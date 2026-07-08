@@ -3,4 +3,4 @@ from .models import MattermostSetting
 
 @admin.register(MattermostSetting)
 class MattermostSettingAdmin(admin.ModelAdmin):
-    list_display = ('id', 'updated_at', 'is_active', 'webhook_url')
+    list_display = ('updated_at', 'is_active', 'webhook_url')

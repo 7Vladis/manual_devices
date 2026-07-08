@@ -1,8 +1,10 @@
+import uuid
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
 
 class ObjectType(models.Model):
-    id = models.AutoField(primary_key=True, verbose_name="ID Типа объекта")
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4,  editable=False)
     type = models.CharField(max_length=100, unique=True, verbose_name="Название объекта")
 
     class Meta:
@@ -15,7 +17,7 @@ class ObjectType(models.Model):
 
 
 class DependencyType(models.Model):
-    id = models.AutoField(primary_key=True, verbose_name="ID Типа связи")
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     type = models.CharField(max_length=100, unique=True, verbose_name="Тип зависимости")
 
     class Meta:
@@ -28,7 +30,7 @@ class DependencyType(models.Model):
 
 
 class ObjectModel(models.Model):
-    id = models.AutoField(primary_key=True, verbose_name="ID Модели")
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     object_type = models.ForeignKey(ObjectType, on_delete=models.PROTECT, related_name='models', verbose_name="Тип объектов")
     name = models.CharField(max_length=255, verbose_name="Название модели")
     specifications = models.JSONField(default=dict,blank=True, null=True, verbose_name="Характеристики модели")
@@ -43,9 +45,11 @@ class ObjectModel(models.Model):
      
 
 class DataObject(models.Model):
-    id = models.AutoField(primary_key=True, verbose_name="ID Объекта")
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,blank = True, null=True, related_name='data_objects', verbose_name="Пользователь")
     model = models.ForeignKey(ObjectModel, on_delete=models.CASCADE, related_name='data_objects', verbose_name="Модель")
     name = models.CharField(max_length=255, verbose_name="Имя объекта", blank=True, null=True)
+    inventory_number = models.CharField(max_length=100, verbose_name="Инвентарный номер", blank=True, null=True)
     next_maintenance_date = models.DateTimeField(blank=True, null=True, verbose_name="Дата следующего обслуживания")
 
     class Meta:
@@ -54,8 +58,7 @@ class DataObject(models.Model):
         verbose_name_plural = 'Объекты данных'
 
     def __str__(self):
-        display_name = self.name if self.name else self.model.name
-        return f"ID: {self.id} | {display_name}"
+        return self.name or f"{self.model.name} ({self.inventory_number})"
          
     
 class Relation(models.Model):
@@ -74,42 +77,39 @@ class Relation(models.Model):
     
 
 class ActionHistory(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name="Исполнитель")
     data_object = models.ForeignKey(DataObject, on_delete=models.CASCADE, related_name='actions', verbose_name = "Объект")
-    action_date = models.DateTimeField(default=timezone.now, verbose_name="Дата и время действия")
     action = models.TextField(verbose_name="Описание действия")
-    pk = models.CompositePrimaryKey('data_object', 'action_date')
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата создания")
 
     class Meta:
         db_table = 'action_history'
         verbose_name = 'История действия'
         verbose_name_plural = 'История объектов'
 
-    def __str__(self):
-        return f"{self.action_date.strftime('%d.%m.%Y %H:%M')} - {self.data_object}"    
-
     
 class Comment(models.Model):
-    id = models.AutoField(primary_key=True, verbose_name="ID Комментария")
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name="Автор")
     data_object = models.ForeignKey(DataObject, on_delete=models.CASCADE, related_name='comments', verbose_name="Объект")
     text = models.TextField(verbose_name="Текст комментария")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата создания")
 
     class Meta:
         db_table = 'comment'
         verbose_name = 'Комментарий'
         verbose_name_plural = 'Комментарии'
 
-    def __str__(self):
-        return f"Комментарий к {self.data_object.id}"
     
 class Attachment(models.Model):
-    id = models.AutoField(primary_key=True, verbose_name="ID Вложения")
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name="Загрузил")
     data_object = models.ForeignKey(DataObject, on_delete=models.CASCADE, related_name='attachments', verbose_name="Объект")
-    path = models.FileField(upload_to='data_objects/attachments/', verbose_name="Файл")
+    path = models.FileField(upload_to='attachments/', verbose_name="Файл")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата загрузки")
 
     class Meta:
         db_table = 'attachment'
         verbose_name = 'Вложение'
         verbose_name_plural = 'Вложения'
-
-    def __str__(self):
-        return f"Вложение для {self.data_object.id}"

@@ -1,0 +1,18 @@
+<div class="list-group list-group-flush rounded-3">
+    {% for obj in results %}
+    <a href="#" class="list-group-item list-group-item-action p-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <span class="fw-bold d-block text-primary">{{ obj.name|default:obj.model.name }}</span>
+                <small class="text-muted">{{ obj.model.name }} | {{ obj.inventory_number }}</small>
+            </div>
+            <div class="text-end">
+                <small class="d-block text-muted">След. ТО</small>
+                <span class="badge bg-light text-dark border">{{ obj.next_maintenance_date|date:"d.m.Y" }}</span>
+            </div>
+        </div>
+    </a>
+    {% empty %}
+    <div class="p-4 text-center text-muted">Ничего не найдено</div>
+    {% endfor %}
+</div>

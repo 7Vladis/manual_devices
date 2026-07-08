@@ -1,190 +1,127 @@
-from notifications.services import send_mattermost_notification
-from rest_framework import viewsets, filters
-from django.db import transaction
-from rest_framework.decorators import action
-from rest_framework.response import Response
+from django.shortcuts import render
+from django.http import HttpResponse
 from django.db.models import Q
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
+from .models import DataObject, ActionHistory
 
-from .models import (
-    ObjectType, DependencyType, ObjectModel, DataObject, Relation, ActionHistory, Comment, Attachment
-)
+def get_period_limits(period_type):
+    """Вспомогательная функция для получения границ дат"""
+    now = timezone.now()
+    today = now.date()
+    
+    if period_type == 'week':
+        # Текущая неделя: Пн - Вс
+        start = today - timedelta(days=today.weekday())
+        end = start + timedelta(days=6)
+    elif period_type == 'month':
+        # Текущий месяц: 1-е число - конец месяца
+        start = today.replace(day=1)
+        next_month = (today.replace(day=28) + timedelta(days=4)).replace(day=1)
+        end = next_month - timedelta(days=1)
+    else: # today
+        start = end = today
+        
+    # Превращаем даты в datetime (начало и конец дня) для фильтрации
+    start_dt = timezone.make_aware(datetime.combine(start, datetime.min.time()))
+    end_dt = timezone.make_aware(datetime.combine(end, datetime.max.time()))
+    return start_dt, end_dt
 
-from .serializers import (
-    ObjectTypeSerializer, DependencyTypeSerializer, ObjectModelSerializer, DataObjectSerializer, RelationSerializer, ActionHistorySerializer, CommentSerializer, AttachmentSerializer
-)
+def dashboard(request):
+    now = timezone.now()
+    # 1. Общее количество
+    total_objects = DataObject.objects.count()
+    
+    # 2. Количество просроченных
+    overdue_count = DataObject.objects.filter(next_maintenance_date__lt=now).count()
+    
+    # 3. Статистика планов (как была)
+    def get_stats(period):
+        start, end = get_period_limits(period)
+        planned = DataObject.objects.filter(next_maintenance_date__range=(start, end)).count()
+        completed = ActionHistory.objects.filter(
+            created_at__range=(start, end),
+            action__icontains="Техническое обслуживание выполнено"
+        ).count()
+        return completed, planned
 
-class DataObjectViewSet(viewsets.ModelViewSet):
-    queryset = DataObject.objects.all().prefetch_related(
-        'actions', 'attachments', 'comments', 'model__object_type'
+    week_done, week_all = get_stats('week')
+    month_done, month_all = get_stats('month')
+
+    context = {
+        'total_objects': total_objects,
+        'overdue_count': overdue_count, # Новое поле
+        'week_done': week_done,
+        'week_all': week_all,
+        'week_percent': (week_done / week_all * 100) if week_all > 0 else 0,
+        'month_done': month_done,
+        'month_all': month_all,
+        'month_percent': (month_done / month_all * 100) if month_all > 0 else 0,
+    }
+    return render(request, 'data/dashboard.html', context)
+
+def maintenance_list(request):
+    period = request.GET.get('period', 'week')
+    now = timezone.now()
+    
+    # Логика фильтрации
+    if period == 'overdue':
+        objects = DataObject.objects.filter(next_maintenance_date__lt=now)
+        label = "Просроченные ТО"
+    elif period == 'today':
+        _, end = get_period_limits('today')
+        objects = DataObject.objects.filter(next_maintenance_date__range=(now, end))
+        label = "ТО на сегодня"
+    elif period == 'month':
+        _, end = get_period_limits('month')
+        objects = DataObject.objects.filter(next_maintenance_date__range=(now, end))
+        label = "План на месяц"
+    else: # week
+        _, end = get_period_limits('week')
+        objects = DataObject.objects.filter(next_maintenance_date__range=(now, end))
+        label = "План на неделю"
+        
+    objects = objects.select_related('model', 'model__object_type').order_by('next_maintenance_date')
+
+    return render(request, 'data/includes/maintenance_table.html', {
+        'objects': objects,
+        'now': now,
+        'period_label': label
+    })
+
+def search_view(request):
+    query = request.GET.get('q', '').strip()
+    if not query or len(query) < 2:
+        return HttpResponse('')
+
+    # Умный поиск: 
+    # 1. Сначала ищем полное совпадение фразы
+    base_filters = (
+        Q(name__icontains=query) |
+        Q(inventory_number__icontains=query) |
+        Q(model__name__icontains=query) |
+        Q(model__specifications__icontains=query) |
+        Q(comments__text__icontains=query) |
+        Q(actions__action__icontains=query)
     )
-    serializer_class = DataObjectSerializer
-
-
-    @action(detail=False, methods=['get'])
-    def search(self, request):
-        query = request.query_params.get('q', '').strip()
-        if not query:
-            return Response([])
-        results = self.queryset.filter(
-            Q(name__icontains=query)|
-            Q(model__name__icontains=query) |
-            Q(model__object_type__type__icontains=query) | 
-            Q(model__specifications__icontains=query) |
-            Q(comments__text__icontains=query) |
-            Q(actions__action__icontains=query)
-        ).distinct()
-        if not results.exists():
-            words = query.split()
-            q_objects = Q()
+    
+    results = DataObject.objects.filter(base_filters).distinct()
+    
+    # 2. Если результатов мало, ищем по отдельным словам
+    if results.count() < 3:
+        words = query.split()
+        if len(words) > 1:
+            word_filters = Q()
             for word in words:
-                q_objects |= Q(name__icontains=query)|\
-                    Q(model__name__icontains=word) |\
-                    Q(model__object_type__type__icontains=word) |\
-                    Q(model__specifications__icontains=word) |\
-                    Q(comments__text__icontains=word) |\
-                    Q(actions__action__icontains=word)
-            results = self.queryset.filter(q_objects).distinct()
-        serializer = self.get_serializer(results, many=True)
-        return Response(serializer.data)
-    
-
-    @action(detail=False, methods=['get'])
-    def maintenance(self, request):
-        period = request.query_params.get('period', 'week')
-        now = timezone.now()
-        if period == 'today':
-            end_date = now.replace(hour=23, minute=59, second=59)
-        elif period == 'month':
-            end_date = now + timedelta(days=30)
-        else:
-            end_date = now + timedelta(days=7)
-        results = self.queryset.filter(
-            next_maintenance_date__range=[now, end_date]
-        ).order_by('next_maintenance_date')
-        serializer = self.get_serializer(results, many=True)
-        return Response(serializer.data)
-    
-
-    @action(detail=False, methods=['get'])
-    def roots(self, request):
-        subjects_ids = Relation.objects.values_list('subject_id', flat=True)
-        roots = self.queryset.exclude(id__in=subjects_ids)
-        serializer = self.get_serializer(roots, many=True)
-        return Response(serializer.data)
-    
-    
-    @action(detail=True, methods=['get'])
-    def children(self, request, pk=None):
-        relations = Relation.objects.filter(main_id=pk).select_related('subject', 'dependency_type')
-        data = []
-        for rel in relations:
-            data.append({
-                "relation_type": rel.dependency_type.type,
-                "object": DataObjectSerializer(rel.subject).data
-            })
-        return Response(data)
-    
-    @action(detail=True, methods=['post'])
-    def chenge_parent(self, request, pk=None):
-        obj = self.get_object()
-        new_parent_id = request.data.get('new_parent_id')
-        dependency_id = request.data.get('dependency_id')
-        new_dependency_name = request.data.get('new_dependency_name')
-        with transaction.atomic():
-            old_relation = Relation.objects.filter(subject=obj).first()
-            old_parent_name = old_relation.main.name if old_relation else "корня справочника"
-            if old_relation:
-                old_relation.delete()
-            if new_parent_id:
-                new_parent = DataObject.objects.get(id=new_parent_id)
-                dep_type = None
-                if dependency_id:
-                    dep_type = DependencyType.objects.get(id=dependency_id)
-                elif new_dependency_name:
-                    dep_type, _ = DependencyType.objects.get_or_create(type=new_dependency_name.strip())
-                if not dep_type:
-                    return Response(
-                        {"error": "Необходимо указать тип связи (ID или название)."}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                Relation.objects.create(
-                    main=new_parent,
-                    subject=obj,
-                    dependency_type=dep_type
+                word_filters |= (
+                    Q(name__icontains=word) | 
+                    Q(model__name__icontains=word) |
+                    Q(model__specifications__icontains=word)
                 )
-                new_parent_name = new_parent.name
-                action_text = f"Объект перемещен из '{old_parent_name} в '{new_parent_name}'."
-            else:
-                action_text = f"Объекть перемещен из '{old_parent_name}' в корень справочника."
-            ActionHistory.objects.create(
-                data_object=obj,
-                action_date=timezone.now(),
-                action=action_text
-            )
-            return Response({"status":"перемещено", "details": action_text})
-        
-    @action(detail=True, methods=['post'])
-    def perform_maintenance(self, request, pk=None):
-        obj = self.get_object()
-        new_date = request.data.get('next_maintenance_date')
-        comment = request.data.get('comment', 'Техническое обслуживание выполнено.')
-        if not new_date:
-            return Response({"error": "Укажите дату следующего ТО"}, status=400)
-        with transaction.atomic():
-            obj.next_maintenance_date = new_date
-            obj.save()
-            ActionHistory.objects.create(
-                data_object=obj,
-                action_date=timezone.now(),
-                action=f"Выполнено ТО. Следующее обслуживания назначено на: {new_date}. Комментарий: {comment}"
-            )
-        send_mattermost_notification(f"ТО объекта {obj.name or obj.model.name} выполенено\nСледующая дата: {new_date}\nКомментарий: {comment}")
-        return Response({"status":"обслужено", "next_date":new_date})
-        
+            results = (results | DataObject.objects.filter(word_filters)).distinct()
 
-class ActionHistoryViewSet(viewsets.ModelViewSet):
-    queryset = ActionHistory.objects.all().order_by('-action_date')
-    serializer_class = ActionHistorySerializer
+    return render(request, 'data/includes/search_results_list.html', {'results': results[:10]})
 
-    @action(detail=False, methods=['get'])
-    def recent(self, request):
-        limit = int(request.query_params.get('limit', 10))
-        recent_actions = self.queryset[:limit]
-        serializer = self.get_serializer(recent_actions, many=True)
-        return Response(serializer.data)
-    
-
-class ObjectTypeViewSet(viewsets.ModelViewSet):
-    queryset = ObjectType.objects.all()
-    serializer_class = ObjectTypeSerializer
-    filter_backends = [filters.SearchFilter]
-    search_fileds = ['type']
-
-
-class ObjectModelViewSet(viewsets.ModelViewSet):
-    queryset = ObjectModel.objects.all()
-    serializer_class = ObjectModelSerializer
-
-
-class RelationViewSet(viewsets.ModelViewSet):
-    queryset = Relation.objects.all()
-    serializer_class = RelationSerializer
-
-
-class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.all()
-    serializer_class = CommentSerializer
-
-
-class AttachmentViewSet(viewsets.ModelViewSet):
-    queryset = Attachment.objects.all()
-    serializer_class = AttachmentSerializer
-
-
-class DependencyTypeViewSet(viewsets.ModelViewSet):
-    queryset = DependencyType.objects.all()
-    serializer_class = DependencyTypeSerializer
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['type']
+def dict_view(request):
+    """Представление для страницы справочника"""
+    return render(request, 'data/dict.html')

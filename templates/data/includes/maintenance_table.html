@@ -1,0 +1,38 @@
+<div class="maintenance-list">
+    {% for obj in objects %}
+    <div class="card p-3 mb-3 clickable-card {% if obj.next_maintenance_date < now %}overdue-card{% endif %}">
+        <div class="maintenance-item-container">
+            <div class="d-flex align-items-center overflow-hidden">
+                <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
+                    {% if obj.next_maintenance_date < now %}
+                        <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                    {% else %}
+                        <i class="bi bi-wrench text-muted fs-5"></i>
+                    {% endif %}
+                </div>
+                <div class="text-truncate">
+                    <h6 class="mb-1 fw-bold text-dark text-truncate">{{ obj.name|default:obj.model.name }}</h6>
+                    <div class="text-muted small">
+                        {{ obj.model.object_type.type }} • {{ obj.inventory_number|default:"Без инв. №" }} • 
+                        <i class="bi bi-calendar3 ms-1"></i> {{ obj.next_maintenance_date|date:"d.m.Y" }}
+                    </div>
+                </div>
+            </div>
+            <div class="ms-3">
+                {% if obj.next_maintenance_date < now %}
+                    <span class="badge rounded-pill bg-danger px-3 py-2">Просрочено</span>
+                {% else %}
+                    <span class="text-muted small fw-medium">Через {{ obj.next_maintenance_date|timeuntil }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="card p-5 text-center text-muted">
+        <i class="bi bi-check2-circle fs-1 d-block mb-2 text-success"></i>
+        Работ не найдено
+    </div>
+    {% endfor %}
+</div>
+
+<span id="period-label" hx-swap-oob="innerHTML">{{ period_label }}</span>

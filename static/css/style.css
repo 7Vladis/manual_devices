@@ -1,0 +1,147 @@
+/* --- 1. ПЕРЕМЕННЫЕ И ОСНОВА --- */
+:root {
+    --app-bg: #f8f9fa;
+    --card-shadow: 4px 4px 12px rgba(0,0,0,0.05);
+    --card-hover-shadow: 6px 8px 20px rgba(0,0,0,0.1);
+    --border-radius: 12px;
+    --primary-color: #0d4ba9;
+    --danger-color: #e63946;
+    --success-color: #198754;
+    --transition: all 0.3s ease;
+}
+
+body {
+    background-color: var(--app-bg);
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    color: #333;
+}
+
+a { text-decoration: none; color: inherit; }
+
+/* --- 2. БАЗОВЫЕ КОМПОНЕНТЫ --- */
+
+/* Карточки */
+.card {
+    border: 1px solid rgba(0,0,0,0.05) !important;
+    border-radius: var(--border-radius) !important;
+    box-shadow: var(--card-shadow) !important;
+    transition: var(--transition);
+    background-color: #fff;
+    height: 100%;
+}
+
+.clickable-card {
+    cursor: pointer;
+    border: 1px solid transparent !important;
+}
+
+.clickable-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--card-hover-shadow) !important;
+    border-color: rgba(13, 75, 169, 0.2) !important; /* На основе --primary-color */
+    background-color: #fdfdfe;
+}
+
+.clickable-card:active {
+    transform: translateY(-1px);
+}
+
+/* Прогресс-бары и иконки */
+.progress {
+    background-color: #e9ecef;
+    border-radius: 10px;
+    height: 8px;
+}
+
+.progress-bar {
+    border-radius: 10px;
+}
+
+.rounded-circle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* --- 3. ШАПКА (HEADER) --- */
+
+.nav-buttons-group, .user-block { flex: 1; }
+.user-block { justify-content: flex-end; }
+
+.nav-btn {
+    width: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.search-wrapper {
+    width: 100%;
+    max-width: 500px;
+}
+
+.search-wrapper .form-control:focus {
+    box-shadow: none;
+    background-color: #fff;
+}
+
+/* Меню профиля */
+.dropdown-item {
+    transition: background-color 0.2s ease;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.dropdown-item i { font-size: 1.1rem; }
+.dropdown-item span { font-weight: 500; }
+.dropdown-divider { opacity: 0.08; }
+
+.user-block .dropdown-toggle::after { display: none; }
+
+/* Форма выхода */
+.logout-btn {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: none;
+    padding: 0;
+}
+
+/* --- 4. СПЕЦИФИКА DASHBOARD --- */
+
+.overdue-card {
+    border: 2px solid var(--danger-color) !important;
+    box-shadow: 0 0 15px rgba(230, 57, 70, 0.15) !important;
+    background-color: #fffafa !important;
+}
+
+.overdue-card.clickable-card:hover {
+    border-color: var(--danger-color) !important;
+    box-shadow: 0 8px 25px rgba(230, 57, 70, 0.2) !important;
+}
+
+.maintenance-item-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.card small.text-muted {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Служебные цвета */
+.bg-light-danger { background-color: #fff5f5; }
+.bg-light-primary { background-color: #f0f7ff; }
+.bg-light-success { background-color: #f3fdf8; }
+
+/* --- 5. HTMX ИНДИКАТОРЫ --- */
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator { display: inline-block; }
+.htmx-request.card { opacity: 0.6; }

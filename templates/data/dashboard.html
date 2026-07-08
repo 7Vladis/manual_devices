@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="px-3">
+    <!-- Сводка (4 равные карточки) -->
+    <div class="row g-3 mb-4">
+        
+        <!-- Всего объектов -->
+        <div class="col-md-3">
+            <div class="card p-3 clickable-card" hx-get="{% url 'maintenance_list' %}?period=today" hx-target="#maintenance-container">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-light-primary text-primary me-3" style="width: 52px; height: 52px;">
+                        <i class="bi bi-box-seam fs-4"></i>
+                    </div>
+                    <div class="overflow-hidden">
+                        <small class="text-muted d-block fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Всего объектов</small>
+                        <span class="fs-4 fw-bold">{{ total_objects }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Просрочено -->
+        <div class="col-md-3">
+            <div class="card p-3 clickable-card" hx-get="{% url 'maintenance_list' %}?period=overdue" hx-target="#maintenance-container">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-light-danger text-danger me-3" style="width: 52px; height: 52px;">
+                        <i class="bi bi-exclamation-octagon fs-4"></i>
+                    </div>
+                    <div class="overflow-hidden">
+                        <small class="text-muted d-block fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Просрочено</small>
+                        <span class="fs-4 fw-bold text-danger">{{ overdue_count }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- План на неделю -->
+        <div class="col-md-3">
+            <div class="card p-3 clickable-card" hx-get="{% url 'maintenance_list' %}?period=week" hx-target="#maintenance-container">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-light-primary text-primary me-3" style="width: 52px; height: 52px;">
+                        <i class="bi bi-calendar-week fs-4"></i>
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">План неделю</small>
+                            <small class="fw-bold">{{ week_done }}/{{ week_all }}</small>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-primary" style="width: {{ week_percent|floatformat:0 }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- План на месяц -->
+        <div class="col-md-3">
+            <div class="card p-3 clickable-card" hx-get="{% url 'maintenance_list' %}?period=month" hx-target="#maintenance-container">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-light-success text-success me-3" style="width: 52px; height: 52px;">
+                        <i class="bi bi-calendar-month fs-4"></i>
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">План месяц</small>
+                            <small class="fw-bold">{{ month_done }}/{{ month_all }}</small>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-success" style="width: {{ month_percent|floatformat:0 }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Заголовок и Список -->
+    <div class="mb-3">
+        <h5 class="mb-0">Список работ: <span class="text-primary fw-bold ms-1" id="period-label">...</span></h5>
+    </div>
+
+    <div id="maintenance-container" hx-get="{% url 'maintenance_list' %}?period=week" hx-trigger="load once">
+        <div class="text-center p-5 text-muted">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
