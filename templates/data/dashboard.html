@@ -7,14 +7,14 @@
         
         <!-- Всего объектов -->
         <div class="col-md-3">
-            <div class="card p-3 clickable-card" hx-get="{% url 'maintenance_list' %}?period=today" hx-target="#maintenance-container">
-                <div class="d-flex align-items-center">
-                    <div class="rounded-circle bg-light-primary text-primary me-3" style="width: 52px; height: 52px;">
+            <div class="card p-3 clickable-card" hx-get="{% url 'maintenance_list' %}?period=all" hx-target="#maintenance-container">
+                <div class="d-flex align-items-start"> <!-- Изменено на start -->
+                    <div class="rounded-circle bg-light-primary text-primary me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; min-width: 52px;">
                         <i class="bi bi-box-seam fs-4"></i>
                     </div>
-                    <div class="overflow-hidden">
-                        <small class="text-muted d-block fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Всего объектов</small>
-                        <span class="fs-4 fw-bold">{{ total_objects }}</span>
+                    <div class="flex-grow-1 overflow-hidden" style="padding-top: 2px;"> <!-- Добавлен padding для выравнивания -->
+                        <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px; line-height: 1.2;">Всего объектов</small>
+                        <span class="fs-4 fw-bold" style="line-height: 1;">{{ total_objects }}</span>
                     </div>
                 </div>
             </div>
@@ -23,13 +23,13 @@
         <!-- Просрочено -->
         <div class="col-md-3">
             <div class="card p-3 clickable-card" hx-get="{% url 'maintenance_list' %}?period=overdue" hx-target="#maintenance-container">
-                <div class="d-flex align-items-center">
-                    <div class="rounded-circle bg-light-danger text-danger me-3" style="width: 52px; height: 52px;">
+                <div class="d-flex align-items-start">
+                    <div class="rounded-circle bg-light-danger text-danger me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; min-width: 52px;">
                         <i class="bi bi-exclamation-octagon fs-4"></i>
                     </div>
-                    <div class="overflow-hidden">
-                        <small class="text-muted d-block fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Просрочено</small>
-                        <span class="fs-4 fw-bold text-danger">{{ overdue_count }}</span>
+                    <div class="flex-grow-1 overflow-hidden" style="padding-top: 2px;">
+                        <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px; line-height: 1.2;">Просрочено</small>
+                        <span class="fs-4 fw-bold text-danger" style="line-height: 1;">{{ overdue_count }}</span>
                     </div>
                 </div>
             </div>
@@ -38,16 +38,16 @@
         <!-- План на неделю -->
         <div class="col-md-3">
             <div class="card p-3 clickable-card" hx-get="{% url 'maintenance_list' %}?period=week" hx-target="#maintenance-container">
-                <div class="d-flex align-items-center">
-                    <div class="rounded-circle bg-light-primary text-primary me-3" style="width: 52px; height: 52px;">
+                <div class="d-flex align-items-start">
+                    <div class="rounded-circle bg-light-primary text-primary me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; min-width: 52px;">
                         <i class="bi bi-calendar-week fs-4"></i>
                     </div>
-                    <div class="flex-grow-1 overflow-hidden">
+                    <div class="flex-grow-1 overflow-hidden" style="padding-top: 2px;">
                         <div class="d-flex justify-content-between align-items-center mb-1">
-                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">План неделю</small>
-                            <small class="fw-bold">{{ week_done }}/{{ week_all }}</small>
+                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px; line-height: 1.2;">План на неделю</small>
+                            <small class="fw-bold text-dark" style="font-size: 0.75rem;">{{ week_done }}/{{ week_all }}</small>
                         </div>
-                        <div class="progress" style="height: 6px;">
+                        <div class="progress" style="height: 6px; margin-top: 8px;"> <!-- Увеличен отступ до полоски -->
                             <div class="progress-bar bg-primary" style="width: {{ week_percent|floatformat:0 }}%"></div>
                         </div>
                     </div>
@@ -58,16 +58,16 @@
         <!-- План на месяц -->
         <div class="col-md-3">
             <div class="card p-3 clickable-card" hx-get="{% url 'maintenance_list' %}?period=month" hx-target="#maintenance-container">
-                <div class="d-flex align-items-center">
-                    <div class="rounded-circle bg-light-success text-success me-3" style="width: 52px; height: 52px;">
+                <div class="d-flex align-items-start">
+                    <div class="rounded-circle bg-light-success text-success me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; min-width: 52px;">
                         <i class="bi bi-calendar-month fs-4"></i>
                     </div>
-                    <div class="flex-grow-1 overflow-hidden">
+                    <div class="flex-grow-1 overflow-hidden" style="padding-top: 2px;">
                         <div class="d-flex justify-content-between align-items-center mb-1">
-                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">План месяц</small>
-                            <small class="fw-bold">{{ month_done }}/{{ month_all }}</small>
+                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px; line-height: 1.2;">План на месяц</small>
+                            <small class="fw-bold text-dark" style="font-size: 0.75rem;">{{ month_done }}/{{ month_all }}</small>
                         </div>
-                        <div class="progress" style="height: 6px;">
+                        <div class="progress" style="height: 6px; margin-top: 8px;">
                             <div class="progress-bar bg-success" style="width: {{ month_percent|floatformat:0 }}%"></div>
                         </div>
                     </div>

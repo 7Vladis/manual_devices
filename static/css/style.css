@@ -93,6 +93,7 @@ a { text-decoration: none; color: inherit; }
     transition: background-color 0.2s ease;
     font-size: 0.95rem;
     cursor: pointer;
+    padding: 0.75rem 1rem;
 }
 
 .dropdown-item i { font-size: 1.1rem; }
@@ -101,13 +102,21 @@ a { text-decoration: none; color: inherit; }
 
 .user-block .dropdown-toggle::after { display: none; }
 
+/* Стили заголовка в выпадающем меню */
+.user-info-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #dfe5ed;
+}
+
 /* Форма выхода */
 .logout-btn {
     width: 100%;
     text-align: left;
     border: none;
     background: none;
-    padding: 0;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
 }
 
 /* --- 4. СПЕЦИФИКА DASHBOARD --- */

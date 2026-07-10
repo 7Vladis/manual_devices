@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.http import HttpResponse
 from django.db.models import Q
@@ -27,6 +28,7 @@ def get_period_limits(period_type):
     end_dt = timezone.make_aware(datetime.combine(end, datetime.max.time()))
     return start_dt, end_dt
 
+@login_required
 def dashboard(request):
     now = timezone.now()
     # 1. Общее количество
@@ -60,6 +62,7 @@ def dashboard(request):
     }
     return render(request, 'data/dashboard.html', context)
 
+@login_required
 def maintenance_list(request):
     period = request.GET.get('period', 'week')
     now = timezone.now()
@@ -68,17 +71,16 @@ def maintenance_list(request):
     if period == 'overdue':
         objects = DataObject.objects.filter(next_maintenance_date__lt=now)
         label = "Просроченные ТО"
-    elif period == 'today':
-        _, end = get_period_limits('today')
-        objects = DataObject.objects.filter(next_maintenance_date__range=(now, end))
-        label = "ТО на сегодня"
+    elif period == 'all':
+        objects = DataObject.objects.all()
+        label = "Все объекты системы"
     elif period == 'month':
         _, end = get_period_limits('month')
-        objects = DataObject.objects.filter(next_maintenance_date__range=(now, end))
+        objects = DataObject.objects.filter(next_maintenance_date__lte=end)
         label = "План на месяц"
     else: # week
         _, end = get_period_limits('week')
-        objects = DataObject.objects.filter(next_maintenance_date__range=(now, end))
+        objects = DataObject.objects.filter(next_maintenance_date__lte=end)
         label = "План на неделю"
         
     objects = objects.select_related('model', 'model__object_type').order_by('next_maintenance_date')
@@ -89,6 +91,7 @@ def maintenance_list(request):
         'period_label': label
     })
 
+@login_required
 def search_view(request):
     query = request.GET.get('q', '').strip()
     if not query or len(query) < 2:
@@ -122,6 +125,7 @@ def search_view(request):
 
     return render(request, 'data/includes/search_results_list.html', {'results': results[:10]})
 
+@login_required
 def dict_view(request):
     """Представление для страницы справочника"""
     return render(request, 'data/dict.html')

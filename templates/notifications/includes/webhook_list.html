@@ -1,0 +1,61 @@
+<div class="webhook-list">
+    {% for item in settings %}
+    <div class="card p-3 mb-3 border-0 shadow-sm" style="background: white; border-radius: 12px;">
+        <div class="row align-items-center">
+            
+            <!-- Левая часть: Чекбокс и Иконка -->
+            <div class="col-auto d-flex align-items-center">
+                <input type="checkbox" name="webhook_ids" value="{{ item.uuid }}" class="form-check-input m-0 me-3 shadow-none" style="width: 22px; height: 22px; cursor: pointer;">
+                <div class="rounded-3 bg-light d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                    <i class="bi bi-hdd-network text-primary fs-4"></i>
+                </div>
+            </div>
+
+            <!-- Средняя часть: URL и Дата -->
+            <div class="col text-truncate">
+                <h6 class="mb-1 fw-bold text-dark text-truncate">{{ item.webhook_url }}</h6>
+                <div class="d-flex align-items-center">
+                    <small class="text-muted"><i class="bi bi-clock me-1"></i>{{ item.updated_at|date:"d.m.Y H:i" }}</small>
+                </div>
+            </div>
+
+            <!-- Правая часть: Тест и Статус (выровнены) -->
+            <div class="col-auto d-flex align-items-center">
+                
+                <!-- Контейнер для результата теста (фиксированная ширина, чтобы кнопки не прыгали) -->
+                <div id="test-result-{{ item.uuid }}" class="me-3 text-end" style="min-width: 150px;">
+                    <!-- Сюда прилетит ответ от HTMX -->
+                </div>
+                
+                <!-- Кнопка Тест -->
+                <button type="button" class="btn btn-light border fw-bold me-2 d-flex align-items-center px-3"
+                        hx-get="{% url 'test_webhook' item.uuid %}"
+                        hx-target="#test-result-{{ item.uuid }}"
+                        style="height: 42px;">
+                    <i class="bi bi-send me-2"></i> Тест
+                </button>
+                
+                <!-- Кнопка Статуса (Toggle) -->
+                <button type="button" 
+                        class="btn {% if item.is_active %}btn-success{% else %}btn-danger{% endif %} fw-bold d-flex align-items-center justify-content-center"
+                        hx-post="{% url 'activate_webhook' item.uuid %}"
+                        hx-target="#webhook-list-container"
+                        style="width: 140px; height: 42px; transition: all 0.2s;">
+                    {% if item.is_active %}
+                        <i class="bi bi-check-circle-fill me-2"></i> Активен
+                    {% else %}
+                        <!-- Изменили иконку на кружок с крестиком -->
+                        <i class="bi bi-x-circle-fill me-2"></i> Выключен
+                    {% endif %}
+                </button>
+            </div>
+
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center py-5 bg-white rounded-4 shadow-sm border border-dashed">
+        <i class="bi bi-bell-slash text-muted fs-1 mb-3 d-block"></i>
+        <p class="text-muted mb-0">Уведомления не настроены</p>
+    </div>
+    {% endfor %}
+</div>

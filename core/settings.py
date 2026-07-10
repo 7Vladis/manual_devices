@@ -27,7 +27,13 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'dashboard'
+LOGOUT_REDIRECT_URL = 'login'
+
 AUTH_USER_MODEL = 'users.User'
+
+SESSION_COOKIE_AGE = 1209600
 
 # Application definition
 

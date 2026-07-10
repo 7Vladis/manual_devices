@@ -20,5 +20,16 @@ def send_mattermost_notification(text):
     except Exception as e:
         return False, str(e)
     
-def check_webhook_availability():
-    return send_mattermost_notification("Проверка связи: Система уведомлений Django активна.")
+def test_specific_webhook(webhook_id):
+    config = MattermostSetting.objects.filter(uuid=webhook_id).first()
+    if not config:
+        return False, "Конфигурация не найдена."
+    
+    payload = {"text": f"Проверка связи: Система уведомлений Django активна."}
+    try:
+        response = requests.post(config.webhook_url, json=payload, timeout=5)
+        if response.status_code == 200:
+            return True, "Успешно отправлено!"
+        return False, f"Ошибка: {response.status_code}"
+    except Exception as e:
+        return False, str(e)
