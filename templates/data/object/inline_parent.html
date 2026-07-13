@@ -1,0 +1,15 @@
+<span id="parent-display-container">
+    <form hx-post="{% url 'edit_parent' obj.uuid %}" hx-target="#parent-display-container" hx-swap="outerHTML" class="d-inline-flex gap-1 align-items-center">
+        {% csrf_token %}
+        <select name="parent_uuid" class="form-select form-select-sm bg-light py-1 shadow-none" style="width: 200px; font-size: 0.8rem;">
+            <option value="">Без родителя</option>
+            {% for candidate in candidates %}
+            <option value="{{ candidate.uuid }}" {% if candidate.pk == current_parent_pk %}selected{% endif %}>{{ candidate.name|default:candidate.model.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-success btn-sm py-1 px-2"><i class="bi bi-check-lg"></i></button>
+        <button type="button" class="btn btn-light btn-sm py-1 px-2 border" 
+                hx-get="{% url 'object_detail' obj.uuid %}" 
+                hx-target="#detail-container"><i class="bi bi-x-lg"></i></button>
+    </form>
+</span>

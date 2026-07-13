@@ -1,0 +1,63 @@
+<div class="animate-fade">
+    
+    <!-- Форма загрузки документов -->
+    <form hx-post="{% url 'add_attachment' obj.uuid %}" 
+          hx-encoding="multipart/form-data" 
+          hx-target="#tab-pane-files" 
+          class="mb-4">
+        {% csrf_token %}
+        <input type="hidden" name="is_preview" value="false">
+        <div class="card border-0 shadow-sm p-3 bg-white" style="border-radius: 8px;">
+            <label class="form-label small fw-bold text-muted mb-2 text-uppercase">Загрузить новый документ</label>
+            <div class="input-group">
+                <input type="file" name="file" class="form-control form-control-sm bg-light border-0 shadow-none" required>
+                <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Загрузить</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Список документов -->
+    <form hx-post="{% url 'delete_attachments_bulk' %}" hx-target="#tab-pane-files">
+        {% csrf_token %}
+        <input type="hidden" name="object_uuid" value="{{ obj.uuid }}">
+        
+        <div class="d-flex justify-content-between align-items-center mb-3 px-1">
+            <h6 class="fw-bold mb-0 text-dark">Документы и вложения ({{ files|length }})</h6>
+            {% if files %}
+            <button type="submit" class="btn btn-outline-danger btn-sm fw-bold" hx-confirm="Удалить выбранные документы?">
+                <i class="bi bi-trash me-1"></i> Удалить выбранные
+            </button>
+            {% endif %}
+        </div>
+
+        <div class="d-flex flex-column gap-2">
+            {% for file in files %}
+            <div class="card p-3 border-0 shadow-sm bg-white hover-bg-light transition-all" style="border-radius: 8px;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center text-truncate flex-grow-1">
+                        <input type="checkbox" name="file_ids" value="{{ file.uuid }}" class="form-check-input me-3 shadow-none" style="width: 18px; height: 18px; cursor: pointer;">
+                        
+                        <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3" style="width: 42px; height: 42px; min-width: 42px;">
+                            <i class="bi bi-file-earmark-arrow-down-fill text-primary fs-4"></i>
+                        </div>
+                        
+                        <div class="text-truncate">
+                            <span class="fw-bold text-dark small d-block text-truncate">{{ file.path.name|cut:"attachments/" }}</span>
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">Загрузил: {{ file.user.username|default:file.user.email }} • {{ file.created_at|date:"d.m.Y" }}</small>
+                        </div>
+                    </div>
+                    
+                    <a href="{{ file.path.url }}" download class="btn btn-light btn-sm text-secondary border shadow-sm px-3 ms-3">
+                        <i class="bi bi-download"></i> Скачать
+                    </a>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-5 text-muted small bg-white rounded-3 shadow-sm">
+                <i class="bi bi-file-earmark-slash fs-3 d-block mb-2 text-secondary opacity-50"></i>
+                Документы отсутствуют.
+            </div>
+            {% endfor %}
+        </div>
+    </form>
+</div>

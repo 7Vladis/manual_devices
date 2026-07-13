@@ -1,0 +1,82 @@
+<div class="row g-4 animate-fade">
+    
+    <!-- Изображение Preview (Слева) -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm overflow-hidden text-center bg-white p-2 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 200px; border-radius: 8px;">
+            {% if preview %}
+                <!-- Картинка кликабельна и вызывает нативное модальное окно Bootstrap -->
+                <img src="{{ preview.path.url }}" 
+                     class="img-fluid rounded-2 cursor-zoom-in" 
+                     style="max-height: 180px; object-fit: contain; cursor: zoom-in;"
+                     data-bs-toggle="modal" 
+                     data-bs-target="#imageFullscreenModal"
+                     title="Открыть во весь экран">
+            {% else %}
+                <div class="text-muted p-4">
+                    <i class="bi bi-image fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                    <span class="small d-block text-muted">Нет изображения превью</span>
+                </div>
+            {% endif %}
+            
+            <form hx-post="{% url 'add_attachment' obj.uuid %}" 
+                  hx-encoding="multipart/form-data" 
+                  hx-target="#tab-pane-short-info"
+                  class="mt-3 w-100">
+                {% csrf_token %}
+                <input type="hidden" name="is_preview" value="true">
+                <input type="file" name="file" id="preview-file-input" class="d-none" onchange="this.form.dispatchEvent(new Event('submit'))">
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="document.getElementById('preview-file-input').click()">
+                    <i class="bi bi-paperclip me-1"></i> Прикрепить фото
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Текстовое описание (Справа) -->
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm p-3 bg-white h-100 d-flex flex-column" style="border-radius: 8px;">
+            <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-file-earmark-text me-2"></i>Описание объекта</h6>
+            </div>
+            
+            <div class="flex-grow-1" id="description-container" hx-get="{% url 'edit_description' obj.uuid %}" hx-target="#description-container" hx-swap="outerHTML">
+                {% if obj.description %}
+                    <p class="text-muted small" style="white-space: pre-line; cursor: pointer;">{{ obj.description }}</p>
+                    <button class="btn btn-sm btn-light border text-muted mt-2"><i class="bi bi-pencil me-1"></i> Редактировать</button>
+                {% else %}
+                    <div class="text-center py-4 text-muted small" style="cursor: pointer;">
+                        <i class="bi bi-pencil-square d-block fs-3 mb-1 opacity-50"></i>
+                        Кликните, чтобы добавить описание...
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% if preview %}
+<!-- МОДАЛЬНОЕ ОКНО ДЛЯ ПРОСМОТРА КАРТИНКИ В ПОЛНЫЙ ЭКРАН (Без JS) -->
+<div class="modal fade" id="imageFullscreenModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <!-- bg-transparent и border-0 убирают стандартную белую карточку модалки -->
+        <div class="modal-content bg-transparent border-0 shadow-none">
+            <div class="modal-body text-center p-0 position-relative">
+                
+                <!-- Белая кнопка-крестик в правом верхнем углу -->
+                <button type="button" 
+                        class="btn-close btn-close-white position-absolute top-0 end-0 m-3 shadow-none" 
+                        data-bs-dismiss="modal" 
+                        aria-label="Close" 
+                        style="z-index: 1060; width: 25px; height: 25px;"></button>
+                
+                <!-- Полноразмерное изображение -->
+                <img src="{{ preview.path.url }}" 
+                     class="img-fluid rounded-3" 
+                     style="max-height: 85vh; object-fit: contain; box-shadow: 0 10px 45px rgba(0,0,0,0.6);">
+                
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,63 @@
+<li class="tree-item position-relative mb-1" id="node-{{ node.uuid }}">
+    <!-- p-1 уменьшает внешние отступы, давая больше пространства по высоте -->
+    <div class="d-flex align-items-center justify-content-between p-1 rounded-2 hover-bg-light transition-all">
+        
+        <!-- 1. Стрелочка раскрытия (вынесена отдельно, чтобы клик по ней только раскрывал ветку) -->
+        <span class="tree-arrow me-1 text-muted d-inline-flex align-items-center justify-content-center" 
+              style="width: 28px; height: 28px; font-size: 0.8rem; cursor: pointer; user-select: none;"
+              data-bs-toggle="collapse" 
+              data-bs-target="#children-{{ node.uuid }}"
+              aria-expanded="false">
+            <i class="bi bi-chevron-right arrow-icon"></i>
+        </span>
+        
+        <!-- 2. Кликабельная область (растянута на всю ширину строки благодаря flex-grow-1) -->
+        <div class="d-flex align-items-center text-truncate flex-grow-1 py-1" 
+              hx-get="{% url 'object_detail' node.uuid %}" 
+              hx-target="#detail-container"
+              hx-swap="innerHTML"
+              style="cursor: pointer; user-select: none;">
+            
+            <i class="bi bi-folder text-warning me-2 fs-5"></i>
+            
+            <span class="text-dark fw-medium text-truncate small">
+                {{ node.name|default:node.model.name }}
+            </span>
+        </div>
+        
+        <!-- 3. Кнопки управления (появляются при наведении справа) -->
+        <div class="tree-actions d-flex align-items-center gap-1 opacity-0 ms-2">
+            <!-- Обслужить -->
+            <button type="button" class="btn btn-link text-secondary p-1 m-0 d-flex align-items-center" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#serviceModal"
+                    hx-get="{% url 'service_object' node.uuid %}"
+                    hx-target="#service-modal-content"
+                    title="Обслужить">
+                <i class="bi bi-wrench-adjustable small"></i>
+            </button>
+            
+            <!-- Удалить -->
+            <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center" 
+                    hx-post="{% url 'delete_object' node.uuid %}"
+                    hx-target="#node-{{ node.uuid }}"
+                    hx-swap="outerHTML"
+                    hx-confirm="Вы действительно хотите удалить объект '{{ node.name|default:node.model.name }}'?"
+                    title="Удалить">
+                <i class="bi bi-trash3 small"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Контейнер для вложенных объектов -->
+    <div class="collapse" 
+         id="children-{{ node.uuid }}" 
+         hx-get="{% url 'object_children' node.uuid %}" 
+         hx-trigger="show.bs.collapse once" 
+         hx-target="#children-{{ node.uuid }}"
+         hx-swap="innerHTML">
+        <div class="py-2 text-center text-muted small">
+            <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+        </div>
+    </div>
+</li>

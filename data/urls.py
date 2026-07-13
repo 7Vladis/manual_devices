@@ -3,7 +3,31 @@ from . import views
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
-    path('maintenance-list/', views.maintenance_list, name='maintenance_list'), # Новый путь
-    path('dict/', views.dict_view, name='dict'),
+    path('maintenance-list/', views.maintenance_list, name='maintenance_list'),
     path('search/', views.search_view, name='search'),
+    path('dict/', views.dict_view, name='dict'),
+    path('dict/objects/', views.object_tree_view, name='object_tree'),
+    path('dict/objects/<uuid:parent_uuid>/children/', views.object_children_view, name='object_children'),
+    path('dict/models/', views.model_tree_view, name='model_tree'),
+    path('dict/objects/<uuid:pk>/service/', views.service_object_view, name='service_object'),
+    path('dict/objects/<uuid:pk>/delete/', views.delete_object_view, name='delete_object'),
+    path('dict/models/<uuid:pk>/delete/', views.delete_model_view, name='delete_model'),
+    path('dict/objects/create/', views.create_object_view, name='create_object'),
+    path('dict/models/create/', views.create_model_view, name='create_model'),
+    path('dict/objects/<uuid:pk>/', views.object_detail_view, name='object_detail'),
+    path('dict/objects/<uuid:pk>/tab/<str:tab_name>/', views.object_tab_view, name='object_tab'),
+    path('dict/objects/<uuid:pk>/edit-inventory/', views.edit_inventory_view, name='edit_inventory'),
+    path('dict/objects/<uuid:pk>/edit-parent/', views.edit_parent_view, name='edit_parent'),
+    path('dict/objects/<uuid:pk>/edit-description/', views.edit_description_view, name='edit_description'),
+    path('dict/objects/<uuid:pk>/comments/add/', views.add_comment_view, name='add_comment'),
+    path('dict/comments/<uuid:pk>/edit/', views.edit_comment_view, name='edit_comment'),
+    path('dict/comments/delete-bulk/', views.delete_comments_bulk, name='delete_comments_bulk'),
+    path('dict/objects/<uuid:pk>/attachments/add/', views.add_attachment_view, name='add_attachment'),
+    path('dict/attachments/delete-bulk/', views.delete_attachments_bulk, name='delete_attachments_bulk'),
+    path('dict/models/<uuid:pk>/', views.model_detail_view, name='model_detail'),
+    path('dict/models/<uuid:pk>/tab/<str:tab_name>/', views.model_tab_view, name='model_tab'),
+    path('dict/models/<uuid:pk>/specs/add/', views.model_spec_add_view, name='model_spec_add'),
+    path('dict/models/<uuid:pk>/specs/edit/', views.model_spec_edit_view, name='model_spec_edit'),
+    path('dict/models/<uuid:pk>/specs/delete/', views.model_spec_delete_view, name='model_spec_delete'),
+    
 ]

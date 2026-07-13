@@ -10,7 +10,7 @@ class CommentInline(admin.TabularInline):
 class AttachmentInline(admin.TabularInline):
     model = Attachment
     extra = 0
-    fields = ('user', 'path', 'created_at')
+    fields = ('user', 'path', 'is_preview', 'created_at')
     readonly_fields = ('created_at',)
 
 class SubsRelationsInline(admin.TabularInline):
@@ -48,6 +48,7 @@ class DataObjectAdmin(admin.ModelAdmin):
     list_display = ('name', 'inventory_number', 'model', 'user', 'next_maintenance_date')
     list_filter = ('model__object_type', 'next_maintenance_date')
     search_fields = ('name', 'inventory_number', 'model__name')
+    fields = ('name', 'inventory_number', 'model', 'user', 'next_maintenance_date', 'description') 
     
     inlines = [
         MainRelationsInline, 

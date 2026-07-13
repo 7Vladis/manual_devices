@@ -1,0 +1,151 @@
+<div class="card d-flex flex-column h-100 bg-white border-0" style="border-radius: 0;">
+    
+    <!-- МИНИ-ШАПКА ОБЪЕКТА -->
+    <div class="px-4 py-3 border-bottom bg-white">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+                <h4 class="fw-bold mb-1 text-dark">{{ obj.name|default:obj.model.name }}</h4>
+                <div class="text-muted small d-flex flex-wrap gap-3">
+                    <span><i class="bi bi-tag me-1"></i>Модель: <strong class="text-dark">{{ obj.model.name }}</strong></span>
+                    <span><i class="bi bi-calendar-event me-1"></i>Следующее ТО: 
+                        <strong class="text-danger">{{ obj.next_maintenance_date|date:"d.m.Y"|default:"Не запланировано" }}</strong>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-2 mt-2 pt-2 border-top border-light" style="font-size: 0.85rem;">
+            <!-- Инвентарный номер -->
+            <div class="col-md-6 d-flex align-items-center">
+                <span class="text-muted me-2">Инвентарный №:</span>
+                <span id="inventory-display-container" hx-get="{% url 'edit_inventory' obj.uuid %}" hx-target="#inventory-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="fw-semibold text-dark">
+                    {% if obj.inventory_number %}{{ obj.inventory_number }}{% else %}<span class="text-muted italic small">добавить <i class="bi bi-pencil-square ms-1"></i></span>{% endif %}
+                </span>
+            </div>
+            
+            <!-- Родительский объект -->
+            <div class="col-md-6 d-flex align-items-center">
+                <span class="text-muted me-2">Входит в состав:</span>
+                <span id="parent-display-container" hx-get="{% url 'edit_parent' obj.uuid %}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-primary fw-semibold">
+                    {% if parent %}{{ parent.name|default:parent.model.name }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>{% else %}<span class="text-muted italic small">указать родителя <i class="bi bi-pencil-square ms-1"></i></span>{% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- НАВИГАЦИЯ ПО ВКЛАДКАМ (HTMX загружает контент в панели по клику на кнопки) -->
+    <div class="bg-light px-3 py-1 border-bottom">
+        <ul class="nav nav-tabs border-0" id="objectTabs" role="tablist" style="font-size: 0.85rem;">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active border-0 py-2 fw-semibold" 
+                        id="short-info-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#tab-pane-short-info" 
+                        type="button" 
+                        role="tab" 
+                        hx-get="{% url 'object_tab' obj.uuid 'short_info' %}"
+                        hx-target="#tab-pane-short-info"
+                        hx-trigger="click"
+                        aria-controls="tab-pane-short-info" 
+                        aria-selected="true">Краткая информация</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link border-0 py-2 fw-semibold" 
+                        id="specs-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#tab-pane-specs" 
+                        type="button" 
+                        role="tab" 
+                        hx-get="{% url 'object_tab' obj.uuid 'specs' %}"
+                        hx-target="#tab-pane-specs"
+                        hx-trigger="click"
+                        aria-controls="tab-pane-specs" 
+                        aria-selected="false">Характеристики</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link border-0 py-2 fw-semibold" 
+                        id="comments-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#tab-pane-comments" 
+                        type="button" 
+                        role="tab" 
+                        hx-get="{% url 'object_tab' obj.uuid 'comments' %}"
+                        hx-target="#tab-pane-comments"
+                        hx-trigger="click"
+                        aria-controls="tab-pane-comments" 
+                        aria-selected="false">Комментарии</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link border-0 py-2 fw-semibold" 
+                        id="files-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#tab-pane-files" 
+                        type="button" 
+                        role="tab" 
+                        hx-get="{% url 'object_tab' obj.uuid 'files' %}"
+                        hx-target="#tab-pane-files"
+                        hx-trigger="click"
+                        aria-controls="tab-pane-files" 
+                        aria-selected="false">Файлы</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link border-0 py-2 fw-semibold" 
+                        id="history-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#tab-pane-history" 
+                        type="button" 
+                        role="tab" 
+                        hx-get="{% url 'object_tab' obj.uuid 'history' %}"
+                        hx-target="#tab-pane-history"
+                        hx-trigger="click"
+                        aria-controls="tab-pane-history" 
+                        aria-selected="false">История</button>
+            </li>
+        </ul>
+    </div>
+
+    <!-- ТАБ-ПАНЕЛИ (Простые контейнеры для размещения ответа) -->
+    <div class="tab-content flex-grow-1 overflow-auto p-4 bg-light" id="object-tab-panes">
+        
+        <!-- Краткая информация загружается сама при монтировании DOM с помощью hx-trigger="load" -->
+        <div class="tab-pane fade show active" 
+             id="tab-pane-short-info" 
+             role="tabpanel" 
+             aria-labelledby="short-info-tab"
+             hx-get="{% url 'object_tab' obj.uuid 'short_info' %}" 
+             hx-trigger="load" 
+             hx-swap="innerHTML">
+            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+        </div>
+
+        <div class="tab-pane fade" 
+             id="tab-pane-specs" 
+             role="tabpanel" 
+             aria-labelledby="specs-tab">
+            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+        </div>
+
+        <div class="tab-pane fade" 
+             id="tab-pane-comments" 
+             role="tabpanel" 
+             aria-labelledby="comments-tab">
+            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+        </div>
+
+        <div class="tab-pane fade" 
+             id="tab-pane-files" 
+             role="tabpanel" 
+             aria-labelledby="files-tab">
+            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+        </div>
+
+        <div class="tab-pane fade" 
+             id="tab-pane-history" 
+             role="tabpanel" 
+             aria-labelledby="history-tab">
+            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+        </div>
+
+    </div>
+    
+</div>

@@ -1,0 +1,26 @@
+<div class="modal-header border-0 pb-0">
+    <h5 class="modal-title fw-bold">Техническое обслуживание</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<form hx-post="{% url 'service_object' obj.uuid %}" 
+      hx-target="#node-{{ obj.uuid }}" 
+      hx-swap="outerHTML"
+      hx-on::after-request="bootstrap.Modal.getInstance(document.getElementById('serviceModal')).hide();">
+    {% csrf_token %}
+    <div class="modal-body py-3 text-center">
+        <i class="bi bi-tools text-primary fs-1 mb-2 d-block"></i>
+        <p class="text-muted small">Выберите дату следующего планового обслуживания для объекта:<br>
+            <strong class="text-dark">{{ obj.name|default:obj.model.name }}</strong>
+        </p>
+        
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase d-block text-start">Дата следующего ТО</label>
+            <input type="date" name="maintenance_date" class="form-control bg-light border-0 py-2" required 
+                   value="{% if obj.next_maintenance_date %}{{ obj.next_maintenance_date|date:'Y-m-d' }}{% endif %}">
+        </div>
+    </div>
+    <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary px-4 fw-bold">Зафиксировать ТО</button>
+    </div>
+</form>

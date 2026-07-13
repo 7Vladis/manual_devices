@@ -1,0 +1,38 @@
+<tr id="spec-row-{{ key|slugify }}" class="border-bottom border-light">
+    {% if editing %}
+    <!-- Режим редактирования строки -->
+    <td colspan="3" class="p-0">
+        <form hx-post="{% url 'model_spec_edit' model_obj.uuid %}" hx-target="#tab-pane-model-specs" class="d-flex align-items-center gap-2 p-2 bg-light rounded-2">
+            {% csrf_token %}
+            <input type="hidden" name="old_key" value="{{ key }}">
+            <input type="text" name="key" value="{{ key }}" class="form-control form-control-sm border-0 shadow-none bg-white py-1" style="font-size: 0.85rem;" required>
+            <input type="text" name="value" value="{{ value }}" class="form-control form-control-sm border-0 shadow-none bg-white py-1" style="font-size: 0.85rem;" required>
+            <button type="submit" class="btn btn-success btn-sm py-1 px-2"><i class="bi bi-check-lg"></i></button>
+            <button type="button" class="btn btn-light btn-sm py-1 px-2 border" hx-get="{% url 'model_tab' model_obj.uuid 'specs' %}" hx-target="#tab-pane-model-specs"><i class="bi bi-x-lg"></i></button>
+        </form>
+    </td>
+    {% else %}
+    <!-- Обычный режим отображения строки -->
+    <td class="text-muted fw-semibold py-2">{{ key }}</td>
+    <td class="fw-bold text-dark py-2">{{ value }}</td>
+    <td class="py-2 text-end">
+        <div class="d-inline-flex gap-1">
+            <!-- Кнопка редактирования -->
+            <button type="button" class="btn btn-link text-secondary p-1" 
+                    hx-get="{% url 'model_spec_edit' model_obj.uuid %}?key={{ key|urlencode }}" 
+                    hx-target="#spec-row-{{ key|slugify }}" 
+                    hx-swap="outerHTML">
+                <i class="bi bi-pencil-square"></i>
+            </button>
+            <!-- Кнопка удаления характеристики -->
+            <button type="button" class="btn btn-link text-danger p-1" 
+                    hx-post="{% url 'model_spec_delete' model_obj.uuid %}" 
+                    hx-target="#tab-pane-model-specs"
+                    hx-vals='{"key": "{{ key }}"}'
+                    hx-confirm="Удалить характеристику '{{ key }}'?">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+    </td>
+    {% endif %}
+</tr>

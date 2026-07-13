@@ -51,6 +51,7 @@ class DataObject(models.Model):
     name = models.CharField(max_length=255, verbose_name="Имя объекта", blank=True, null=True)
     inventory_number = models.CharField(max_length=100, verbose_name="Инвентарный номер", blank=True, null=True)
     next_maintenance_date = models.DateTimeField(blank=True, null=True, verbose_name="Дата следующего обслуживания")
+    description = models.TextField(blank=True, null=True, verbose_name="Описание")
 
     class Meta:
         db_table = 'data_object'
@@ -108,6 +109,7 @@ class Attachment(models.Model):
     data_object = models.ForeignKey(DataObject, on_delete=models.CASCADE, related_name='attachments', verbose_name="Объект")
     path = models.FileField(upload_to='attachments/', verbose_name="Файл")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата загрузки")
+    is_preview = models.BooleanField(default=False, verbose_name="Превью (фото)")
 
     class Meta:
         db_table = 'attachment'

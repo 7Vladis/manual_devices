@@ -1,0 +1,68 @@
+<div class="d-flex flex-column h-100 pe-1">
+    
+    <!-- Переключатель вкладок (Без JS, управляется через Django и HTMX) -->
+    <div class="d-flex bg-light p-1 rounded-3 my-2" style="font-size: 0.85rem;">
+        <button class="btn {% if active_tab == 'objects' %}btn-white shadow-sm text-dark{% else %}btn-light text-muted{% endif %} flex-fill fw-bold py-2 border-0 rounded-2" 
+                hx-get="{% url 'dict' %}?tab=objects&sidebar=1" 
+                hx-target="#sidebar-container">
+            <i class="bi bi-box-seam me-1"></i>Объекты
+        </button>
+        <button class="btn {% if active_tab == 'models' %}btn-white shadow-sm text-dark{% else %}btn-light text-muted{% endif %} flex-fill fw-bold py-2 border-0 rounded-2" 
+                hx-get="{% url 'dict' %}?tab=models&sidebar=1" 
+                hx-target="#sidebar-container">
+            <i class="bi bi-layers me-1"></i>Модели
+        </button>
+    </div>
+
+    <!-- Кнопка Создать -->
+    <div class="dropdown mb-2">
+        <button class="btn w-100 py-2 text-white fw-bold d-flex align-items-center justify-content-between px-3" 
+                type="button" 
+                data-bs-toggle="dropdown" 
+                aria-expanded="false"
+                style="background-color: #1e293b; border-radius: 6px; font-size: 0.9rem;">
+            <span><i class="bi bi-plus-lg me-2"></i>Создать</span>
+            <i class="bi bi-chevron-down small"></i>
+        </button>
+        <ul class="dropdown-menu w-100 border-0 shadow-lg mt-1 p-2">
+            <li>
+                <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
+                        type="button" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#createObjectModal">
+                    <div class="bg-light rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
+                        <i class="bi bi-box text-primary fs-5"></i>
+                    </div>
+                    <div>
+                        <span class="d-block fw-bold text-dark small">Объект</span>
+                        <small class="text-muted" style="font-size: 0.75rem;">Конкретный экземпляр оборудования</small>
+                    </div>
+                </button>
+            </li>
+            <li><hr class="dropdown-divider my-2 opacity-50"></li>
+            <li>
+                <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
+                        type="button" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#createModelModal">
+                    <div class="bg-light rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
+                        <i class="bi bi-layers text-purple fs-5"></i>
+                    </div>
+                    <div>
+                        <span class="d-block fw-bold text-dark small">Модель</span>
+                        <small class="text-muted" style="font-size: 0.75rem;">Тип/шаблон оборудования</small>
+                    </div>
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Контейнер дерева/списка моделей -->
+    <div id="tree-container" class="flex-grow-1 overflow-auto pb-3">
+        {% if active_tab == 'models' %}
+            {% include 'data/tree/model_tree_list.html' with object_types=object_types_list %}
+        {% else %}
+            {% include 'data/tree/object_tree_list.html' with objects=initial_objects %}
+        {% endif %}
+    </div>
+</div>

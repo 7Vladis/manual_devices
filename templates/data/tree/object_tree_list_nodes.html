@@ -1,0 +1,7 @@
+<ul class="list-unstyled ps-4 mt-1 border-start border-light" style="margin-left: 10px;">
+    {% for obj in objects %}
+        {% include 'data/tree/object_tree_node.html' with node=obj %}
+    {% empty %}
+        <li class="text-muted small ps-3">Нет вложенных элементов</li>
+    {% endfor %}
+</ul>

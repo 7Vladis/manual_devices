@@ -1,0 +1,7 @@
+<ul class="list-unstyled mb-0" id="object-root-tree">
+    {% for obj in objects %}
+        {% include 'data/tree/object_tree_node.html' with node=obj %}
+    {% empty %}
+        <li class="p-3 text-center text-muted small">Объекты не найдены</li>
+    {% endfor %}
+</ul>

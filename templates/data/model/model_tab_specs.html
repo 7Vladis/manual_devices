@@ -1,0 +1,40 @@
+<div class="card border-0 shadow-sm p-4 bg-white animate-fade" style="border-radius: 8px;">
+    <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-cpu me-2"></i>Шаблон технических характеристик</h6>
+
+    <div class="table-responsive mb-4">
+        <table class="table table-striped table-hover table-borderless align-middle mb-0" style="font-size: 0.9rem;">
+            <thead>
+                <tr class="border-bottom text-muted" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+                    <th class="py-2 w-40 text-uppercase">Параметр (Ключ)</th>
+                    <th class="py-2 w-40 text-uppercase">Значение по умолчанию</th>
+                    <th class="py-2 w-20 text-end text-uppercase">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, val in specifications.items %}
+                    {% include 'data/model/inline_spec_row.html' with key=key value=val %}
+                {% empty %}
+                <tr id="empty-specs-row">
+                    <td colspan="3" class="text-center py-4 text-muted small">Характеристики модели ещё не заданы. Добавьте первый параметр ниже.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Форма быстрого добавления нового параметра в JSON -->
+    <div class="border-top pt-3">
+        <form hx-post="{% url 'model_spec_add' model_obj.uuid %}" hx-target="#tab-pane-model-specs" class="row g-2">
+            {% csrf_token %}
+            <div class="col-md-5">
+                <input type="text" name="key" class="form-control form-control-sm bg-light border-0 py-2 shadow-none" placeholder="Название параметра (например, Мощность)" required>
+            </div>
+            <div class="col-md-5">
+                <input type="text" name="value" class="form-control form-control-sm bg-light border-0 py-2 shadow-none" placeholder="Значение (например, 5 МВт)" required>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100 py-2 fw-bold"><i class="bi bi-plus-lg me-1"></i>Добавить</button>
+            </div>
+        </form>
+    </div>
+</div>

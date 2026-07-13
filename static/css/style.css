@@ -154,3 +154,47 @@ a { text-decoration: none; color: inherit; }
 .htmx-indicator { display: none; }
 .htmx-request .htmx-indicator { display: inline-block; }
 .htmx-request.card { opacity: 0.6; }
+
+
+/* --- 6. ПРОВОДНИК (ДЕРЕВО ОБЪЕКТОВ) --- */
+
+.hover-bg-light:hover {
+    background-color: #f1f5f9;
+}
+
+/* Вращение стрелочки при разворачивании */
+.tree-arrow[aria-expanded="true"] .arrow-icon {
+    transform: rotate(90deg);
+}
+
+.tree-arrow .arrow-icon {
+    transition: transform 0.2s ease-in-out;
+}
+
+/* Скрытие кнопок действий по умолчанию и их показ при наведении на строку дерева */
+.tree-item .tree-actions {
+    transition: opacity 0.25s ease-in-out;
+}
+
+.tree-item:hover .tree-actions {
+    opacity: 1 !important;
+}
+
+/* Настройки для шрифтов дерева */
+.text-purple {
+    color: #6f42c1;
+}
+
+.transition-all {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Анимация плавного появления */
+.animate-fade {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}

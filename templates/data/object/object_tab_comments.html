@@ -1,0 +1,53 @@
+<div class="animate-fade">
+    
+    <!-- Добавление комментария -->
+    <form hx-post="{% url 'add_comment' obj.uuid %}" hx-target="#tab-pane-comments" class="mb-4">
+        {% csrf_token %}
+        <div class="card border-0 shadow-sm p-3 bg-white" style="border-radius: 8px;">
+            <div class="mb-2">
+                <textarea name="text" rows="2" class="form-control border-0 bg-light shadow-none small" placeholder="Напишите комментарий к объекту..." required></textarea>
+            </div>
+            <div class="text-end">
+                <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Отправить</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Список комментариев -->
+    <form hx-post="{% url 'delete_comments_bulk' %}" hx-target="#tab-pane-comments">
+        {% csrf_token %}
+        <input type="hidden" name="object_uuid" value="{{ obj.uuid }}">
+        
+        <div class="d-flex justify-content-between align-items-center mb-3 px-1">
+            <h6 class="fw-bold mb-0 text-dark">Лента комментариев ({{ comments|length }})</h6>
+            {% if comments %}
+            <button type="submit" class="btn btn-outline-danger btn-sm fw-bold" hx-confirm="Удалить выбранные комментарии?">
+                <i class="bi bi-trash me-1"></i> Удалить выбранные
+            </button>
+            {% endif %}
+        </div>
+
+        <div class="d-flex flex-column gap-2">
+            {% for comment in comments %}
+            <div class="card p-3 border-0 shadow-sm bg-white hover-bg-light transition-all" id="comment-item-{{ comment.uuid }}" style="border-radius: 8px;">
+                <div class="d-flex align-items-start">
+                    <input type="checkbox" name="comment_ids" value="{{ comment.uuid }}" class="form-check-input me-3 mt-1 shadow-none" style="width: 18px; height: 18px; cursor: pointer;">
+                    
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-bold text-dark small">{{ comment.user.username|default:comment.user.email }}</span>
+                            <small class="text-muted">{{ comment.created_at|date:"d.m.Y H:i" }}</small>
+                        </div>
+                        <p class="text-muted small mb-0">{{ comment.text }}</p>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-5 text-muted small bg-white rounded-3 shadow-sm">
+                <i class="bi bi-chat-left-dots fs-3 d-block mb-2 text-secondary opacity-50"></i>
+                Комментарии отсутствуют.
+            </div>
+            {% endfor %}
+        </div>
+    </form>
+</div>
