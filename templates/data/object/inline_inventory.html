@@ -1,14 +1,44 @@
-<span id="inventory-display-container">
+<!-- templates/data/object/inline_inventory.html -->
+<span id="inventory-display-container" class="animate-fade">
 {% if editing %}
-    <form hx-post="{% url 'edit_inventory' obj.uuid %}" hx-target="#inventory-display-container" hx-swap="outerHTML" class="d-inline-flex gap-1 align-items-center">
+    <form hx-post="{% url 'edit_inventory' obj.uuid %}" 
+          hx-target="#inventory-display-container" 
+          hx-swap="outerHTML" 
+          class="d-inline-flex gap-1 align-items-center">
         {% csrf_token %}
-        <input type="text" name="inventory_number" value="{{ obj.inventory_number|default:'' }}" class="form-control form-control-sm bg-light py-1 shadow-none" style="width: 150px; font-size: 0.8rem;" required>
-        <button type="submit" class="btn btn-success btn-sm py-1 px-2"><i class="bi bi-check-lg"></i></button>
-        <button type="button" class="btn btn-light btn-sm py-1 px-2 border" hx-get="{% url 'edit_inventory' obj.uuid %}?cancel=1" hx-target="#inventory-display-container" hx-swap="outerHTML"><i class="bi bi-x-lg"></i></button>
+        
+        <!-- Убран атрибут required, чтобы разрешить сохранение пустых значений -->
+        <input type="text" 
+               name="inventory_number" 
+               value="{{ obj.inventory_number|default:'' }}" 
+               class="form-control form-control-sm bg-light py-1 shadow-none" 
+               style="width: 150px; font-size: 0.8rem;"
+               autocomplete="off">
+               
+        <!-- Сохранить -->
+        <button type="submit" class="btn btn-success btn-sm py-1 px-2">
+            <i class="bi bi-check-lg"></i>
+        </button>
+        <!-- Отмена (hx-get шлет ?cancel=1) -->
+        <button type="button" class="btn btn-light btn-sm py-1 px-2 border" 
+                hx-get="{% url 'edit_inventory' obj.uuid %}?cancel=1" 
+                hx-target="#inventory-display-container" 
+                hx-swap="outerHTML">
+            <i class="bi bi-x-lg"></i>
+        </button>
     </form>
 {% else %}
-    <span hx-get="{% url 'edit_inventory' obj.uuid %}" hx-target="#inventory-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="fw-semibold text-dark">
-        {% if obj.inventory_number %}{{ obj.inventory_number }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>{% else %}<span class="text-muted italic small">добавить <i class="bi bi-pencil-square ms-1"></i></span>{% endif %}
+    <!-- Клик по значению снова переведет поле в режим редактирования -->
+    <span hx-get="{% url 'edit_inventory' obj.uuid %}" 
+          hx-target="#inventory-display-container" 
+          hx-swap="outerHTML" 
+          style="cursor: pointer;" 
+          class="fw-semibold text-dark">
+        {% if obj.inventory_number %}
+            {{ obj.inventory_number }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>
+        {% else %}
+            <span class="text-muted italic small">добавить <i class="bi bi-pencil-square ms-1"></i></span>
+        {% endif %}
     </span>
 {% endif %}
 </span>

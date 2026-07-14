@@ -1,15 +1,50 @@
-<span id="parent-display-container">
-    <form hx-post="{% url 'edit_parent' obj.uuid %}" hx-target="#parent-display-container" hx-swap="outerHTML" class="d-inline-flex gap-1 align-items-center">
+<!-- templates/data/object/inline_parent.html -->
+<div id="parent-display-container" class="animate-fade d-inline-block">
+    <form hx-post="{% url 'edit_parent' obj.uuid %}" 
+          hx-target="#parent-display-container" 
+          hx-swap="outerHTML" 
+          class="d-inline-flex gap-2 align-items-center flex-wrap">
         {% csrf_token %}
-        <select name="parent_uuid" class="form-select form-select-sm bg-light py-1 shadow-none" style="width: 200px; font-size: 0.8rem;">
-            <option value="">Без родителя</option>
-            {% for candidate in candidates %}
-            <option value="{{ candidate.uuid }}" {% if candidate.pk == current_parent_pk %}selected{% endif %}>{{ candidate.name|default:candidate.model.name }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit" class="btn btn-success btn-sm py-1 px-2"><i class="bi bi-check-lg"></i></button>
+        
+        <!-- Контейнер умного поиска родительского объекта -->
+        <div id="search-wrapper-parent" class="position-relative" style="min-width: 250px;">
+            {% if current_parent %}
+                <div class="d-flex align-items-center justify-content-between bg-light border border-primary-subtle px-2 py-1 rounded-2">
+                    <span class="small fw-semibold text-dark text-truncate" style="max-width: 170px;">
+                        <i class="bi bi-check-circle-fill text-success me-1"></i>{{ current_parent.name|default:current_parent.model.name }}
+                    </span>
+                    <input type="hidden" name="parent" value="{{ current_parent.uuid }}">
+                    <button type="button" 
+                            class="btn btn-sm btn-link text-secondary p-0 ms-2 shadow-none border-0 fw-bold"
+                            style="font-size: 0.75rem;"
+                            hx-get="{% url 'reset_suggestion' %}?field=parent"
+                            hx-target="#search-wrapper-parent"
+                            hx-swap="outerHTML">
+                        Изменить
+                    </button>
+                </div>
+            {% else %}
+                <input type="text" name="q" class="form-control form-control-sm bg-light py-1 shadow-none" 
+                       placeholder="Начните вводить имя родителя..."
+                       hx-get="{% url 'suggest' %}?field=parent"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#results-parent"
+                       autocomplete="off"
+                       style="font-size: 0.8rem;">
+                <div id="results-parent"></div>
+            {% endif %}
+        </div>
+
+        <!-- Кнопки управления -->
+        <button type="submit" class="btn btn-success btn-sm py-1 px-2" title="Сохранить">
+            <i class="bi bi-check-lg"></i>
+        </button>
         <button type="button" class="btn btn-light btn-sm py-1 px-2 border" 
-                hx-get="{% url 'object_detail' obj.uuid %}" 
-                hx-target="#detail-container"><i class="bi bi-x-lg"></i></button>
+                hx-get="{% url 'edit_parent' obj.uuid %}?cancel=1" 
+                hx-target="#parent-display-container"
+                hx-swap="outerHTML"
+                title="Отмена">
+            <i class="bi bi-x-lg"></i>
+        </button>
     </form>
-</span>
+</div>

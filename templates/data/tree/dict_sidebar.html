@@ -26,10 +26,13 @@
         </button>
         <ul class="dropdown-menu w-100 border-0 shadow-lg mt-1 p-2">
             <li>
+                <!-- КНОПКА СОЗДАНИЯ ОБЪЕКТА -->
                 <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
                         type="button" 
                         data-bs-toggle="modal" 
-                        data-bs-target="#createObjectModal">
+                        data-bs-target="#createObjectModal"
+                        hx-get="{% url 'create_object' %}"
+                        hx-target="#createObjectModal .modal-content">
                     <div class="bg-light rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
                         <i class="bi bi-box text-primary fs-5"></i>
                     </div>
@@ -41,10 +44,13 @@
             </li>
             <li><hr class="dropdown-divider my-2 opacity-50"></li>
             <li>
+                <!-- КНОПКА СОЗДАНИЯ МОДЕЛИ -->
                 <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
                         type="button" 
                         data-bs-toggle="modal" 
-                        data-bs-target="#createModelModal">
+                        data-bs-target="#createModelModal"
+                        hx-get="{% url 'create_model' %}"
+                        hx-target="#createModelModal .modal-content">
                     <div class="bg-light rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
                         <i class="bi bi-layers text-purple fs-5"></i>
                     </div>

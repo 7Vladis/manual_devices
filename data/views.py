@@ -4,6 +4,7 @@ from django.http import HttpResponse
 from django.db.models import Q, Prefetch
 from django.utils import timezone
 from datetime import timedelta, datetime
+from django.views.decorators.http import require_GET, require_POST
 from .models import DataObject, ActionHistory, ObjectModel, ObjectType, Relation, DependencyType, Attachment, Comment
 
 # (Существующие вспомогательные функции для дашборда)
@@ -238,42 +239,58 @@ def delete_model_view(request, pk):
 
 @login_required
 def create_object_view(request):
-    """Быстрое создание объекта из левого меню"""
+    """Быстрое создание объекта / Загрузка чистой формы"""
     if request.method == 'POST':
         name = request.POST.get('name')
         model_uuid = request.POST.get('model')
         inventory_number = request.POST.get('inventory_number')
         parent_uuid = request.POST.get('parent')
+        maintenance_str = request.POST.get('next_maintenance_date')
+        
+        dep_type_uuid = request.POST.get('dependency_type')
+        new_dep_type_name = request.POST.get('new_dependency_type')
         
         model_obj = get_object_or_404(ObjectModel, pk=model_uuid)
         
-        # Создаем объект
+        next_maintenance_date = None
+        if maintenance_str:
+            try:
+                next_maintenance_date = timezone.make_aware(
+                    datetime.strptime(maintenance_str, '%Y-%m-%d')
+                )
+            except ValueError:
+                pass
+                
         new_obj = DataObject.objects.create(
             name=name,
             model=model_obj,
-            inventory_number=inventory_number,
+            inventory_number=inventory_number if inventory_number else None,
+            next_maintenance_date=next_maintenance_date,
             user=request.user
         )
         
-        # Если указан родительский объект, создаем связь в Relation
         if parent_uuid:
             parent_obj = get_object_or_404(DataObject, pk=parent_uuid)
-            # Ищем или создаем базовый тип зависимости "Состоит из"
-            dep_type, _ = DependencyType.objects.get_or_create(type="Входит в состав")
+            
+            if new_dep_type_name:
+                dep_type, _ = DependencyType.objects.get_or_create(type=new_dep_type_name)
+            elif dep_type_uuid:
+                dep_type = get_object_or_404(DependencyType, pk=dep_type_uuid)
+            else:
+                dep_type, _ = DependencyType.objects.get_or_create(type="Входит в состав")
+                
             Relation.objects.create(
                 main=parent_obj,
                 subject=new_obj,
                 dependency_type=dep_type
             )
             
-        # Записываем действие в историю
         ActionHistory.objects.create(
             user=request.user,
             data_object=new_obj,
-            action="Объект успешно зарегистрирован в системе."
+            action="Объект зарегистрирован в системе через форму быстрого добавления."
         )
         
-        # ОТДАЕМ ОБНОВЛЕННЫЙ САЙДБАР ЦЕЛИКОМ
         roots = DataObject.objects.exclude(main_relations__isnull=False).order_by('name')
         context = {
             'initial_objects': roots,
@@ -283,23 +300,32 @@ def create_object_view(request):
         }
         return render(request, 'data/tree/dict_sidebar.html', context)
 
+    # ЕСЛИ GET-ЗАПРОС: Возвращаем чистый бланк формы
+    return render(request, 'data/includes/create_object_modal_body.html')
 
 @login_required
 def create_model_view(request):
-    """Быстрое создание модели из левого меню"""
+    """Быстрое создание модели / Загрузка чистой формы"""
     if request.method == 'POST':
         name = request.POST.get('name')
         type_uuid = request.POST.get('object_type')
+        new_type_name = request.POST.get('new_object_type')
         
-        object_type = get_object_or_404(ObjectType, pk=type_uuid)
+        spec_keys = request.POST.getlist('spec_keys')
+        spec_values = request.POST.getlist('spec_values')
+        specifications = dict(zip(spec_keys, spec_values))
         
+        if new_type_name:
+            object_type, _ = ObjectType.objects.get_or_create(type=new_type_name)
+        else:
+            object_type = get_object_or_404(ObjectType, pk=type_uuid)
+            
         ObjectModel.objects.create(
             name=name,
             object_type=object_type,
-            specifications={} # Пустые характеристики по умолчанию
+            specifications=specifications
         )
         
-        # ОТДАЕМ ОБНОВЛЕННЫЙ САЙДБАР ЦЕЛИКОМ С АКТИВНОЙ ВКЛАДКОЙ "МОДЕЛИ"
         object_types = ObjectType.objects.prefetch_related(
             Prefetch('models', queryset=ObjectModel.objects.all().order_by('name'))
         ).order_by('type')
@@ -310,6 +336,9 @@ def create_model_view(request):
             'object_types': ObjectType.objects.all().order_by('type')
         }
         return render(request, 'data/tree/dict_sidebar.html', context)
+
+    # ЕСЛИ GET-ЗАПРОС: Возвращаем чистый бланк формы
+    return render(request, 'data/includes/create_model_modal_body.html')
     
     # ==========================================
 # ЭТАП 2: ДЕТАЛИ ОБЪЕКТА (ПРАВОЕ ОКНО)
@@ -395,21 +424,24 @@ def object_tab_view(request, pk, tab_name):
 
 @login_required
 def edit_inventory_view(request, pk):
-    """Возвращает поле ввода для изменения инвентарного номера"""
+    """Редактирование инвентарного номера объекта"""
     obj = get_object_or_404(DataObject, pk=pk)
+    
     if request.method == 'POST':
         new_inv = request.POST.get('inventory_number', '').strip()
         obj.inventory_number = new_inv if new_inv else None
         obj.save()
         
-        # Запишем изменение в лог
+        # Логируем изменение инвентарного номера
         ActionHistory.objects.create(
             user=request.user,
             data_object=obj,
             action=f"Изменен инвентарный номер объекта на: {new_inv or 'отсутствует'}."
         )
+        return render(request, 'data/object/inline_inventory.html', {'obj': obj, 'editing': False})
         
-        # Возвращаем обычное текстовое представление номера
+    # GET-запрос: если нажата кнопка отмены, возвращаем обычный режим просмотра
+    if request.GET.get('cancel') == '1':
         return render(request, 'data/object/inline_inventory.html', {'obj': obj, 'editing': False})
         
     return render(request, 'data/object/inline_inventory.html', {'obj': obj, 'editing': True})
@@ -417,13 +449,25 @@ def edit_inventory_view(request, pk):
 
 @login_required
 def edit_parent_view(request, pk):
-    """Возвращает выпадающий список для смены родительского объекта"""
+    """Выбор родительского объекта с использованием умных подсказок поиска"""
     obj = get_object_or_404(DataObject, pk=pk)
     
-    if request.method == 'POST':
-        parent_uuid = request.POST.get('parent_uuid')
+    # Легкий обработчик отмены редактирования (возвращает только текстовый вид)
+    if request.method == 'GET' and request.GET.get('cancel') == '1':
+        current_relation = Relation.objects.filter(subject=obj).select_related('main__model').first()
+        parent = current_relation.main if current_relation else None
+        parent_name = parent.name or parent.model.name if parent else "отсутствует"
         
-        # Удаляем существующую родительскую связь
+        return HttpResponse(
+            f'<div id="parent-display-container" hx-get="{request.path}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-primary fw-semibold d-inline-block animate-fade">'
+            f'{parent_name if parent else "<span class=\'text-muted italic small\'>указать родителя <i class=\'bi bi-pencil-square ms-1\'></i></span>"}'
+            f'{f" <i class=\'bi bi-pencil-square ms-1 text-muted small\'></i>" if parent else ""}'
+            f'</div>'
+        )
+        
+    if request.method == 'POST':
+        parent_uuid = request.POST.get('parent') or request.POST.get('parent_uuid')
+        
         Relation.objects.filter(subject=obj).delete()
         
         parent_name = "отсутствует"
@@ -437,15 +481,12 @@ def edit_parent_view(request, pk):
                 dependency_type=dep_type
             )
             
-        # Логируем смену родителя
         ActionHistory.objects.create(
             user=request.user,
             data_object=obj,
             action=f"Связь изменена: назначен новый родительский объект '{parent_name}'."
         )
         
-        # Возвращаем текстовый вид и инициируем обновление левой панели проводника через OOB Swap
-        # Это мгновенно перерисует дерево с правильной вложенностью
         roots = DataObject.objects.exclude(main_relations__isnull=False).order_by('name')
         sidebar_context = {
             'initial_objects': roots,
@@ -455,27 +496,22 @@ def edit_parent_view(request, pk):
         }
         sidebar_html = render(request, 'data/tree/dict_sidebar.html', sidebar_context).content.decode('utf-8')
         
-        parent_obj = DataObject.objects.filter(subject_relations__subject=obj).first()
         response_html = f"""
-            <span id="parent-display-container" hx-get="{request.path}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-primary fw-semibold">
-                {parent_name} <i class="bi bi-pencil-square ms-1 small text-muted"></i>
-            </span>
+            <div id="parent-display-container" hx-get="{request.path}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-primary fw-semibold d-inline-block animate-fade">
+                {parent_name} <i class="bi bi-pencil-square ms-1 text-muted small"></i>
+            </div>
             <div id="sidebar-container" hx-swap-oob="innerHTML">
                 {sidebar_html}
             </div>
         """
         return HttpResponse(response_html)
 
-    # GET запрос: отдаем селектор
-    # Исключаем самого себя из кандидатов в родители, чтобы избежать рекурсии
-    candidates = DataObject.objects.exclude(pk=obj.pk).order_by('name')
-    current_relation = Relation.objects.filter(subject=obj).first()
-    current_parent_pk = current_relation.main.pk if current_relation else None
+    current_relation = Relation.objects.filter(subject=obj).select_related('main__model').first()
+    current_parent = current_relation.main if current_relation else None
     
     return render(request, 'data/object/inline_parent.html', {
         'obj': obj,
-        'candidates': candidates,
-        'current_parent_pk': current_parent_pk
+        'current_parent': current_parent
     })
 
 
@@ -735,3 +771,297 @@ def model_spec_delete_view(request, pk):
         'specifications': model_obj.specifications
     }
     return render(request, 'data/model/model_tab_specs.html', context)
+
+@login_required
+def check_model_name_view(request):
+    """Умная проверка имени модели на точные совпадения и схожесть"""
+    name = request.GET.get('name', '').strip()
+    if not name or len(name) < 2:
+        return HttpResponse('')
+
+    # 1. Сначала жесткая проверка на точное совпадение
+    exact_match = ObjectModel.objects.filter(name__iexact=name).first()
+    if exact_match:
+        return HttpResponse(
+            f'<div class="alert alert-danger py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">'
+            f'<div class="fw-bold mb-1"><i class="bi bi-x-circle-fill me-1"></i> Модель с таким названием уже существует!</div>'
+            f'<a href="#" class="text-danger fw-bold" '
+            f'hx-get="/dict/models/{exact_match.uuid}/?sidebar=1" '
+            f'hx-target="#detail-container" '
+            f'hx-on:click="bootstrap.Modal.getInstance(document.getElementById(\'createModelModal\')).hide();">'
+            f'Перейти к существующей модели: {exact_match.name} ({exact_match.object_type.type})'
+            f'</a>'
+            f'</div>'
+        )
+
+    # 2. Умный поиск похожих названий моделей (исключая предлоги и короткие слова)
+    stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по', 'of', 'and', 'the'}
+    words = [
+        w.lower() for w in name.split() 
+        if len(w) >= 2 and w.lower() not in stop_words
+    ]
+
+    similar_models = []
+    if words:
+        # Ищем совпадения по словам в названии модели или в типе оборудования
+        query = Q()
+        for word in words:
+            query |= Q(name__icontains=word) | Q(object_type__type__icontains=word)
+            
+        similar_models = ObjectModel.objects.filter(query).select_related('object_type').distinct()[:5]
+
+    if similar_models:
+        links = []
+        for model in similar_models:
+            links.append(
+                f'<li class="mb-1">'
+                f'<a href="#" class="alert-link text-primary fw-semibold" '
+                f'hx-get="/dict/models/{model.uuid}/?sidebar=1" '
+                f'hx-target="#detail-container" '
+                f'hx-on:click="bootstrap.Modal.getInstance(document.getElementById(\'createModelModal\')).hide();">'
+                f'{model.name} <span class="text-muted fw-normal">({model.object_type.type})</span>'
+                f'</a>'
+                f'</li>'
+            )
+
+        return HttpResponse(
+            f'<div class="alert alert-warning py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">'
+            f'<div class="fw-bold text-dark mb-1">'
+            f'<i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> '
+            f'Обнаружены похожие модели ({len(similar_models)} шт.):'
+            f'</div>'
+            f'<ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">'  # Добавлен скролл
+            f'{"".join(links)}'
+            f'</ul>'
+            f'<div class="text-muted" style="font-size: 0.75rem;">'
+            f'Возможно, нужная модель уже заведена. Кликните для быстрого перехода.'
+            f'</div>'
+            f'</div>'
+        )
+
+    # 3. Если всё свободно
+    return HttpResponse(
+        '<div class="text-success small mt-1">'
+        '<i class="bi bi-check-circle-fill me-1"></i>'
+        'Название модели свободно и уникально'
+        '</div>'
+    )
+
+
+@login_required
+def check_object_name_view(request):
+    """Умная проверка имени объекта на точные совпадения и схожесть"""
+    name = request.GET.get('name', '').strip()
+    if not name or len(name) < 2:
+        return HttpResponse('')
+
+    # 1. Сначала жесткая проверка на точное совпадение
+    exact_match = DataObject.objects.filter(name__iexact=name).first()
+    if exact_match:
+        exact_name = exact_match.name or exact_match.model.name
+        return HttpResponse(
+            f'<div class="alert alert-danger py-2 px-3 mt-2 mb-0 rounded-3 small">'
+            f'<div class="fw-bold mb-1"><i class="bi bi-x-circle-fill me-1"></i> Объект с таким именем уже существует!</div>'
+            f'<a href="#" class="text-danger fw-bold" '
+            f'hx-get="/dict/objects/{exact_match.uuid}/?sidebar=1" '
+            f'hx-target="#detail-container" '
+            f'hx-on:click="bootstrap.Modal.getInstance(document.getElementById(\'createObjectModal\')).hide();">'
+            f'Перейти к существующему объекту: {exact_name} ({exact_match.model.name})'
+            f'</a>'
+            f'</div>'
+        )
+
+    # 2. Умный поиск похожих названий (исключая предлоги и короткие слова)
+    stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по'}
+    words = [
+        w.lower() for w in name.split() 
+        if len(w) >= 3 and w.lower() not in stop_words
+    ]
+
+    similar_objects = []
+    if words:
+        # Строим Q-запрос для поиска вхождений любых из значимых слов в имя объекта или имя его модели
+        query = Q()
+        for word in words:
+            query |= Q(name__icontains=word) | Q(model__name__icontains=word)
+            
+        similar_objects = DataObject.objects.filter(query).select_related('model').distinct()[:5]
+
+    if similar_objects:
+        links = []
+        for obj in similar_objects:
+            obj_name = obj.name or obj.model.name
+            # Каждая ссылка при клике загружает детали в правое окно и закрывает модальное окно создания
+            links.append(
+                f'<li class="mb-1">'
+                f'<a href="#" class="alert-link text-primary fw-semibold" '
+                f'hx-get="/dict/objects/{obj.uuid}/?sidebar=1" '
+                f'hx-target="#detail-container" '
+                f'hx-on:click="bootstrap.Modal.getInstance(document.getElementById(\'createObjectModal\')).hide();">'
+                f'{obj_name} <span class="text-muted fw-normal">({obj.model.name})</span>'
+                f'</a>'
+                f'</li>'
+            )
+
+        return HttpResponse(
+            f'<div class="alert alert-warning py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">'
+            f'<div class="fw-bold text-dark mb-1">'
+            f'<i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> '
+            f'Обнаружены похожие объекты ({len(similar_objects)} шт.):'
+            f'</div>'
+            f'<ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">'  # Добавлен скролл
+            f'{"".join(links)}'
+            f'</ul>'
+            f'<div class="text-muted" style="font-size: 0.75rem;">'
+            f'Возможно, нужный объект уже зарегистрирован. Кликните на него для перехода.'
+            f'</div>'
+            f'</div>'
+        )
+
+    # 3. Если всё чисто
+    return HttpResponse(
+        '<div class="text-success small mt-1">'
+        '<i class="bi bi-check-circle-fill me-1"></i>'
+        'Имя свободно и уникально'
+        '</div>'
+    )
+
+
+@login_required
+def suggest_view(request):
+    """Единый эндпоинт для умных подсказок (с сужением результатов через AND)"""
+    field = request.GET.get('field')
+    q = request.GET.get('q', '').strip()
+    
+    if not q or len(q) < 1:
+        return HttpResponse('')
+        
+    results = []
+    words = q.split()
+    
+    if field == 'object_type':
+        exact = ObjectType.objects.filter(type__iexact=q)
+        # Сужение поиска через оператор &= (И)
+        word_filter = Q()
+        for w in words:
+            word_filter &= Q(type__icontains=w)
+        partial = ObjectType.objects.filter(word_filter).exclude(pk__in=exact)
+        results = list(exact) + list(partial)
+        
+    elif field == 'model':
+        exact = ObjectModel.objects.filter(name__iexact=q)
+        word_filter = Q()
+        for w in words:
+            word_filter &= (Q(name__icontains=w) | Q(object_type__type__icontains=w))
+        partial = ObjectModel.objects.filter(word_filter).exclude(pk__in=exact)
+        results = list(exact) + list(partial)
+        
+    elif field == 'parent':
+        exact = DataObject.objects.filter(Q(name__iexact=q) | Q(inventory_number__iexact=q))
+        word_filter = Q()
+        for w in words:
+            word_filter &= (Q(name__icontains=w) | Q(inventory_number__icontains=w) | Q(model__name__icontains=w))
+        partial = DataObject.objects.filter(word_filter).exclude(pk__in=exact)
+        results = list(exact) + list(partial)
+        
+    elif field == 'dependency_type':
+        exact = DependencyType.objects.filter(type__iexact=q)
+        word_filter = Q()
+        for w in words:
+            word_filter &= Q(type__icontains=w)
+        partial = DependencyType.objects.filter(word_filter).exclude(pk__in=exact)
+        results = list(exact) + list(partial)
+
+    show_create_option = False
+    if field in ['object_type', 'dependency_type']:
+        has_exact_match = any(
+            (getattr(item, 'type', '').lower() == q.lower()) for item in results
+        )
+        if not has_exact_match:
+            show_create_option = True
+
+    return render(request, 'data/includes/suggestions_list.html', {
+        'results': results[:10],
+        'field': field,
+        'q': q,
+        'show_create_option': show_create_option
+    })
+
+
+@login_required
+def select_suggestion_view(request):
+    """Рендеринг состояния выбранного элемента (Badge с кнопкой Сбросить)"""
+    field = request.GET.get('field')
+    uuid_val = request.GET.get('uuid')
+    name_val = request.GET.get('name')
+    
+    display_name = ""
+    hidden_name = field
+    hidden_value = ""
+    
+    if uuid_val:
+        hidden_value = uuid_val
+        if field == 'object_type':
+            display_name = get_object_or_404(ObjectType, pk=uuid_val).type
+        elif field == 'model':
+            model_obj = get_object_or_404(ObjectModel, pk=uuid_val)
+            display_name = f"{model_obj.name} ({model_obj.object_type.type})"
+        elif field == 'parent':
+            parent_obj = get_object_or_404(DataObject, pk=uuid_val)
+            display_name = parent_obj.name or parent_obj.model.name
+        elif field == 'dependency_type':
+            display_name = get_object_or_404(DependencyType, pk=uuid_val).type
+    elif name_val:
+        # Режим создания нового типа inline
+        display_name = f"{name_val} (Создать новый)"
+        hidden_name = f"new_{field}"
+        hidden_value = name_val
+        
+    return render(request, 'data/includes/suggestion_selected.html', {
+        'field': field,
+        'display_name': display_name,
+        'hidden_name': hidden_name,
+        'hidden_value': hidden_value
+    })
+
+
+@login_required
+def reset_suggestion_view(request):
+    """Сброс выбранного значения обратно к строке поиска"""
+    field = request.GET.get('field')
+    placeholders = {
+        'object_type': 'Введите тип оборудования...',
+        'model': 'Введите модель оборудования...',
+        'parent': 'Поиск родительского объекта...',
+        'dependency_type': 'Введите тип связи...'
+    }
+    return render(request, 'data/includes/suggestion_input.html', {
+        'field': field,
+        'placeholder': placeholders.get(field, 'Начните вводить...')
+    })
+
+
+@login_required
+def specs_builder_view(request):
+    """Обработка добавления и удаления временных спецификаций модели на стороне HTML"""
+    # Собираем текущие списки ключей и значений из скрытых полей
+    keys = request.POST.getlist('spec_keys')
+    values = request.POST.getlist('spec_values')
+    
+    # Объединяем их в один словарь
+    specs = dict(zip(keys, values))
+    
+    # Обработка добавления нового элемента
+    new_key = request.POST.get('new_key', '').strip()
+    new_value = request.POST.get('new_value', '').strip()
+    if new_key and new_value:
+        specs[new_key] = new_value
+        
+    # Обработка удаления
+    remove_key = request.POST.get('remove_key')
+    if remove_key:
+        specs.pop(remove_key, None)
+        
+    return render(request, 'data/includes/specs_builder.html', {
+        'specifications': specs
+    })

@@ -1,0 +1,30 @@
+<!-- templates/data/includes/suggestions_list.html -->
+<div class="list-group list-group-flush border shadow-sm rounded-3 mt-1" 
+     style="max-height: 160px; overflow-y: auto; z-index: 1100; position: absolute; width: 100%;">
+    
+    {% for item in results %}
+    <button type="button" 
+            class="list-group-item list-group-item-action py-2 text-start small border-0"
+            hx-get="{% url 'select_suggestion' %}?field={{ field }}&uuid={{ item.uuid }}"
+            hx-target="#search-wrapper-{{ field }}"
+            hx-swap="outerHTML">
+        {% if field == 'model' %}
+            <i class="bi bi-layers text-secondary me-2"></i><strong>{{ item.name }}</strong> <span class="text-muted">({{ item.object_type.type }})</span>
+        {% elif field == 'parent' %}
+            <i class="bi bi-folder text-warning me-2"></i><strong>{{ item.name|default:item.model.name }}</strong> <small class="text-muted">| {{ item.inventory_number|default:"Без инв. №" }}</small>
+        {% else %}
+            <i class="bi bi-tag text-muted me-2"></i>{{ item.type }}
+        {% endif %}
+    </button>
+    {% endfor %}
+
+    {% if show_create_option %}
+    <button type="button" 
+            class="list-group-item list-group-item-action py-2 text-primary text-start small border-0 bg-light fw-bold"
+            hx-get="{% url 'select_suggestion' %}?field={{ field }}&name={{ q|urlencode }}"
+            hx-target="#search-wrapper-{{ field }}"
+            hx-swap="outerHTML">
+        <i class="bi bi-plus-circle-fill me-2"></i>Создать новый: "{{ q }}"
+    </button>
+    {% endif %}
+</div>

@@ -1,0 +1,15 @@
+<!-- templates/data/includes/suggestion_selected.html -->
+<div id="search-wrapper-{{ field }}" class="d-flex align-items-center justify-content-between bg-light border border-primary-subtle p-2 rounded-3 animate-fade">
+    <span class="small fw-semibold text-dark"><i class="bi bi-check-circle-fill text-success me-2"></i>{{ display_name }}</span>
+    
+    <!-- Скрытые инпуты, которые отправятся с формой -->
+    <input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">
+    
+    <button type="button" 
+            class="btn btn-sm btn-link text-secondary p-0 shadow-none border-0 fw-bold"
+            hx-get="{% url 'reset_suggestion' %}?field={{ field }}"
+            hx-target="#search-wrapper-{{ field }}"
+            hx-swap="outerHTML">
+        Изменить
+    </button>
+</div>

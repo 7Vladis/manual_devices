@@ -53,89 +53,16 @@
 
 <!-- МОДАЛЬНОЕ ОКНО: Создание Объекта -->
 <div class="modal fade" id="createObjectModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold">Новый объект</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <!-- После успешного создания обновляем весь sidebar -->
-            <form hx-post="{% url 'create_object' %}" 
-                  hx-target="#sidebar-container" 
-                  hx-on::after-request="bootstrap.Modal.getInstance(document.getElementById('createObjectModal')).hide(); this.reset();">
-                {% csrf_token %}
-                <div class="modal-body py-3">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Название объекта</label>
-                        <input type="text" name="name" class="form-control bg-light border-0" placeholder="Котельная установка КУ-5" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Инвентарный номер</label>
-                        <input type="text" name="inventory_number" class="form-control bg-light border-0" placeholder="ИНВ-003429">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Модель оборудования</label>
-                        <select name="model" class="form-select bg-light border-0" required>
-                            <option value="" disabled selected>Выберите модель...</option>
-                            {% for model in models %}
-                            <option value="{{ model.uuid }}">{{ model.name }} ({{ model.object_type.type }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Родительский объект (если есть)</label>
-                        <select name="parent" class="form-select bg-light border-0">
-                            <option value="">Без родителя (корневой объект)</option>
-                            {% if initial_objects %}
-                                {% for item in initial_objects %}
-                                    <option value="{{ item.uuid }}">{{ item.name|default:item.model.name }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-primary px-4">Создать</button>
-                </div>
-            </form>
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
         </div>
     </div>
 </div>
 
-<!-- МОДАЛЬНОЕ ОКНО: Создание Модели -->
+<!-- МОДАЛЬНОЕ ОКНО: Создание Модели (Новая чистая обертка) -->
 <div class="modal fade" id="createModelModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold">Новая модель</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <!-- После успешного создания модели обновляем sidebar с параметром tab=models -->
-            <form hx-post="{% url 'create_model' %}" 
-                  hx-target="#sidebar-container" 
-                  hx-on::after-request="bootstrap.Modal.getInstance(document.getElementById('createModelModal')).hide(); this.reset();">
-                {% csrf_token %}
-                <div class="modal-body py-3">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Название модели</label>
-                        <input type="text" name="name" class="form-control bg-light border-0" placeholder="ВК-25" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted text-uppercase">Тип оборудования</label>
-                        <select name="object_type" class="form-select bg-light border-0" required>
-                            <option value="" disabled selected>Выберите тип...</option>
-                            {% for ot in object_types %}
-                            <option value="{{ ot.uuid }}">{{ ot.type }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-primary px-4">Создать</button>
-                </div>
-            </form>
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
         </div>
     </div>
 </div>

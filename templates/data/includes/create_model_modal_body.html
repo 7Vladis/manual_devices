@@ -1,0 +1,54 @@
+<!-- templates/data/includes/create_model_modal_body.html -->
+<div class="modal-header border-0 pb-0 animate-fade">
+    <h5 class="modal-title fw-bold">Новая модель</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<form hx-post="{% url 'create_model' %}" 
+      hx-target="#sidebar-container" 
+      hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('createModelModal')).hide(); }">
+    {% csrf_token %}
+    <div class="modal-body py-3">
+        <div class="row g-4">
+            
+            <!-- Левая колонка: Идентификация модели -->
+            <div class="col-md-4 border-end-md">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Название модели</label>
+                    <input type="text" name="name" class="form-control bg-light border-0 py-2" 
+                           placeholder="Например: ВК-25" required
+                           hx-get="{% url 'check_model_name' %}"
+                           hx-trigger="keyup changed delay:500ms"
+                           hx-target="#model-name-check-container"
+                           autocomplete="off">
+                    <div id="model-name-check-container"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Тип оборудования</label>
+                    <div id="search-wrapper-object_type" class="position-relative">
+                        <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2" 
+                               placeholder="Введите или найдите тип оборудования..."
+                               hx-get="{% url 'suggest' %}?field=object_type"
+                               hx-trigger="keyup changed delay:300ms"
+                               hx-target="#results-object_type"
+                               autocomplete="off">
+                        <div id="results-object_type"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Правая колонка: Спецификации -->
+            <div class="col-md-8">
+                <div id="specs-builder-container" hx-get="{% url 'specs_builder' %}" hx-trigger="load" hx-target="this">
+                    <!-- Загрузит чистый конструктор характеристик -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary px-4 fw-bold">Создать</button>
+    </div>
+</form>
