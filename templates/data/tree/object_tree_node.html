@@ -2,44 +2,24 @@
     <div class="d-flex align-items-center justify-content-between p-1 rounded-2 hover-bg-light transition-all">
         
         {% if node.subject_relations.all %}
-            <!-- 1. Родительский объект: Стрелочка раскрытия и иконка папки -->
+            <!-- 1. Родительский объект -->
             <span class="tree-arrow me-1 text-muted d-inline-flex align-items-center justify-content-center" 
                   style="width: 28px; height: 28px; font-size: 0.8rem; cursor: pointer; user-select: none;"
                   data-bs-toggle="collapse" 
                   data-bs-target="#children-{{ node.uuid }}"
-                  aria-expanded="false">
+                  aria-expanded="{% if node.uuid|stringformat:'s' in parent_uuids %}true{% else %}false{% endif %}">
                 <i class="bi bi-chevron-right arrow-icon"></i>
             </span>
-            
-            <div class="d-flex align-items-center text-truncate flex-grow-1 py-1" 
-                  hx-get="{% url 'object_detail' node.uuid %}" 
-                  hx-target="#detail-container"
-                  hx-swap="innerHTML"
-                  style="cursor: pointer; user-select: none;">
-                <i class="bi bi-folder text-warning me-2 fs-5"></i>
-                <span class="text-dark fw-medium text-truncate small">
-                    {{ node.name|default:node.model.name }}
-                </span>
-            </div>
         {% else %}
-            <!-- 2. Конечный объект: Пустой отступ для выравнивания и иконка файла -->
+            <!-- 2. Конечный объект -->
             <span class="me-1 d-inline-flex" style="width: 28px; height: 28px;"></span>
-            
-            <div class="d-flex align-items-center text-truncate flex-grow-1 py-1" 
-                  hx-get="{% url 'object_detail' node.uuid %}" 
-                  hx-target="#detail-container"
-                  hx-swap="innerHTML"
-                  style="cursor: pointer; user-select: none;">
-                <i class="bi bi-file-text text-secondary me-2 fs-5"></i>
-                <span class="text-dark fw-medium text-truncate small">
-                    {{ node.name|default:node.model.name }}
-                </span>
-            </div>
         {% endif %}
         
-        <!-- 3. Кнопки управления (заменили opacity-0 на opacity-100, чтобы они были видны всегда) -->
+        <!-- Рендерим лейбл через подключаемый микро-шаблон -->
+        {% include 'data/tree/object_tree_node_label.html' with node=node %}
+        
+        <!-- 3. Кнопки управления -->
         <div class="tree-actions d-flex align-items-center gap-1 opacity-100 ms-2">
-            <!-- Обслужить -->
             <button type="button" class="btn btn-link text-secondary p-1 m-0 d-flex align-items-center" 
                     data-bs-toggle="modal" 
                     data-bs-target="#serviceModal"
@@ -49,7 +29,6 @@
                 <i class="bi bi-wrench-adjustable small"></i>
             </button>
             
-            <!-- Удалить -->
             <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center" 
                     hx-post="{% url 'delete_object' node.uuid %}"
                     hx-target="#node-{{ node.uuid }}"
@@ -61,12 +40,11 @@
         </div>
     </div>
     
-    <!-- Контейнер для вложенных объектов (релевантно только для родителей) -->
     {% if node.subject_relations.all %}
-    <div class="collapse" 
+    <div class="collapse {% if node.uuid|stringformat:'s' in parent_uuids %}show{% endif %}" 
          id="children-{{ node.uuid }}" 
-         hx-get="{% url 'object_children' node.uuid %}" 
-         hx-trigger="show.bs.collapse once" 
+         hx-get="{% url 'object_children' node.uuid %}{% if active_object %}?active_object={{ active_object.uuid }}{% endif %}" 
+         hx-trigger="{% if node.uuid|stringformat:'s' in parent_uuids %}load once{% else %}show.bs.collapse once{% endif %}" 
          hx-target="#children-{{ node.uuid }}"
          hx-swap="innerHTML">
         <div class="py-2 text-center text-muted small">

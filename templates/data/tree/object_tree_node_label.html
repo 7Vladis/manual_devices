@@ -1,0 +1,17 @@
+<div id="node-label-{{ node.uuid }}" 
+     class="d-flex align-items-center text-truncate flex-grow-1 py-1 px-2 rounded-2 {% if is_active or active_object and active_object.uuid == node.uuid %}bg-light-primary border border-primary-subtle fw-bold text-primary active-tree-node{% endif %}" 
+     hx-get="{% url 'object_detail' node.uuid %}" 
+     hx-target="#detail-container"
+     style="cursor: pointer; user-select: none;"
+     {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+    
+    {% if node.subject_relations.all %}
+        <i class="bi bi-folder text-warning me-2 fs-5"></i>
+    {% else %}
+        <i class="bi bi-file-text text-secondary me-2 fs-5"></i>
+    {% endif %}
+    
+    <span class="text-dark fw-medium text-truncate small">
+        {{ node.name|default:node.model.name }}
+    </span>
+</div>

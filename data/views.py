@@ -124,21 +124,31 @@ def dict_view(request):
     """Главная страница справочника (содержит разметку левого и правого окон)"""
     active_tab = request.GET.get('tab', 'objects')
     
-    # Считываем переданные через URL параметры объектов или моделей
     selected_object_id = request.GET.get('object')
     selected_model_id = request.GET.get('model')
     
     active_object = None
     active_model = None
+    parent_uuids = [] # Список UUID всех родителей для автоматического раскрытия дерева
     
     if selected_object_id:
         active_tab = 'objects'
         active_object = get_object_or_404(DataObject, pk=selected_object_id)
+        
+        # Рекурсивно собираем всю цепочку родителей вверх
+        current = active_object
+        while True:
+            relation = Relation.objects.filter(subject=current).select_related('main').first()
+            if relation:
+                parent_uuids.append(str(relation.main.pk))
+                current = relation.main
+            else:
+                break
+                
     elif selected_model_id:
         active_tab = 'models'
         active_model = get_object_or_404(ObjectModel, pk=selected_model_id)
     
-    # Общие данные для модальных окон создания
     models = ObjectModel.objects.all().order_by('name')
     object_types = ObjectType.objects.all().order_by('type')
     
@@ -148,9 +158,9 @@ def dict_view(request):
         'active_tab': active_tab,
         'active_object': active_object,
         'active_model': active_model,
+        'parent_uuids': parent_uuids, # Передаем в контекст
     }
     
-    # Наполнение контекста в зависимости от активной вкладки
     if active_tab == 'models':
         context['object_types_list'] = ObjectType.objects.prefetch_related(
             Prefetch('models', queryset=ObjectModel.objects.all().order_by('name'))
@@ -158,14 +168,12 @@ def dict_view(request):
     else:
         context['initial_objects'] = DataObject.objects.exclude(
             main_relations__isnull=False
-        ).prefetch_related('subject_relations').order_by('name') # наша оптимизация из первого шага
+        ).prefetch_related('subject_relations').order_by('name')
         
-    # Если это HTMX-запрос на обновление левой панели (sidebar)
     if request.headers.get('HX-Request') and request.GET.get('sidebar'):
         return render(request, 'data/tree/dict_sidebar.html', context)
         
     return render(request, 'data/dict.html', context)
-
 
 @login_required
 def object_tree_view(request):
@@ -179,16 +187,37 @@ def object_tree_view(request):
 
 @login_required
 def object_children_view(request, parent_uuid):
-    """Возвращает дочерние объекты конкретного родителя"""
+    """Возвращает дочерние объекты конкретного родителя с поддержкой сквозной иерархии"""
     parent = get_object_or_404(DataObject, pk=parent_uuid)
-    # Добавляем prefetch_related('subject_relations')
     children = DataObject.objects.filter(
         main_relations__main=parent
     ).prefetch_related('subject_relations').order_by('name')
     
+    # Считываем переданный из HTMX-запроса ID активного объекта
+    active_object_id = request.GET.get('active_object')
+    active_object = None
+    parent_uuids = []
+    
+    if active_object_id:
+        try:
+            active_object = DataObject.objects.get(pk=active_object_id)
+            # Рекурсивно выстраиваем цепочку родителей для текущего уровня дерева
+            current = active_object
+            while True:
+                relation = Relation.objects.filter(subject=current).select_related('main').first()
+                if relation:
+                    parent_uuids.append(str(relation.main.pk))
+                    current = relation.main
+                else:
+                    break
+        except DataObject.DoesNotExist:
+            pass
+
     return render(request, 'data/tree/object_tree_list_nodes.html', {
         'objects': children,
-        'parent': parent
+        'parent': parent,
+        'active_object': active_object, # Передаем активный объект дальше
+        'parent_uuids': parent_uuids,   # Передаем список раскрытых родителей дальше
     })
 
 
@@ -419,8 +448,12 @@ def create_model_view(request):
 
 @login_required
 def object_detail_view(request, pk):
-    """Отображает правое окно объекта с вкладками"""
+    """Отображает правое окно объекта с вкладками и обновляет подсветку в дереве"""
     obj = get_object_or_404(DataObject.objects.select_related('model', 'model__object_type'), pk=pk)
+    
+    # Считываем прошлый активный объект из сессии и сохраняем новый
+    prev_active_id = request.session.get('active_object_id')
+    request.session['active_object_id'] = str(pk)
     
     parent_relation = Relation.objects.filter(subject=obj).select_related('main').first()
     parent = parent_relation.main if parent_relation else None
@@ -431,7 +464,35 @@ def object_detail_view(request, pk):
         'active_tab': 'short_info',
     }
     
-    response = render(request, 'data/object/object_details.html', context)
+    # Рендерим основную карточку деталей
+    response_content = render_to_string('data/object/object_details.html', context, request=request)
+    
+    # Подготавливаем OOB-элементы для обновления подсветки в дереве на лету
+    oob_elements = []
+    
+    # Шаблон для нового подсвеченного элемента
+    new_node_html = render_to_string('data/tree/object_tree_node_label.html', {
+        'node': obj,
+        'is_active': True,
+        'oob': True
+    }, request=request)
+    oob_elements.append(new_node_html)
+    
+    # Шаблон для удаления подсветки со старого элемента (если он изменился)
+    if prev_active_id and prev_active_id != str(pk):
+        try:
+            prev_obj = DataObject.objects.get(pk=prev_active_id)
+            old_node_html = render_to_string('data/tree/object_tree_node_label.html', {
+                'node': prev_obj,
+                'is_active': False,
+                'oob': True
+            }, request=request)
+            oob_elements.append(old_node_html)
+        except DataObject.DoesNotExist:
+            pass
+            
+    # Объединяем детали и OOB-свопы в один ответ
+    combined_content = response_content + "\n" + "\n".join(oob_elements)
     
     # Если перешли по ссылке из модели — переключим левый сайдбар на "Объекты" на лету
     if request.GET.get('sidebar'):
@@ -443,12 +504,9 @@ def object_detail_view(request, pk):
             'object_types': ObjectType.objects.all().order_by('type')
         }
         sidebar_html = render_to_string('data/tree/dict_sidebar.html', sidebar_context, request=request)
+        combined_content = combined_content + f'\n<div id="sidebar-container" hx-swap-oob="innerHTML">{sidebar_html}</div>'
         
-        content = response.content.decode('utf-8')
-        combined_content = f'{content}\n<div id="sidebar-container" hx-swap-oob="innerHTML">{sidebar_html}</div>'
-        return HttpResponse(combined_content)
-        
-    return response
+    return HttpResponse(combined_content)
 
 
 @login_required
@@ -702,36 +760,61 @@ def delete_attachments_bulk(request):
 # ЭТАП 3: ДЕТАЛИ МОДЕЛИ И JSON-РЕДАКТОР
 # ==========================================
 
-@login_required
+login_required
 def model_detail_view(request, pk):
-    """Отображает правое окно детализации модели"""
+    """Отображает правое окно детализации модели и обновляет подсветку в дереве"""
     model_obj = get_object_or_404(ObjectModel.objects.select_related('object_type'), pk=pk)
+    
+    # Считываем прошлую активную модель из сессии и сохраняем новую
+    prev_active_id = request.session.get('active_model_id')
+    request.session['active_model_id'] = str(pk)
     
     context = {
         'model_obj': model_obj,
         'active_tab': 'specs',
     }
     
-    response = render(request, 'data/model/model_details.html', context)
+    # Рендерим карточку деталей модели
+    response_content = render_to_string('data/model/model_details.html', context, request=request)
     
-    # Если запрашиваем деталь модели с флагом sidebar=1 (при переходе из объекта)
+    # Готовим OOB-свопы подсветки дерева моделей
+    oob_elements = []
+    
+    new_node_html = render_to_string('data/tree/model_tree_node_label.html', {
+        'model': model_obj,
+        'is_active': True,
+        'oob': True
+    }, request=request)
+    oob_elements.append(new_node_html)
+    
+    if prev_active_id and prev_active_id != str(pk):
+        try:
+            prev_model = ObjectModel.objects.get(pk=prev_active_id)
+            old_node_html = render_to_string('data/tree/model_tree_node_label.html', {
+                'model': prev_model,
+                'is_active': False,
+                'oob': True
+            }, request=request)
+            oob_elements.append(old_node_html)
+        except ObjectModel.DoesNotExist:
+            pass
+            
+    combined_content = response_content + "\n" + "\n".join(oob_elements)
+    
     if request.GET.get('sidebar'):
         object_types = ObjectType.objects.prefetch_related(
             Prefetch('models', queryset=ObjectModel.objects.all().order_by('name'))
         ).order_by('type')
         sidebar_context = {
             'object_types_list': object_types,
-            'active_tab': 'models', # Устанавливаем вкладку "Модели" активной
+            'active_tab': 'models',
             'models': ObjectModel.objects.all().order_by('name'),
             'object_types': ObjectType.objects.all().order_by('type')
         }
         sidebar_html = render_to_string('data/tree/dict_sidebar.html', sidebar_context, request=request)
+        combined_content = combined_content + f'\n<div id="sidebar-container" hx-swap-oob="innerHTML">{sidebar_html}</div>'
         
-        content = response.content.decode('utf-8')
-        combined_content = f'{content}\n<div id="sidebar-container" hx-swap-oob="innerHTML">{sidebar_html}</div>'
-        return HttpResponse(combined_content)
-        
-    return response
+    return HttpResponse(combined_content)
 
 
 @login_required

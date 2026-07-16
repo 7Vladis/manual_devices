@@ -13,14 +13,9 @@
             <ul class="list-unstyled ps-2 border-start border-light" style="margin-left: 6px;">
                 {% for model in ot.models.all %}
                 <li class="tree-item d-flex align-items-center justify-content-between p-2 rounded-2 hover-bg-light transition-all mb-1" id="model-node-{{ model.uuid }}">
-                    <!-- Название модели: Клик открывает детали модели в правом окне -->
-                    <div class="d-flex align-items-center text-truncate flex-grow-1" 
-                         style="cursor: pointer;" 
-                         hx-get="{% url 'model_detail' model.uuid %}" 
-                         hx-target="#detail-container">
-                        <i class="bi bi-layers text-secondary me-2 fs-6"></i>
-                        <span class="text-dark small fw-semibold text-truncate">{{ model.name }}</span>
-                    </div>
+                    
+                    <!-- Подключаем микро-шаблон лейбла модели для автоматической серверной подсветки -->
+                    {% include 'data/tree/model_tree_node_label.html' with model=model %}
                     
                     <div class="tree-actions d-flex align-items-center gap-1 opacity-100 ms-2">
                         <!-- Кнопка удаления модели -->
