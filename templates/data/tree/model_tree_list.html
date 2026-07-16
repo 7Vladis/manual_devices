@@ -22,7 +22,7 @@
                         <span class="text-dark small fw-semibold text-truncate">{{ model.name }}</span>
                     </div>
                     
-                    <div class="tree-actions d-flex align-items-center gap-1 opacity-0 ms-2">
+                    <div class="tree-actions d-flex align-items-center gap-1 opacity-100 ms-2">
                         <!-- Кнопка удаления модели -->
                         <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center"
                                 hx-post="{% url 'delete_model' model.uuid %}"

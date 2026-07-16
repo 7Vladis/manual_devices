@@ -30,13 +30,30 @@
 
         <!-- ПРАВОЕ ОКНО: Детали (заглушка) -->
         <div class="col-12 col-md-8 col-lg-9 d-flex flex-column h-100 bg-light" id="detail-container">
-            <div class="d-flex align-items-center justify-content-center text-muted p-5 text-center h-100">
-                <div>
-                    <i class="bi bi-info-circle fs-1 mb-3 text-secondary"></i>
-                    <h5 class="fw-bold">Выберите объект или модель в левом окне</h5>
-                    <p class="small mb-0">Здесь отобразится подробная техническая информация, история обслуживания и прикрепленные файлы.</p>
+            {% if active_object %}
+                <!-- Если передан объект, HTMX мгновенно подгружает его карточку -->
+                <div hx-get="{% url 'object_detail' active_object.uuid %}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">
+                    <div class="text-center p-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
                 </div>
-            </div>
+            {% elif active_model %}
+                <!-- Если передана модель, HTMX мгновенно подгружает её карточку -->
+                <div hx-get="{% url 'model_detail' active_model.uuid %}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">
+                    <div class="text-center p-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                </div>
+            {% else %}
+                <!-- Заглушка по умолчанию, если ничего не выбрано -->
+                <div class="d-flex align-items-center justify-content-center text-muted p-5 text-center h-100">
+                    <div>
+                        <i class="bi bi-info-circle fs-1 mb-3 text-secondary"></i>
+                        <h5 class="fw-bold">Выберите объект или модель в левом окне</h5>
+                        <p class="small mb-0">Здесь отобразится подробная техническая информация, история обслуживания и прикрепленные файлы.</p>
+                    </div>
+                </div>
+            {% endif %}
         </div>
         
     </div>

@@ -26,25 +26,7 @@
         </button>
         <ul class="dropdown-menu w-100 border-0 shadow-lg mt-1 p-2">
             <li>
-                <!-- КНОПКА СОЗДАНИЯ ОБЪЕКТА -->
-                <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
-                        type="button" 
-                        data-bs-toggle="modal" 
-                        data-bs-target="#createObjectModal"
-                        hx-get="{% url 'create_object' %}"
-                        hx-target="#createObjectModal .modal-content">
-                    <div class="bg-light rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
-                        <i class="bi bi-box text-primary fs-5"></i>
-                    </div>
-                    <div>
-                        <span class="d-block fw-bold text-dark small">Объект</span>
-                        <small class="text-muted" style="font-size: 0.75rem;">Конкретный экземпляр оборудования</small>
-                    </div>
-                </button>
-            </li>
-            <li><hr class="dropdown-divider my-2 opacity-50"></li>
-            <li>
-                <!-- КНОПКА СОЗДАНИЯ МОДЕЛИ -->
+                <!-- КНОПКА СОЗДАНИЯ МОДЕЛИ (Теперь первая) -->
                 <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
                         type="button" 
                         data-bs-toggle="modal" 
@@ -57,6 +39,24 @@
                     <div>
                         <span class="d-block fw-bold text-dark small">Модель</span>
                         <small class="text-muted" style="font-size: 0.75rem;">Тип/шаблон оборудования</small>
+                    </div>
+                </button>
+            </li>
+            <li><hr class="dropdown-divider my-2 opacity-50"></li>
+            <li>
+                <!-- КНОПКА СОЗДАНИЯ ОБЪЕКТА (Теперь вторая) -->
+                <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
+                        type="button" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#createObjectModal"
+                        hx-get="{% url 'create_object' %}"
+                        hx-target="#createObjectModal .modal-content">
+                    <div class="bg-light rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
+                        <i class="bi bi-box text-primary fs-5"></i>
+                    </div>
+                    <div>
+                        <span class="d-block fw-bold text-dark small">Объект</span>
+                        <small class="text-muted" style="font-size: 0.75rem;">Конкретный экземпляр оборудования</small>
                     </div>
                 </button>
             </li>

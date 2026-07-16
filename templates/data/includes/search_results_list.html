@@ -1,6 +1,6 @@
 <div class="list-group list-group-flush rounded-3">
     {% for obj in results %}
-    <a href="#" class="list-group-item list-group-item-action p-3">
+        <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="list-group-item list-group-item-action p-3">
         <div class="d-flex justify-content-between align-items-center">
             <div>
                 <span class="fw-bold d-block text-primary">{{ obj.name|default:obj.model.name }}</span>

@@ -124,6 +124,20 @@ def dict_view(request):
     """Главная страница справочника (содержит разметку левого и правого окон)"""
     active_tab = request.GET.get('tab', 'objects')
     
+    # Считываем переданные через URL параметры объектов или моделей
+    selected_object_id = request.GET.get('object')
+    selected_model_id = request.GET.get('model')
+    
+    active_object = None
+    active_model = None
+    
+    if selected_object_id:
+        active_tab = 'objects'
+        active_object = get_object_or_404(DataObject, pk=selected_object_id)
+    elif selected_model_id:
+        active_tab = 'models'
+        active_model = get_object_or_404(ObjectModel, pk=selected_model_id)
+    
     # Общие данные для модальных окон создания
     models = ObjectModel.objects.all().order_by('name')
     object_types = ObjectType.objects.all().order_by('type')
@@ -132,6 +146,8 @@ def dict_view(request):
         'models': models,
         'object_types': object_types,
         'active_tab': active_tab,
+        'active_object': active_object,
+        'active_model': active_model,
     }
     
     # Наполнение контекста в зависимости от активной вкладки
@@ -142,7 +158,7 @@ def dict_view(request):
     else:
         context['initial_objects'] = DataObject.objects.exclude(
             main_relations__isnull=False
-        ).order_by('name')
+        ).prefetch_related('subject_relations').order_by('name') # наша оптимизация из первого шага
         
     # Если это HTMX-запрос на обновление левой панели (sidebar)
     if request.headers.get('HX-Request') and request.GET.get('sidebar'):
@@ -154,9 +170,10 @@ def dict_view(request):
 @login_required
 def object_tree_view(request):
     """Возвращает только дерево объектов (для вкладки 'Объекты')"""
+    # Добавляем prefetch_related('subject_relations')
     roots = DataObject.objects.exclude(
         main_relations__isnull=False
-    ).order_by('name')
+    ).prefetch_related('subject_relations').order_by('name')
     return render(request, 'data/tree/object_tree_list.html', {'objects': roots})
 
 
@@ -164,10 +181,10 @@ def object_tree_view(request):
 def object_children_view(request, parent_uuid):
     """Возвращает дочерние объекты конкретного родителя"""
     parent = get_object_or_404(DataObject, pk=parent_uuid)
-    # Находим все DataObject, которые связаны отношением, где parent является главным (main)
+    # Добавляем prefetch_related('subject_relations')
     children = DataObject.objects.filter(
         main_relations__main=parent
-    ).order_by('name')
+    ).prefetch_related('subject_relations').order_by('name')
     
     return render(request, 'data/tree/object_tree_list_nodes.html', {
         'objects': children,
