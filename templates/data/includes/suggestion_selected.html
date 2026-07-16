@@ -1,15 +1,50 @@
 <!-- templates/data/includes/suggestion_selected.html -->
-<div id="search-wrapper-{{ field }}" class="d-flex align-items-center justify-content-between bg-light border border-primary-subtle p-2 rounded-3 animate-fade">
-    <span class="small fw-semibold text-dark"><i class="bi bi-check-circle-fill text-success me-2"></i>{{ display_name }}</span>
+<!-- Теперь весь шаблон целиком обернут в id="search-wrapper-{{ field }}" -->
+<div id="search-wrapper-{{ field }}" class="animate-fade">
     
-    <!-- Скрытые инпуты, которые отправятся с формой -->
-    <input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">
+    <!-- 1. Плашка выбранного правила / элемента -->
+    <div class="d-flex align-items-center justify-content-between bg-light border border-primary-subtle p-2 rounded-3">
+        <span class="small fw-semibold text-dark">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>{{ display_name }}
+        </span>
+        
+        <!-- Скрытые инпуты для отправки стандартной формы -->
+        <input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">
+        
+        <!-- Кнопка сброса заменяет весь внешний контейнер (#search-wrapper-{{ field }}) -->
+        <button type="button" 
+                class="btn btn-sm btn-link text-secondary p-0 shadow-none border-0 fw-bold"
+                hx-get="{% url 'reset_suggestion' %}?field={{ field }}"
+                hx-target="#search-wrapper-{{ field }}"
+                hx-swap="outerHTML">
+            Изменить
+        </button>
+    </div>
+
+    <!-- 2. ВИЗУАЛЬНЫЙ КОНСТРУКТОР НОВОГО ПРАВИЛА (теперь находится внутри заменяемой области) -->
+    {% if is_new_rule %}
+    <div class="mt-3 p-3 border rounded-3 bg-white shadow-sm">
+        <h6 class="fw-bold text-dark small mb-3 border-bottom pb-2">
+            <i class="bi bi-sliders me-1 text-primary"></i> Настройка нового правила
+        </h6>
+
+        <!-- Выбор стратегии -->
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Тип правила</label>
+            <select name="new_rule_strategy" 
+                    class="form-select form-select-sm"
+                    hx-get="{% url 'rule_constructor' %}"
+                    hx-target="#constructor-fields-container"
+                    hx-swap="outerHTML"
+                    hx-trigger="change">
+                <option value="relative" selected>Относительный интервал (через промежуток времени)</option>
+                <option value="fixed">Фиксированные календарные даты (одна или несколько)</option>
+            </select>
+        </div>
+
+        <!-- Контейнер для динамических полей -->
+        {% include 'data/includes/rule_constructor_fields.html' with strategy='relative' %}
+    </div>
+    {% endif %}
     
-    <button type="button" 
-            class="btn btn-sm btn-link text-secondary p-0 shadow-none border-0 fw-bold"
-            hx-get="{% url 'reset_suggestion' %}?field={{ field }}"
-            hx-target="#search-wrapper-{{ field }}"
-            hx-swap="outerHTML">
-        Изменить
-    </button>
 </div>

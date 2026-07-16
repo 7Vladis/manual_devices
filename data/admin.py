@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ObjectType, DependencyType, ObjectModel, DataObject, Relation, ActionHistory, Comment, Attachment
+from .models import ObjectType, DependencyType, DateUpdateRule, ObjectModel, DataObject, Relation, ActionHistory, Comment, Attachment
 
 class CommentInline(admin.TabularInline):
     model = Comment
@@ -37,6 +37,11 @@ class DependencyTypeAdmin(admin.ModelAdmin):
     list_display = ('type',)
     search_fields = ('type',)
 
+@admin.register(DateUpdateRule)
+class DateUpdateRuleAdmin(admin.ModelAdmin):
+    list_display = ('name', 'rule')
+    search_fields = ('name',)
+
 @admin.register(ObjectModel)
 class ObjectModelAdmin(admin.ModelAdmin):
     list_display = ('name', 'object_type')
@@ -48,7 +53,7 @@ class DataObjectAdmin(admin.ModelAdmin):
     list_display = ('name', 'inventory_number', 'model', 'user', 'next_maintenance_date')
     list_filter = ('model__object_type', 'next_maintenance_date')
     search_fields = ('name', 'inventory_number', 'model__name')
-    fields = ('name', 'inventory_number', 'model', 'user', 'next_maintenance_date', 'description') 
+    fields = ('name', 'inventory_number', 'model', 'user','date_update_rule', 'next_maintenance_date', 'description') 
     
     inlines = [
         MainRelationsInline, 

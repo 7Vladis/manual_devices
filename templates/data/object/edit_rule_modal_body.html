@@ -1,0 +1,37 @@
+<!-- templates/data/object/edit_rule_modal_body.html -->
+<div class="modal-header border-0 pb-0">
+    <h5 class="modal-title fw-bold">Правило расчета даты ТО</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<form hx-post="{% url 'edit_rule' obj.uuid %}" 
+    hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('editRuleModal')).hide(); }">
+    {% csrf_token %}
+    <div class="modal-body py-3">
+        <p class="text-muted small mb-3">Настройте способ определения даты следующего обслуживания для объекта:<br>
+            <strong class="text-dark">{{ obj.name|default:obj.model.name }}</strong>
+        </p>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Режим планирования</label>
+            <select name="maintenance_scheduling_mode" 
+                    class="form-select form-select-sm"
+                    hx-get="{% url 'toggle_scheduling_mode' %}?inline=1"
+                    hx-target="#inline-scheduling-mode-fields"
+                    hx-swap="outerHTML"
+                    hx-trigger="change">
+                <option value="manual" {% if current_mode == 'manual' %}selected{% endif %}>Ручной выбор даты следующего ТО</option>
+                <option value="auto" {% if current_mode == 'auto' %}selected{% endif %}>Автоматический расчет по правилу</option>
+            </select>
+        </div>
+
+        <!-- Контейнер переключаемых полей -->
+        <div id="inline-scheduling-mode-fields" class="mb-2">
+            {% include 'data/includes/scheduling_mode_fields_inline.html' with mode=current_mode %}
+        </div>
+    </div>
+    <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary px-4 fw-bold">Сохранить</button>
+    </div>
+</form>

@@ -1,11 +1,12 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404
+from django.template.loader import render_to_string
 from django.http import HttpResponse
 from django.db.models import Q, Prefetch
 from django.utils import timezone
 from datetime import timedelta, datetime
-from django.views.decorators.http import require_GET, require_POST
-from .models import DataObject, ActionHistory, ObjectModel, ObjectType, Relation, DependencyType, Attachment, Comment
+from dateutil.relativedelta import relativedelta
+from .models import DateUpdateRule, DataObject, ActionHistory, ObjectModel, ObjectType, Relation, DependencyType, Attachment, Comment
 
 # (Существующие вспомогательные функции для дашборда)
 def get_period_limits(period_type):
@@ -204,17 +205,17 @@ def service_object_view(request, pk):
                 action=f"Техническое обслуживание выполнено. Следующее ТО запланировано на {maintenance_date.strftime('%d.%m.%Y')}."
             )
         
-        # Перерендерим только этот узел в дереве, чтобы обновить дату или состояние
-        # Нам нужно понять, является ли он корневым или дочерним, но шаблон отображения узла одинаков
-        # Для обновления возвращаем обновленный элемент дерева
-        # Так как модалка закрывается с помощью data-bs-dismiss на кнопке отправки, мы просто возвращаем узел
-        # Дополнительно передадим заголовок HX-Trigger, чтобы обновить правое окно, если этот объект был там открыт
         response = render(request, 'data/tree/object_tree_node.html', {'node': obj})
         response['HX-Trigger'] = 'objectServiced'
         return response
 
-    # GET запрос возвращает HTML-код формы для модального окна
-    return render(request, 'data/tree/service_modal_body.html', {'obj': obj})
+    # GET запрос: рассчитываем рекомендованную дату на основе правила
+    proposed_date = calculate_next_maintenance_date(obj)
+    
+    return render(request, 'data/tree/service_modal_body.html', {
+        'obj': obj,
+        'proposed_date': proposed_date
+    })
 
 
 @login_required
@@ -250,6 +251,10 @@ def create_object_view(request):
         dep_type_uuid = request.POST.get('dependency_type')
         new_dep_type_name = request.POST.get('new_dependency_type')
         
+        # Данные по правилу
+        rule_uuid = request.POST.get('date_update_rule')
+        new_rule_name = request.POST.get('new_date_update_rule')
+        
         model_obj = get_object_or_404(ObjectModel, pk=model_uuid)
         
         next_maintenance_date = None
@@ -260,14 +265,65 @@ def create_object_view(request):
                 )
             except ValueError:
                 pass
+
+        # Инициализация правила
+        selected_rule = None
+        if rule_uuid:
+            selected_rule = get_object_or_404(DateUpdateRule, pk=rule_uuid)
+        elif new_rule_name:
+            from .models import DateUpdateRule
+            
+            strategy = request.POST.get('new_rule_strategy', 'relative')
+            
+            if strategy == 'relative':
+                anchor = request.POST.get('new_rule_anchor', 'actual')
+                years = int(request.POST.get('new_rule_years', 0))
+                months = int(request.POST.get('new_rule_months', 6))
+                days = int(request.POST.get('new_rule_days', 0))
+                
+                rule_json = {
+                    "strategy": "relative",
+                    "anchor": anchor,
+                    "value": {
+                        "years": years,
+                        "months": months,
+                        "days": days
+                    }
+                }
+            elif strategy == 'fixed': # Универсальный парсер фиксированных дат (одной или нескольких)
+                fixed_months = request.POST.getlist('fixed_months')
+                fixed_days = request.POST.getlist('fixed_days')
+                
+                dates_list = []
+                for m, d in zip(fixed_months, fixed_days):
+                    dates_list.append({"month": int(m), "day": int(d)})
+                    
+                rule_json = {
+                    "strategy": "fixed",
+                    "anchor": "yearly",
+                    "value": dates_list
+                }
+                
+            selected_rule, _ = DateUpdateRule.objects.get_or_create(
+                name=new_rule_name,
+                defaults={"rule": rule_json}
+            )
                 
         new_obj = DataObject.objects.create(
             name=name,
             model=model_obj,
             inventory_number=inventory_number if inventory_number else None,
             next_maintenance_date=next_maintenance_date,
+            date_update_rule=selected_rule,
             user=request.user
         )
+
+        scheduling_mode = request.POST.get('maintenance_scheduling_mode', 'manual')
+        if scheduling_mode == 'auto' and selected_rule:
+            # Расчет даты, отталкиваясь от текущего момента
+            first_date = calculate_next_maintenance_date(new_obj, base_date=timezone.now())
+            new_obj.next_maintenance_date = first_date
+            new_obj.save()
         
         if parent_uuid:
             parent_obj = get_object_or_404(DataObject, pk=parent_uuid)
@@ -369,7 +425,6 @@ def object_detail_view(request, pk):
             'models': ObjectModel.objects.all().order_by('name'),
             'object_types': ObjectType.objects.all().order_by('type')
         }
-        from django.template.loader import render_to_string
         sidebar_html = render_to_string('data/tree/dict_sidebar.html', sidebar_context, request=request)
         
         content = response.content.decode('utf-8')
@@ -544,7 +599,6 @@ def add_comment_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
     text = request.POST.get('text', '').strip()
     if text:
-        from .models import Comment
         Comment.objects.create(
             user=request.user,
             data_object=obj,
@@ -558,7 +612,6 @@ def add_comment_view(request, pk):
 @login_required
 def edit_comment_view(request, pk):
     """Поштучное редактирование комментария"""
-    from .models import Comment
     comment = get_object_or_404(Comment, pk=pk)
     
     if request.method == 'POST':
@@ -574,7 +627,6 @@ def edit_comment_view(request, pk):
 @login_required
 def delete_comments_bulk(request):
     """Массовое и одиночное удаление комментариев"""
-    from .models import Comment
     comment_ids = request.POST.getlist('comment_ids')
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
@@ -596,7 +648,6 @@ def add_attachment_view(request, pk):
     is_preview_upload = request.POST.get('is_preview') == 'true'
     
     if file:
-        from .models import Attachment
         if is_preview_upload:
             # Снимаем флаг превью со всех старых вложений объекта
             Attachment.objects.filter(data_object=obj, is_preview=True).update(is_preview=False)
@@ -620,7 +671,6 @@ def add_attachment_view(request, pk):
 @login_required
 def delete_attachments_bulk(request):
     """Массовое удаление файлов"""
-    from .models import Attachment
     file_ids = request.POST.getlist('file_ids')
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
@@ -658,7 +708,6 @@ def model_detail_view(request, pk):
             'models': ObjectModel.objects.all().order_by('name'),
             'object_types': ObjectType.objects.all().order_by('type')
         }
-        from django.template.loader import render_to_string
         sidebar_html = render_to_string('data/tree/dict_sidebar.html', sidebar_context, request=request)
         
         content = response.content.decode('utf-8')
@@ -972,10 +1021,18 @@ def suggest_view(request):
         partial = DependencyType.objects.filter(word_filter).exclude(pk__in=exact)
         results = list(exact) + list(partial)
 
+    elif field == 'date_update_rule':
+        exact = DateUpdateRule.objects.filter(name__iexact=q)
+        word_filter = Q()
+        for w in words:
+            word_filter &= Q(name__icontains=w)
+        partial = DateUpdateRule.objects.filter(word_filter).exclude(pk__in=exact)
+        results = list(exact) + list(partial)
+
     show_create_option = False
-    if field in ['object_type', 'dependency_type']:
+    if field in ['object_type', 'dependency_type', 'date_update_rule']:
         has_exact_match = any(
-            (getattr(item, 'type', '').lower() == q.lower()) for item in results
+            (getattr(item, 'type' if field != 'date_update_rule' else 'name', '').lower() == q.lower()) for item in results
         )
         if not has_exact_match:
             show_create_option = True
@@ -998,6 +1055,7 @@ def select_suggestion_view(request):
     display_name = ""
     hidden_name = field
     hidden_value = ""
+    is_new_rule = False
     
     if uuid_val:
         hidden_value = uuid_val
@@ -1011,17 +1069,21 @@ def select_suggestion_view(request):
             display_name = parent_obj.name or parent_obj.model.name
         elif field == 'dependency_type':
             display_name = get_object_or_404(DependencyType, pk=uuid_val).type
+        elif field == 'date_update_rule':
+            display_name = get_object_or_404(DateUpdateRule, pk=uuid_val).name
     elif name_val:
-        # Режим создания нового типа inline
-        display_name = f"{name_val} (Создать новый)"
+        display_name = f"{name_val} (Создать новое)"
         hidden_name = f"new_{field}"
         hidden_value = name_val
+        if field == 'date_update_rule':
+            is_new_rule = True
         
     return render(request, 'data/includes/suggestion_selected.html', {
         'field': field,
         'display_name': display_name,
         'hidden_name': hidden_name,
-        'hidden_value': hidden_value
+        'hidden_value': hidden_value,
+        'is_new_rule': is_new_rule  # Передаем маркер, чтобы вывести доп. поле настройки периода
     })
 
 
@@ -1033,7 +1095,8 @@ def reset_suggestion_view(request):
         'object_type': 'Введите тип оборудования...',
         'model': 'Введите модель оборудования...',
         'parent': 'Поиск родительского объекта...',
-        'dependency_type': 'Введите тип связи...'
+        'dependency_type': 'Введите тип связи...',
+        'date_update_rule': 'Введите правило обновления...' # Добавлено
     }
     return render(request, 'data/includes/suggestion_input.html', {
         'field': field,
@@ -1064,4 +1127,232 @@ def specs_builder_view(request):
         
     return render(request, 'data/includes/specs_builder.html', {
         'specifications': specs
+    })
+
+# ==========================================
+# ЭТАП 4: Конструктор обслуживания
+# ==========================================
+
+def calculate_next_maintenance_date(data_object, base_date=None):
+    """
+    Рассчитывает дату следующего обслуживания для объекта на основе привязанного правила.
+    """
+    if not data_object.date_update_rule:
+        return None
+        
+    rule_data = data_object.date_update_rule.rule or {}
+    strategy = rule_data.get('strategy', 'relative')
+    anchor_type = rule_data.get('anchor', 'actual')
+    value = rule_data.get('value', {})
+    
+    if not base_date:
+        base_date = timezone.now()
+        
+    if anchor_type == 'scheduled' and data_object.next_maintenance_date:
+        base_date = data_object.next_maintenance_date
+
+    if strategy == 'relative':
+        delta = relativedelta(
+            years=int(value.get('years', 0)),
+            months=int(value.get('months', 0)),
+            days=int(value.get('days', 0))
+        )
+        return base_date + delta
+        
+    elif strategy == 'fixed': # Универсальный расчет для фиксированных дат (списка любой длины)
+        if not isinstance(value, list) or not value:
+            return None
+            
+        dates_in_year = []
+        for item in value:
+            m = int(item.get('month', 1))
+            d = int(item.get('day', 1))
+            try:
+                dates_in_year.append(base_date.replace(month=m, day=d))
+            except ValueError:
+                # На случай некорректных чисел (например, 31 ноября)
+                dates_in_year.append(base_date.replace(month=m, day=28))
+                
+        dates_in_year.sort()
+        
+        # Ищем первую дату в этом году, которая наступит ПОСЛЕ базовой даты
+        for candidate in dates_in_year:
+            if candidate > base_date:
+                return candidate
+                
+        # Если в текущем году будущих дат больше нет, берем самую первую дату следующего года
+        first_candidate = dates_in_year[0]
+        return first_candidate + relativedelta(years=1)
+        
+    return None
+
+@login_required
+def rules_dates_builder_view(request):
+    """Динамический конструктор списка сезонных дат для правил через HTMX"""
+    months = request.POST.getlist('fixed_months')
+    days = request.POST.getlist('fixed_days')
+    
+    # Объединяем полученные списки
+    dates = []
+    for m, d in zip(months, days):
+        dates.append({'month': int(m), 'day': int(d)})
+        
+    # Обработка добавления новой даты
+    new_month = request.POST.get('new_fixed_month')
+    new_day = request.POST.get('new_fixed_day')
+    if new_month and new_day:
+        new_date = {'month': int(new_month), 'day': int(new_day)}
+        if new_date not in dates:
+            dates.append(new_date)
+            
+    # Обработка удаления даты по индексу
+    remove_idx = request.POST.get('remove_idx')
+    if remove_idx is not None:
+        try:
+            dates.pop(int(remove_idx))
+        except IndexError:
+            pass
+            
+    # Сортируем даты по календарному порядку (сначала месяц, потом день)
+    dates.sort(key=lambda x: (x['month'], x['day']))
+    
+    # Мапа названий месяцев для красивого вывода в шаблоне
+    month_names = {
+        1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
+        5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
+        9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
+    }
+    
+    return render(request, 'data/includes/rules_dates_builder.html', {
+        'dates': dates,
+        'month_names': month_names
+    })
+
+@login_required
+def rule_constructor_view(request):
+    """Возвращает поля конструктора правил за один чистый запрос к серверу"""
+    strategy = request.GET.get('new_rule_strategy', 'relative')
+    context = {'strategy': strategy}
+    
+    if strategy == 'fixed':
+        # Прямо здесь готовим контекст для билдера дат, исключая второй запрос
+        context['dates'] = []  # При создании нового правила список дат изначально пуст
+        context['month_names'] = {
+            1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
+            5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
+            9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
+        }
+        
+    return render(request, 'data/includes/rule_constructor_fields.html', context)
+
+@login_required
+def toggle_scheduling_mode_view(request):
+    """Переключает поля формы создания/редактирования объекта"""
+    mode = request.GET.get('maintenance_scheduling_mode', 'manual')
+    is_inline = request.GET.get('inline', '0') == '1'
+    
+    # Выбираем соответствующий шаблон, чтобы избежать конфликта ID в DOM
+    template = 'data/includes/scheduling_mode_fields_inline.html' if is_inline else 'data/includes/scheduling_mode_fields.html'
+    
+    return render(request, template, {
+        'mode': mode
+    })
+
+@login_required
+def edit_rule_view(request, pk):
+    """Редактирование правила планирования ТО через модальное окно"""
+    obj = get_object_or_404(DataObject, pk=pk)
+    
+    if request.method == 'POST':
+        mode = request.POST.get('maintenance_scheduling_mode', 'manual')
+        
+        if mode == 'manual':
+            obj.date_update_rule = None
+            obj.save()
+        else:
+            rule_uuid = request.POST.get('date_update_rule')
+            new_rule_name = request.POST.get('new_date_update_rule')
+            
+            selected_rule = None
+            if rule_uuid:
+                from .models import DateUpdateRule
+                selected_rule = get_object_or_404(DateUpdateRule, pk=rule_uuid)
+            elif new_rule_name:
+                from .models import DateUpdateRule
+                strategy = request.POST.get('new_rule_strategy', 'relative')
+                
+                if strategy == 'relative':
+                    anchor = request.POST.get('new_rule_anchor', 'actual')
+                    years = int(request.POST.get('new_rule_years', 0))
+                    months = int(request.POST.get('new_rule_months', 6))
+                    days = int(request.POST.get('new_rule_days', 0))
+                    
+                    rule_json = {
+                        "strategy": "relative",
+                        "anchor": anchor,
+                        "value": {
+                            "years": years,
+                            "months": months,
+                            "days": days
+                        }
+                    }
+                elif strategy == 'fixed':
+                    fixed_months = request.POST.getlist('fixed_months')
+                    fixed_days = request.POST.getlist('fixed_days')
+                    
+                    dates_list = []
+                    for m, d in zip(fixed_months, fixed_days):
+                        dates_list.append({"month": int(m), "day": int(d)})
+                        
+                    rule_json = {
+                        "strategy": "fixed",
+                        "anchor": "yearly",
+                        "value": dates_list
+                    }
+                    
+                selected_rule, _ = DateUpdateRule.objects.get_or_create(
+                    name=new_rule_name,
+                    defaults={"rule": rule_json}
+                )
+                
+            if selected_rule:
+                obj.date_update_rule = selected_rule
+                obj.next_maintenance_date = calculate_next_maintenance_date(obj, base_date=timezone.now())
+                obj.save()
+                
+        rule_name = obj.date_update_rule.name if obj.date_update_rule else 'ручной ввод'
+        ActionHistory.objects.create(
+            user=request.user,
+            data_object=obj,
+            action=f"Изменено правило планирования ТО на: {rule_name}."
+        )
+        
+        # 1. С помощью hx-swap-oob="outerHTML" обновляем плашку правила в шапке карточки
+        rule_name_display = f"{obj.date_update_rule.name} <i class='bi bi-pencil-square ms-1 text-muted small'></i>" if obj.date_update_rule else "<span class='text-muted italic small'>ручной ввод <i class='bi bi-pencil-square ms-1'></i></span>"
+        
+        oob_rule_html = f"""
+        <span id="rule-display-container" 
+              data-bs-toggle="modal" 
+              data-bs-target="#editRuleModal"
+              hx-get="/dict/objects/{obj.uuid}/edit-rule/" 
+              hx-target="#edit-rule-modal-content"
+              style="cursor: pointer;" 
+              class="fw-semibold text-primary transition-all"
+              hx-swap-oob="outerHTML">
+            {rule_name_display}
+        </span>
+        """
+        
+        # 2. Обновляем саму дату ТО в мини-шапке
+        date_str = obj.next_maintenance_date.strftime('%d.%m.%Y') if obj.next_maintenance_date else "Не запланировано"
+        oob_date_html = f'<strong id="maintenance-date-display" class="text-danger" hx-swap-oob="innerHTML">{date_str}</strong>'
+        
+        # Отдаем пустой ответ с двумя OOB-свопами
+        return HttpResponse(f"{oob_rule_html}\n{oob_date_html}")
+
+    # GET запрос: отдаем тело модального окна
+    current_mode = 'auto' if obj.date_update_rule else 'manual'
+    return render(request, 'data/object/edit_rule_modal_body.html', {
+        'obj': obj,
+        'current_mode': current_mode
     })

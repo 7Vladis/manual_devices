@@ -9,14 +9,26 @@
     {% csrf_token %}
     <div class="modal-body py-3 text-center">
         <i class="bi bi-tools text-primary fs-1 mb-2 d-block"></i>
-        <p class="text-muted small">Выберите дату следующего планового обслуживания для объекта:<br>
+        <p class="text-muted small">Подтвердите выполнение работ для объекта:<br>
             <strong class="text-dark">{{ obj.name|default:obj.model.name }}</strong>
         </p>
         
-        <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase d-block text-start">Дата следующего ТО</label>
+        <div class="mb-3 text-start">
+            <label class="form-label small fw-bold text-muted text-uppercase d-block">Дата следующего ТО</label>
             <input type="date" name="maintenance_date" class="form-control bg-light border-0 py-2" required 
-                   value="{% if obj.next_maintenance_date %}{{ obj.next_maintenance_date|date:'Y-m-d' }}{% endif %}">
+                   value="{% if proposed_date %}{{ proposed_date|date:'Y-m-d' }}{% elif obj.next_maintenance_date %}{{ obj.next_maintenance_date|date:'Y-m-d' }}{% endif %}">
+            
+            {% if proposed_date %}
+            <div class="form-text text-success d-flex align-items-center mt-2" style="font-size: 0.75rem;">
+                <i class="bi bi-info-circle-fill me-1"></i> 
+                Дата рассчитана автоматически на основе правила: 
+                <strong class="ms-1">{{ obj.date_update_rule.name }}</strong>.
+            </div>
+            {% else %}
+            <div class="form-text text-muted d-flex align-items-center mt-2" style="font-size: 0.75rem;">
+                <i class="bi bi-exclamation-circle me-1"></i> Правило автоматического расчета не назначено.
+            </div>
+            {% endif %}
         </div>
     </div>
     <div class="modal-footer border-0 pt-0">

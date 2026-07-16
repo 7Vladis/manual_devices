@@ -29,6 +29,20 @@ class DependencyType(models.Model):
         return self.type  
 
 
+class DateUpdateRule(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, unique=True, verbose_name="Название правила")
+    rule = models.JSONField(default=dict, verbose_name="Правило расчета (JSON)")
+
+    class Meta:
+        db_table = 'date_update_rule'
+        verbose_name = 'Правило обновления даты'
+        verbose_name_plural = 'Правила обновления дат'
+
+    def __str__(self):
+        return self.name
+
+
 class ObjectModel(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     object_type = models.ForeignKey(ObjectType, on_delete=models.PROTECT, related_name='models', verbose_name="Тип объектов")
@@ -52,6 +66,7 @@ class DataObject(models.Model):
     inventory_number = models.CharField(max_length=100, verbose_name="Инвентарный номер", blank=True, null=True)
     next_maintenance_date = models.DateTimeField(blank=True, null=True, verbose_name="Дата следующего обслуживания")
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
+    date_update_rule = models.ForeignKey(DateUpdateRule, on_delete=models.SET_NULL, blank=True, null=True, related_name='data_objects', verbose_name="Правило расчета ТО")
 
     class Meta:
         db_table = 'data_object'

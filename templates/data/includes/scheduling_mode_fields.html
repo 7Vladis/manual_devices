@@ -1,0 +1,28 @@
+<!-- templates/data/includes/scheduling_mode_fields.html -->
+<div id="scheduling-mode-container" class="animate-fade">
+    {% if mode == 'manual' %}
+        <!-- РУЧНОЙ РЕЖИМ: Только выбор конкретной даты -->
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase">Дата следующего ТО</label>
+            <input type="date" name="next_maintenance_date" class="form-control bg-light border-0 py-2">
+            <div class="form-text text-muted" style="font-size: 0.75rem;">Задайте фиксированную дату проведения следующего обслуживания вручную.</div>
+        </div>
+    {% else %}
+        <!-- АВТОМАТИЧЕСКИЙ РЕЖИМ: Только выбор и настройка правила -->
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase">Правило расчета даты ТО</label>
+            <div id="search-wrapper-date_update_rule" class="position-relative">
+                <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2" 
+                       placeholder="Поиск или ввод нового правила (например, Раз в год)..."
+                       hx-get="{% url 'suggest' %}?field=date_update_rule"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#results-date_update_rule"
+                       autocomplete="off">
+                <div id="results-date_update_rule"></div>
+            </div>
+            <div class="form-text text-success" style="font-size: 0.75rem;">
+                <i class="bi bi-info-circle-fill me-1"></i> Первая дата следующего ТО рассчитается автоматически от сегодняшнего дня.
+            </div>
+        </div>
+    {% endif %}
+</div>

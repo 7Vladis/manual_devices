@@ -1,0 +1,77 @@
+<!-- templates/data/includes/rules_dates_builder.html -->
+<div id="rules-dates-builder-container" class="animate-fade">
+    <label class="form-label small fw-bold text-muted text-uppercase mb-2" style="font-size: 0.75rem;">
+        <i class="bi bi-calendar-check me-1"></i> Список сезонных дат
+    </label>
+    
+    <!-- 1. Список уже добавленных дат -->
+    <div class="p-2 bg-light rounded-3 mb-2 border" style="max-height: 150px; overflow-y: auto;">
+        {% for item in dates %}
+        <div class="d-flex align-items-center justify-content-between bg-white border rounded-2 px-2 py-1 mb-1" style="font-size: 0.85rem;">
+            <span>
+                <i class="bi bi-calendar-event text-primary me-2"></i>
+                <strong>{{ item.day }}</strong> 
+                {% for num, name in month_names.items %}
+                    {% if num == item.month %}{{ name }}{% endif %}
+                {% endfor %}
+            </span>
+            
+            <!-- Кнопка удаления даты из списка -->
+            <button type="button" class="btn btn-link text-danger p-0 border-0 fw-bold"
+                    hx-post="{% url 'rules_dates_builder' %}"
+                    hx-target="#rules-dates-builder-container"
+                    hx-swap="outerHTML"
+                    hx-include="[name='fixed_months'], [name='fixed_days']"
+                    hx-vals='{"remove_idx": "{{ forloop.counter0 }}"}'>
+                <i class="bi bi-x-circle-fill"></i>
+            </button>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-3" style="font-size: 0.8rem;">Даты еще не добавлены. Добавьте первую дату ниже.</div>
+        {% endfor %}
+    </div>
+
+    <!-- 2. Форма добавления новой даты -->
+    <div class="row g-1 mb-2">
+        <!-- Поле числа (День) перенесено вперед -->
+        <div class="col-3">
+            <input type="number" id="new_fixed_day_input" class="form-control form-control-sm text-center" value="1" min="1" max="31">
+        </div>
+        
+        <!-- Выпадающий список месяцев перенесен на второе место -->
+        <div class="col-7">
+            <select id="new_fixed_month_select" class="form-select form-select-sm">
+                <option value="1">Января</option>
+                <option value="2">Февраля</option>
+                <option value="3" selected>Марта</option>
+                <option value="4">Апреля</option>
+                <option value="5">Мая</option>
+                <option value="6">Июня</option>
+                <option value="7">Июля</option>
+                <option value="8">Августа</option>
+                <option value="9">Сентября</option>
+                <option value="10">Октября</option>
+                <option value="11">Ноября</option>
+                <option value="12">Декабря</option>
+            </select>
+        </div>
+        
+        <!-- Кнопка «Добавить» -->
+        <div class="col-2">
+            <button type="button" class="btn btn-success btn-sm w-100"
+                    hx-post="{% url 'rules_dates_builder' %}"
+                    hx-target="#rules-dates-builder-container"
+                    hx-swap="outerHTML"
+                    hx-include="[name='fixed_months'], [name='fixed_days']"
+                    hx-vals='js:{new_fixed_month: document.getElementById("new_fixed_month_select").value, new_fixed_day: document.getElementById("new_fixed_day_input").value}'>
+                <i class="bi bi-plus-lg"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Скрытые инпуты, которые отправятся с основной формой создания объекта -->
+    {% for item in dates %}
+        <input type="hidden" name="fixed_months" value="{{ item.month }}">
+        <input type="hidden" name="fixed_days" value="{{ item.day }}">
+    {% endfor %}
+</div>

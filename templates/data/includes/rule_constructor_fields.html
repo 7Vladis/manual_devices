@@ -1,0 +1,55 @@
+<!-- templates/data/includes/rule_constructor_fields.html -->
+<div id="constructor-fields-container" class="animate-fade">
+    {% if strategy == 'relative' %}
+        <!-- Поля для Относительного интервала -->
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Точка отсчета</label>
+            <select name="new_rule_anchor" class="form-select form-select-sm">
+                <option value="actual" selected>От даты фактического обслуживания (Рекомендуется)</option>
+                <option value="scheduled">От предыдущей плановой даты (Сохранять жесткий график)</option>
+            </select>
+            <div class="form-text text-muted mt-1" style="font-size: 0.75rem; line-height: 1.3;">
+                <span class="text-primary">●</span> <strong>От факта:</strong> Новый срок рассчитывается от дня проведения работ.<br>
+                <span class="text-warning">●</span> <strong>От плана:</strong> Срок рассчитывается от старого плана. График сохраняется жестким.
+            </div>
+        </div>
+        
+        <div class="mb-2">
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Интервал времени</label>
+            <div class="row g-2">
+                <div class="col-4">
+                    <div class="input-group input-group-sm">
+                        <input type="number" name="new_rule_years" class="form-control" value="0" min="0">
+                        <span class="input-group-text small text-muted px-1" style="font-size: 0.75rem;">лет</span>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="input-group input-group-sm">
+                        <input type="number" name="new_rule_months" class="form-control" value="6" min="0">
+                        <span class="input-group-text small text-muted px-1" style="font-size: 0.75rem;">мес.</span>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="input-group input-group-sm">
+                        <input type="number" name="new_rule_days" class="form-control" value="0" min="0">
+                        <span class="input-group-text small text-muted px-1" style="font-size: 0.75rem;">дн.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="form-text text-muted mt-2" style="font-size: 0.75rem;">
+                Укажите период, через который должно наступить следующее обслуживание.
+            </div>
+        </div>
+        
+    {% elif strategy == 'fixed' %}
+        <!-- ПРАВИЛО: Фиксированные календарные даты (Универсальный список) -->
+        <div class="mb-2">
+            <!-- Внедряем шаблон билдера напрямую. Никаких фоновых hx-запросов! -->
+            {% include 'data/includes/rules_dates_builder.html' %}
+            
+            <div class="form-text text-muted mt-2" style="font-size: 0.75rem; line-height: 1.3;">
+                Добавьте одну или несколько ежегодных календарных дат (например, для сезонных работ). Система автоматически выберет ближайшую будущую дату из этого списка.
+            </div>
+        </div>
+    {% endif %}
+</div>

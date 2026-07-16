@@ -8,7 +8,7 @@
                 <div class="text-muted small d-flex flex-wrap gap-3">
                     <span><i class="bi bi-tag me-1"></i>Модель: <strong class="text-dark">{{ obj.model.name }}</strong></span>
                     <span><i class="bi bi-calendar-event me-1"></i>Следующее ТО: 
-                        <strong class="text-danger">{{ obj.next_maintenance_date|date:"d.m.Y"|default:"Не запланировано" }}</strong>
+                        <strong id="maintenance-date-display" class="text-danger">{{ obj.next_maintenance_date|date:"d.m.Y"|default:"Не запланировано" }}</strong>
                     </span>
                 </div>
             </div>
@@ -28,6 +28,24 @@
                 <span class="text-muted me-2">Входит в состав:</span>
                 <span id="parent-display-container" hx-get="{% url 'edit_parent' obj.uuid %}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-primary fw-semibold">
                     {% if parent %}{{ parent.name|default:parent.model.name }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>{% else %}<span class="text-muted italic small">указать родителя <i class="bi bi-pencil-square ms-1"></i></span>{% endif %}
+                </span>
+            </div>
+
+            <div class="col-md-12 d-flex align-items-center mt-2 border-top pt-2">
+                <span class="text-muted me-2"><i class="bi bi-calendar-range me-1"></i>Правило расчета ТО:</span>
+                
+                <span id="rule-display-container" 
+                      data-bs-toggle="modal" 
+                      data-bs-target="#editRuleModal"
+                      hx-get="{% url 'edit_rule' obj.uuid %}" 
+                      hx-target="#edit-rule-modal-content"
+                      style="cursor: pointer;" 
+                      class="fw-semibold text-primary transition-all">
+                    {% if obj.date_update_rule %}
+                        {{ obj.date_update_rule.name }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>
+                    {% else %}
+                        <span class="text-muted italic small">ручной ввод <i class="bi bi-pencil-square ms-1"></i></span>
+                    {% endif %}
                 </span>
             </div>
         </div>

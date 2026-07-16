@@ -12,7 +12,7 @@
         <div class="row g-4">
             
             <!-- Левая колонка: Основные данные -->
-            <div class="col-md-6 border-end-md">
+            <div class="col-md-6 border-end">
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase">Название объекта</label>
                     <input type="text" name="name" class="form-control bg-light border-0" 
@@ -43,12 +43,26 @@
                 </div>
             </div>
             
-            <!-- Правая колонка: Обслуживание и иерархия -->
+            <!-- Правая колонка: Настройка планирования и Иерархия -->
             <div class="col-md-6">
+                <!-- Режим планирования ТО -->
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Дата следующего ТО</label>
-                    <input type="date" name="next_maintenance_date" class="form-control bg-light border-0 py-2">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Режим планирования ТО</label>
+                    <select name="maintenance_scheduling_mode" 
+                            class="form-select form-select-sm"
+                            hx-get="{% url 'toggle_scheduling_mode' %}"
+                            hx-target="#scheduling-mode-container"
+                            hx-swap="outerHTML"
+                            hx-trigger="change">
+                        <option value="manual" selected>Ручной выбор даты следующего ТО</option>
+                        <option value="auto">Автоматический расчет по правилу</option>
+                    </select>
                 </div>
+
+                <!-- Контейнер переключаемых полей (по умолчанию ручной режим) -->
+                {% include 'data/includes/scheduling_mode_fields.html' with mode='manual' %}
+
+                <hr class="my-3 opacity-25">
 
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase">Родительский объект</label>

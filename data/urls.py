@@ -24,6 +24,7 @@ urlpatterns = [
     # Детализация объектов
     path('dict/objects/<uuid:pk>/', views.object_detail_view, name='object_detail'),
     path('dict/objects/<uuid:pk>/tab/<str:tab_name>/', views.object_tab_view, name='object_tab'),
+    path('dict/objects/<uuid:pk>/edit-rule/', views.edit_rule_view, name='edit_rule'),
     path('dict/objects/<uuid:pk>/edit-inventory/', views.edit_inventory_view, name='edit_inventory'),
     path('dict/objects/<uuid:pk>/edit-parent/', views.edit_parent_view, name='edit_parent'),
     path('dict/objects/<uuid:pk>/edit-description/', views.edit_description_view, name='edit_description'),
@@ -47,4 +48,7 @@ urlpatterns = [
     path('dict/objects/check-name/', views.check_object_name_view, name='check_object_name'),
     path('dict/models/check-name/', views.check_model_name_view, name='check_model_name'),
     path('dict/models/specs-builder/', views.specs_builder_view, name='specs_builder'),
+    path('dict/rules/constructor/', views.rule_constructor_view, name='rule_constructor'), 
+    path('dict/rules/dates-builder/', views.rules_dates_builder_view, name='rules_dates_builder'),
+    path('dict/rules/toggle-mode/', views.toggle_scheduling_mode_view, name='toggle_scheduling_mode'),
 ]
