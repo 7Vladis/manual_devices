@@ -1,21 +1,70 @@
 <!-- templates/data/object/edit_rule_modal_body.html -->
+
+<!-- Локальные стили кнопок (Защита от кеширования браузера + Идеальный центр) -->
+<style>
+    .btn-rule-edit-custom, .btn-rule-unlink-custom {
+        width: 32px !important;
+        height: 32px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        border-radius: 8px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.2s ease-in-out !important;
+        cursor: pointer !important;
+        text-decoration: none !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+
+    /* Карандаш (Редактирование) */
+    .btn-rule-edit-custom {
+        background-color: #e3effd !important;
+        color: #0d4ba9 !important;
+    }
+
+    .btn-rule-edit-custom:hover {
+        background-color: #0d4ba9 !important;
+        color: #ffffff !important;
+        transform: scale(1.05) !important;
+    }
+
+    /* Скрепка (Отвязка) */
+    .btn-rule-unlink-custom {
+        background-color: #fce8e6 !important;
+        color: #e63946 !important;
+    }
+
+    .btn-rule-unlink-custom:hover {
+        background-color: #e63946 !important;
+        color: #ffffff !important;
+        transform: scale(1.05) !important;
+    }
+</style>
+
 <div class="modal-header border-0 pb-0">
-    <h5 class="modal-title fw-bold">Правило расчета даты ТО</h5>
+    <h5 class="modal-title fw-bold text-dark">Режим планирования ТО</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 
+<!-- Валидация закрытия по HTMX-событию (elt === this) -->
 <form hx-post="{% url 'edit_rule' obj.uuid %}" 
-    hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('editRuleModal')).hide(); }">
+      hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('editRuleModal')).hide(); }">
     {% csrf_token %}
     <div class="modal-body py-3">
-        <p class="text-muted small mb-3">Настройте способ определения даты следующего обслуживания для объекта:<br>
+        <p class="text-muted small mb-4" style="font-size: 0.85rem;">
+            Настройте способ определения даты следующего обслуживания для объекта:<br>
             <strong class="text-dark">{{ obj.name|default:obj.model.name }}</strong>
         </p>
 
-        <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Режим планирования</label>
+        <!-- Выбор режима планирования -->
+        <div class="mb-4">
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1.5" style="font-size: 0.72rem; letter-spacing: 0.5px;">Режим планирования</label>
             <select name="maintenance_scheduling_mode" 
-                    class="form-select form-select-sm"
+                    class="form-select form-select-sm bg-light border-0 py-2 shadow-none"
+                    style="font-size: 0.85rem; border-radius: 8px;"
                     hx-get="{% url 'toggle_scheduling_mode' %}?inline=1"
                     hx-target="#inline-scheduling-mode-fields"
                     hx-swap="outerHTML"
@@ -27,11 +76,77 @@
 
         <!-- Контейнер переключаемых полей -->
         <div id="inline-scheduling-mode-fields" class="mb-2">
-            {% include 'data/includes/scheduling_mode_fields_inline.html' with mode=current_mode %}
+            {% if current_mode == 'manual' %}
+                <!-- РУЧНОЙ РЕЖИМ -->
+                <div class="form-text text-muted small px-1" style="font-size: 0.80rem; line-height: 1.4;">
+                    Правило расчета отключено. Срок ТО вводится инженером вручную.
+                </div>
+            {% else %}
+                
+                <!-- АВТОМАТИЧЕСКИЙ РЕЖИМ -->
+                {% if obj.date_update_rule %}
+                    
+                    <!-- Состояние А: Правило ПРИВЯЗАНО. Вывод параметров и компактных вертикальных кнопок с защищенными стилями -->
+                    <div class="card bg-light border-0 p-3 mb-2 rounded-3" style="border-radius: 10px;">
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                            <div>
+                                <small class="text-uppercase text-muted fw-bold d-block mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Текущее активное правило</small>
+                                <strong class="text-dark d-block" style="font-size: 0.85rem;">{{ obj.date_update_rule.name }}</strong>
+                                <span class="text-muted d-block mt-1" style="font-size: 0.78rem; line-height: 1.35;">
+                                    {{ rule_details }}
+                                </span>
+                            </div>
+                            
+                            <!-- Вертикальный блок иконок с защищенными классами -->
+                            <div class="d-flex flex-column gap-2 align-items-center">
+                                <!-- Изменить (Карандаш) -> Новая вкладка -->
+                                <a href="{% url 'settings_page' %}?tab=rules" 
+                                   target="_blank" 
+                                   class="btn-rule-edit-custom"
+                                   title="Редактировать оригинал правила в настройках">
+                                    <i class="bi bi-pencil fs-6" style="line-height: 0;"></i>
+                                </a>
+                                
+                                <!-- Отвязать (Скрепка/Расцепка) -> HTMX-запрос -->
+                                <button type="button" 
+                                        class="btn-rule-unlink-custom"
+                                        hx-post="{% url 'unlink_rule' obj.uuid %}"
+                                        hx-target="#edit-rule-modal-content"
+                                        title="Отвязать правило от объекта">
+                                    <i class="bi bi-link-45deg fs-5" style="line-height: 0;"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Скрытый инпут сохранения -->
+                    <input type="hidden" name="date_update_rule" value="{{ obj.date_update_rule.uuid }}">
+                    
+                {% else %}
+                    
+                    <!-- Состояние Б: Правило НЕ ПРИВЯЗАНО. Показываем строку поиска -->
+                    <div class="mb-3 animate-fade">
+                        <label class="form-label small fw-bold text-muted text-uppercase mb-1.5" style="font-size: 0.72rem; letter-spacing: 0.5px;">Выбрать автоматическое правило</label>
+                        <div id="search-wrapper-date_update_rule" class="position-relative">
+                            <input type="text" name="q" class="form-control form-control-sm bg-light py-2 shadow-none border-0" 
+                                   placeholder="Начните вводить название правила для поиска..."
+                                   hx-get="{% url 'suggest' %}?field=date_update_rule"
+                                   hx-trigger="keyup changed delay:300ms"
+                                   hx-target="#results-date_update_rule"
+                                   autocomplete="off"
+                                   style="font-size: 0.85rem; border-radius: 8px;">
+                                <div id="results-date_update_rule"></div>
+                            </div>
+                        </div>
+                        
+                    {% endif %}
+                {% endif %}
+            </div>
         </div>
-    </div>
-    <div class="modal-footer border-0 pt-0">
-        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-        <button type="submit" class="btn btn-primary px-4 fw-bold">Сохранить</button>
-    </div>
-</form>
+        
+        <!-- Нижние кнопки действий -->
+        <div class="modal-footer border-0 pt-3">
+            <button type="button" class="btn btn-light px-4 py-2 border-0 fw-semibold text-muted" data-bs-dismiss="modal" style="font-size: 0.85rem; border-radius: 8px;">Отмена</button>
+            <button type="submit" class="btn btn-primary px-4 py-2 fw-bold text-white border-0" style="background-color: #1e293b; font-size: 0.85rem; border-radius: 8px;">Сохранить изменения</button>
+        </div>
+    </form>

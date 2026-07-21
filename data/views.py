@@ -1,12 +1,252 @@
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model
 from django.shortcuts import render, get_object_or_404
 from django.template.loader import render_to_string
 from django.http import HttpResponse
-from django.db.models import Q, Prefetch
+from django.db.models import Q, Prefetch, Count
 from django.utils import timezone
 from datetime import timedelta, datetime
 from dateutil.relativedelta import relativedelta
 from .models import DateUpdateRule, DataObject, ActionHistory, ObjectModel, ObjectType, Relation, DependencyType, Attachment, Comment
+
+@login_required
+def settings_page(request):
+    """Единый интерактивный центр управления системой (без JS, горизонтальные вкладки)"""
+    active_tab = request.GET.get('tab', 'rules')
+    context = {'active_tab': active_tab}
+
+    # 1. ВКЛАДКА: Правила планирования ТО
+    if active_tab == 'rules':
+        # Считаем объекты и делаем prefetch подключенных объектов
+        rules_query = DateUpdateRule.objects.prefetch_related('data_objects').annotate(
+            objects_count=Count('data_objects')
+        ).order_by('name')
+        
+        # Мапа названий месяцев для вывода в краткой информации
+        month_names = {
+            1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
+            5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
+            9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
+        }
+        
+        # Форматируем сезонные даты в человекопонятный вид на бэкенде
+        for r in rules_query:
+            rule_data = r.rule or {}
+            if rule_data.get('strategy') == 'fixed':
+                dates_list = rule_data.get('value', [])
+                formatted_dates = []
+                for d in dates_list:
+                    day = d.get('day', 1)
+                    month_num = d.get('month', 1)
+                    month_name = month_names.get(month_num, '')
+                    formatted_dates.append(f"{day} {month_name}")
+                r.formatted_fixed_dates = ", ".join(formatted_dates)
+                
+        context['rules'] = rules_query
+
+    # 2. ВКЛАДКА: Типы объектов
+    elif active_tab == 'object_types':
+        context['object_types'] = ObjectType.objects.annotate(
+            models_count=Count('models')
+        ).order_by('type')
+
+    # 3. ВКЛАДКА: Типы связей (взаимодействия)
+    elif active_tab == 'dependency_types':
+        context['dependency_types'] = DependencyType.objects.annotate(
+            relations_count=Count('relations')
+        ).order_by('type')
+
+    # 4. ВКЛАДКА: Уведомления Mattermost
+    elif active_tab == 'notifications':
+        from notifications.models import MattermostSetting
+        context['settings'] = MattermostSetting.objects.all().order_by('-updated_at')
+
+    # 5. ВКЛАДКА: Пользователи
+    elif active_tab == 'users':
+        User = get_user_model()
+        context['users_list'] = User.objects.all().order_by('username')
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'data/settings/settings_layout_inner.html', context)
+    return render(request, 'data/settings.html', context)
+
+@login_required
+def create_object_type_view(request):
+    """Создание нового типа оборудования из настроек"""
+    if request.method == 'POST':
+        name = request.POST.get('type', '').strip()
+        if name:
+            ObjectType.objects.get_or_create(type=name)
+            
+    # Возвращаем обновленный блок вкладок через перенаправление HTMX
+    response = HttpResponse()
+    response['HX-Redirect'] = '/settings/?tab=object_types'
+    return response
+
+@login_required
+def delete_object_type_view(request, pk):
+    """Удаление типа оборудования с проверкой на использование"""
+    obj_type = get_object_or_404(ObjectType, pk=pk)
+    # Проверяем, привязан ли этот тип к моделям
+    if obj_type.models.exists():
+        # Если привязан — возвращаем сообщение об ошибке с кодом 400
+        return HttpResponse(
+            '<div class="alert alert-danger py-2 px-3 m-0 rounded-3 small animate-fade">'
+            '<i class="bi bi-exclamation-triangle-fill me-1"></i> '
+            'Нельзя удалить тип: он привязан к существующим моделям оборудования!'
+            '</div>', 
+            status=400
+        )
+    obj_type.delete()
+    
+    response = HttpResponse()
+    response['HX-Redirect'] = '/settings/?tab=object_types'
+    return response
+
+@login_required
+def create_dependency_type_view(request):
+    """Создание нового типа связи из настроек"""
+    if request.method == 'POST':
+        name = request.POST.get('type', '').strip()
+        if name:
+            DependencyType.objects.get_or_create(type=name)
+            
+    response = HttpResponse()
+    response['HX-Redirect'] = '/settings/?tab=dependency_types'
+    return response
+
+@login_required
+def delete_dependency_type_view(request, pk):
+    """Удаление типа связи с защитой целостности данных"""
+    dep_type = get_object_or_404(DependencyType, pk=pk)
+    if dep_type.relations.exists():
+        return HttpResponse(
+            '<div class="alert alert-danger py-2 px-3 m-0 rounded-3 small animate-fade">'
+            '<i class="bi bi-exclamation-triangle-fill me-1"></i> '
+            'Нельзя удалить связь: она используется в активных отношениях между объектами!'
+            '</div>', 
+            status=400
+        )
+    dep_type.delete()
+    
+    response = HttpResponse()
+    response['HX-Redirect'] = '/settings/?tab=dependency_types'
+    return response
+
+@login_required
+def edit_rule_settings_view(request, pk):
+    """Редактирование параметров правила планирования ТО (с автообновлением дат у объектов)"""
+    rule_obj = get_object_or_404(DateUpdateRule, pk=pk)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        strategy = request.POST.get('new_rule_strategy', 'relative')
+        
+        if name:
+            rule_obj.name = name
+            
+        if strategy == 'relative':
+            anchor = request.POST.get('new_rule_anchor', 'actual')
+            years = int(request.POST.get('new_rule_years', 0))
+            months = int(request.POST.get('new_rule_months', 6))
+            days = int(request.POST.get('new_rule_days', 0))
+            
+            rule_json = {
+                "strategy": "relative",
+                "anchor": anchor,
+                "value": {
+                    "years": years,
+                    "months": months,
+                    "days": days
+                }
+            }
+        elif strategy == 'fixed':
+            fixed_months = request.POST.getlist('fixed_months')
+            fixed_days = request.POST.getlist('fixed_days')
+            
+            dates_list = []
+            for m, d in zip(fixed_months, fixed_days):
+                dates_list.append({"month": int(m), "day": int(d)})
+                
+            rule_json = {
+                "strategy": "fixed",
+                "anchor": "yearly",
+                "value": dates_list
+            }
+            
+        rule_obj.rule = rule_json
+        rule_obj.save()
+        
+        # Пересчитываем расписание обслуживания у всех подключенных объектов
+        for obj in rule_obj.data_objects.all():
+            obj.next_maintenance_date = calculate_next_maintenance_date(obj, base_date=timezone.now())
+            obj.save()
+            
+        response = HttpResponse()
+        response['HX-Redirect'] = '/settings/?tab=rules'
+        return response
+
+    # GET-запрос: парсим текущие параметры JSON-правила для автозаполнения полей формы
+    rule_data = rule_obj.rule or {}
+    strategy = rule_data.get('strategy', 'relative')
+    anchor = rule_data.get('anchor', 'actual')
+    val = rule_data.get('value', {})
+    
+    years = val.get('years', 0) if strategy == 'relative' else 0
+    months = val.get('months', 6) if strategy == 'relative' else 0
+    days = val.get('days', 0) if strategy == 'relative' else 0
+    
+    fixed_dates = val if strategy == 'fixed' else []
+    
+    month_names = {
+        1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
+        5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
+        9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
+    }
+    
+    return render(request, 'data/settings/edit_rule_modal.html', {
+        'rule_obj': rule_obj,
+        'strategy': strategy,
+        'anchor': anchor,
+        'years': years,
+        'months': months,
+        'days': days,
+        'fixed_dates': fixed_dates,
+        'month_names': month_names,
+    })
+
+@login_required
+def delete_rule_view(request, pk):
+    """Удаление правила планирования (только если нет привязанных объектов)"""
+    rule = get_object_or_404(DateUpdateRule, pk=pk)
+    if rule.data_objects.exists():
+        return HttpResponse(
+            '<div class="alert alert-danger py-2 px-3 m-0 rounded-3 small animate-fade">'
+            '<i class="bi bi-exclamation-triangle-fill me-1"></i> '
+            'Нельзя удалить: правило используется в активных объектах!'
+            '</div>', 
+            status=400
+        )
+    rule.delete()
+    
+    response = HttpResponse()
+    response['HX-Redirect'] = '/settings/?tab=rules'
+    return response
+
+@login_required
+def toggle_user_status_view(request, pk):
+    """Быстрая активация/блокировка пользователя из настроек"""
+    User = get_user_model()
+    target_user = get_object_or_404(User, pk=pk)
+    
+    # Администратор не может заблокировать сам себя во избежание потери доступа
+    if target_user != request.user:
+        target_user.is_active = not target_user.is_active
+        target_user.save()
+        
+    response = HttpResponse()
+    response['HX-Redirect'] = '/settings/?tab=users'
+    return response
 
 # (Существующие вспомогательные функции для дашборда)
 def get_period_limits(period_type):
@@ -508,6 +748,28 @@ def object_detail_view(request, pk):
         
     return HttpResponse(combined_content)
 
+@login_required
+def unlink_rule_view(request, pk):
+    """Отвязка правила от объекта внутри модального окна (без JS)"""
+    obj = get_object_or_404(DataObject, pk=pk)
+    
+    # Отвязываем правило в БД
+    obj.date_update_rule = None
+    obj.save()
+    
+    # Записываем действие в историю объекта
+    ActionHistory.objects.create(
+        user=request.user,
+        data_object=obj,
+        action="Правило автоматического расчета ТО отвязано от объекта."
+    )
+    
+    # Возвращаем обновленный контент модального окна в режиме 'auto', но уже без привязанного правила
+    return render(request, 'data/object/edit_rule_modal_body.html', {
+        'obj': obj,
+        'current_mode': 'auto',
+        'rule_details': None
+    })
 
 @login_required
 def object_tab_view(request, pk, tab_name):
@@ -1360,7 +1622,7 @@ def toggle_scheduling_mode_view(request):
 
 @login_required
 def edit_rule_view(request, pk):
-    """Редактирование правила планирования ТО через модальное окно"""
+    """Редактирование правила планирования ТО через модальное окно объекта"""
     obj = get_object_or_404(DataObject, pk=pk)
     
     if request.method == 'POST':
@@ -1375,10 +1637,8 @@ def edit_rule_view(request, pk):
             
             selected_rule = None
             if rule_uuid:
-                from .models import DateUpdateRule
                 selected_rule = get_object_or_404(DateUpdateRule, pk=rule_uuid)
             elif new_rule_name:
-                from .models import DateUpdateRule
                 strategy = request.POST.get('new_rule_strategy', 'relative')
                 
                 if strategy == 'relative':
@@ -1427,7 +1687,7 @@ def edit_rule_view(request, pk):
             action=f"Изменено правило планирования ТО на: {rule_name}."
         )
         
-        # 1. С помощью hx-swap-oob="outerHTML" обновляем плашку правила в шапке карточки
+        # OOB-свопы для моментального обновления шапки карточки без перезагрузки всей страницы
         rule_name_display = f"{obj.date_update_rule.name} <i class='bi bi-pencil-square ms-1 text-muted small'></i>" if obj.date_update_rule else "<span class='text-muted italic small'>ручной ввод <i class='bi bi-pencil-square ms-1'></i></span>"
         
         oob_rule_html = f"""
@@ -1443,16 +1703,35 @@ def edit_rule_view(request, pk):
         </span>
         """
         
-        # 2. Обновляем саму дату ТО в мини-шапке
         date_str = obj.next_maintenance_date.strftime('%d.%m.%Y') if obj.next_maintenance_date else "Не запланировано"
         oob_date_html = f'<strong id="maintenance-date-display" class="text-danger" hx-swap-oob="innerHTML">{date_str}</strong>'
         
-        # Отдаем пустой ответ с двумя OOB-свопами
         return HttpResponse(f"{oob_rule_html}\n{oob_date_html}")
 
-    # GET запрос: отдаем тело модального окна
+    # --- ОБРАБОТКА GET-ЗАПРОСА ---
     current_mode = 'auto' if obj.date_update_rule else 'manual'
+    rule_details = None
+    
+    # Формируем человекочитаемое описание параметров текущего правила для вывода в окне
+    if obj.date_update_rule:
+        rule_data = obj.date_update_rule.rule or {}
+        strategy = rule_data.get('strategy', 'relative')
+        
+        if strategy == 'relative':
+            anchor_text = 'фактического выполнения' if rule_data.get('anchor') == 'actual' else 'планового срока'
+            val = rule_data.get('value', {})
+            rule_details = f"Интервал от {anchor_text}: {val.get('years', 0)}г. {val.get('months', 0)}мес. {val.get('days', 0)}дн."
+        elif strategy == 'fixed':
+            month_names = {
+                1: 'Янв', 2: 'Фев', 3: 'Мар', 4: 'Апр', 5: 'Май', 6: 'Июн',
+                7: 'Июл', 8: 'Авг', 9: 'Сен', 10: 'Окт', 11: 'Ноя', 12: 'Дек'
+            }
+            dates = rule_data.get('value', [])
+            formatted_dates = [f"{d.get('day')} {month_names.get(d.get('month'))}" for d in dates]
+            rule_details = f"Сезонные даты: {', '.join(formatted_dates)}"
+
     return render(request, 'data/object/edit_rule_modal_body.html', {
         'obj': obj,
-        'current_mode': current_mode
+        'current_mode': current_mode,
+        'rule_details': rule_details
     })

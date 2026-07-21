@@ -1,0 +1,97 @@
+<!-- templates/data/settings/tab_rules.html -->
+<div class="animate-fade">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="fw-bold text-dark m-0"><i class="bi bi-calendar-range text-primary me-2"></i>Правила расчета дат ТО</h5>
+    </div>
+
+    {% for item in rules %}
+    <div class="card border-0 shadow-sm mb-3 p-3 bg-white" style="border-radius: 10px;">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            
+            <!-- Интерактивное название правила: по клику плавно подгружает форму в модальное окно -->
+            <div style="cursor: pointer;"
+                 data-bs-toggle="modal" 
+                 data-bs-target="#editRuleSettingsModal"
+                 hx-get="{% url 'edit_rule_settings' item.uuid %}"
+                 hx-target="#edit-rule-settings-modal-content"
+                 class="flex-grow-1">
+                <h6 class="fw-bold m-0 text-dark d-inline-block hover-text-primary transition-all">
+                    {{ item.name }} <i class="bi bi-pencil-square ms-1 text-muted" style="font-size: 0.75rem;"></i>
+                </h6>
+                <div class="mt-1">
+                    <small class="text-muted" style="font-size: 0.8rem;">
+                        {% if item.rule.strategy == 'relative' %}
+                            <i class="bi bi-arrow-repeat text-success me-1"></i> Относительный интервал: 
+                            каждые <strong>{{ item.rule.value.years }}г. {{ item.rule.value.months }}мес. {{ item.rule.value.days }}дн.</strong>
+                        {% else %}
+                            <i class="bi bi-calendar-event text-info me-1"></i> Сезонные даты: 
+                            <strong>{{ item.formatted_fixed_dates }}</strong>
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+            
+            <div class="d-flex align-items-center gap-2">
+                <!-- Кнопка раскрытия списка объектов -->
+                <button class="btn btn-light btn-sm fw-bold border text-primary" 
+                        type="button" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#collapse-objects-{{ item.uuid }}" 
+                        aria-expanded="false" 
+                        style="font-size: 0.8rem;">
+                    Подключено объектов: {{ item.objects_count }} шт. <i class="bi bi-chevron-down ms-1"></i>
+                </button>
+                
+                <!-- Удаление -->
+                <div id="rule-error-{{ item.uuid }}" class="d-inline-block small text-danger me-2"></div>
+                {% if item.objects_count == 0 %}
+                <button type="button" class="btn btn-outline-danger btn-sm border-0"
+                        hx-post="{% url 'delete_rule' item.uuid %}"
+                        hx-target-error="#rule-error-{{ item.uuid }}"
+                        hx-confirm="Вы уверены, что хотите удалить правило '{{ item.name }}'?"
+                        title="Удалить">
+                    <i class="bi bi-trash3"></i>
+                </button>
+                {% else %}
+                <span class="text-muted small px-2" title="Нельзя удалить используемое правило"><i class="bi bi-lock-fill"></i></span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Скрытый по умолчанию блок со списком подключенных объектов -->
+        <div class="collapse" id="collapse-objects-{{ item.uuid }}">
+            <div class="mt-3 pt-3 border-top">
+                <h6 class="fw-bold text-muted small text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">Связанные объекты оборудования:</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for obj in item.data_objects.all %}
+                    <a href="{% url 'dict' %}?object={{ obj.uuid }}" 
+                       target="_blank" 
+                       class="badge bg-light text-dark border py-2 px-3 text-decoration-none rounded-3 d-inline-flex align-items-center hover-bg-light transition-all"
+                       style="font-size: 0.8rem;">
+                        <i class="bi bi-box-seam text-secondary me-2"></i>
+                        {{ obj.name|default:obj.model.name }}
+                        <i class="bi bi-box-arrow-up-right text-muted ms-2" style="font-size: 0.65rem;"></i>
+                    </a>
+                    {% empty %}
+                    <small class="text-muted py-2">Нет подключенных объектов в системе.</small>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="card p-5 border-0 shadow-sm bg-white text-center text-muted" style="border-radius: 12px;">
+        <i class="bi bi-calendar-x fs-1 mb-2"></i>
+        Правила не найдены
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ГЛОБАЛЬНЫЙ КОНТЕЙНЕР ДЛЯ МОДАЛЬНОГО ОКНА РЕДАКТИРОВАНИЯ ПРАВИЛ -->
+<div class="modal fade" id="editRuleSettingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 500px;">
+        <div class="modal-content border-0 shadow-lg" id="edit-rule-settings-modal-content" style="border-radius: 12px;">
+            <!-- Контент формы подгрузится динамически через HTMX -->
+        </div>
+    </div>
+</div>

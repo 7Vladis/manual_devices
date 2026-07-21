@@ -6,6 +6,16 @@ urlpatterns = [
     path('maintenance-list/', views.maintenance_list, name='maintenance_list'),
     path('search/', views.search_view, name='search'),
     path('dict/', views.dict_view, name='dict'),
+
+    # Натсройки
+    path('settings/', views.settings_page, name='settings_page'),
+    path('settings/object-types/create/', views.create_object_type_view, name='create_object_type'),
+    path('settings/object-types/<uuid:pk>/delete/', views.delete_object_type_view, name='delete_object_type'),
+    path('settings/dependency-types/create/', views.create_dependency_type_view, name='create_dependency_type'),
+    path('settings/dependency-types/<uuid:pk>/delete/', views.delete_dependency_type_view, name='delete_dependency_type'),
+    path('settings/rules/<uuid:pk>/delete/', views.delete_rule_view, name='delete_rule'),
+    path('settings/rules/<uuid:pk>/edit/', views.edit_rule_settings_view, name='edit_rule_settings'),
+    path('settings/users/<uuid:pk>/toggle/', views.toggle_user_status_view, name='toggle_user_status'),
     
     # Дерево объектов
     path('dict/objects/', views.object_tree_view, name='object_tree'),
@@ -33,6 +43,7 @@ urlpatterns = [
     path('dict/comments/delete-bulk/', views.delete_comments_bulk, name='delete_comments_bulk'),
     path('dict/objects/<uuid:pk>/attachments/add/', views.add_attachment_view, name='add_attachment'),
     path('dict/attachments/delete-bulk/', views.delete_attachments_bulk, name='delete_attachments_bulk'),
+    path('dict/objects/<uuid:pk>/unlink-rule/', views.unlink_rule_view, name='unlink_rule'),
     
     # Детализация моделей
     path('dict/models/<uuid:pk>/', views.model_detail_view, name='model_detail'),

@@ -1,0 +1,54 @@
+<!-- templates/data/settings/tab_users.html -->
+<div class="card border-0 shadow-sm p-4 bg-white animate-fade" style="border-radius: 12px;">
+    <h5 class="fw-bold mb-4 text-dark"><i class="bi bi-people-fill text-primary me-2"></i>Управление пользователями системы</h5>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+            <thead>
+                <tr class="text-muted border-bottom" style="font-size: 0.75rem;">
+                    <th class="py-2 text-uppercase">Email адрес</th>
+                    <th class="py-2 text-uppercase">Имя пользователя</th>
+                    <th class="py-2 text-uppercase text-center">Роль в системе</th>
+                    <th class="py-2 text-uppercase text-center">Статус</th>
+                    <th class="py-2 text-uppercase text-end">Действие</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in users_list %}
+                <tr>
+                    <td class="fw-bold text-dark py-3">{{ item.email }}</td>
+                    <td class="text-muted py-3">{{ item.username|default:"—" }}</td>
+                    <td class="text-center py-3">
+                        {% if item.is_superuser %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 py-1">Суперпользователь</span>
+                        {% elif item.is_staff %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-1">Администратор</span>
+                        {% else %}
+                            <span class="badge bg-light text-muted border rounded-pill px-3 py-1">Инженер</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center py-3">
+                        {% if item.is_active %}
+                            <span class="text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i> Активен</span>
+                        {% else %}
+                            <span class="text-danger fw-bold"><i class="bi bi-x-circle-fill me-1"></i> Заблокирован</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end py-3">
+                        {% if item != request.user %}
+                            <button type="button" 
+                                    class="btn btn-sm {% if item.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %} fw-bold px-3"
+                                    hx-post="{% url 'toggle_user_status' item.uuid %}"
+                                    hx-confirm="Изменить статус активности пользователя {{ item.email }}?">
+                                {% if item.is_active %}Блокировать{% else %}Активировать{% endif %}
+                            </button>
+                        {% else %}
+                            <span class="text-muted italic small pe-2">Это ваша сессия</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
