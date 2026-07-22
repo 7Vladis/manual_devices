@@ -9,7 +9,8 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-import os
+import ldap
+from django_auth_ldap.config import LDAPSearch
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -34,6 +35,34 @@ LOGOUT_REDIRECT_URL = 'login'
 AUTH_USER_MODEL = 'users.User'
 
 SESSION_COOKIE_AGE = 1209600
+
+# Authentication
+
+AUTHENTICATION_BACKENDS = [
+#    'django_auth_ldap.backend.LDAPBackend',          
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+AUTH_LDAP_SERVER_URI = "ldap://192.168.1.10"
+
+AUTH_LDAP_BIND_DN = "uid=django_service,cn=users,cn=accounts,dc=example,dc=com"
+AUTH_LDAP_BIND_PASSWORD = "your_secure_service_password"
+
+AUTH_LDAP_USER_SEARCH = LDAPSearch(
+    "cn=users,cn=accounts,dc=example,dc=com",  
+    ldap.SCOPE_SUBTREE,
+    "(mail=%(user)s)"                         
+)
+
+AUTH_LDAP_USER_ATTR_MAP = {
+    "first_name": "givenName",
+    "last_name": "sn",
+    "email": "mail",
+    "name": "displayName", 
+}
+
+AUTH_LDAP_ALWAYS_UPDATE_USER_FLAGS = False
+AUTH_LDAP_CREATE_USER = True 
 
 # Application definition
 

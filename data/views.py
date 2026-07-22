@@ -2,34 +2,38 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.shortcuts import render, get_object_or_404
 from django.template.loader import render_to_string
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.db.models import Q, Prefetch, Count
 from django.utils import timezone
 from datetime import timedelta, datetime
 from dateutil.relativedelta import relativedelta
+from users.decorators import role_required
 from .models import DateUpdateRule, DataObject, ActionHistory, ObjectModel, ObjectType, Relation, DependencyType, Attachment, Comment
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])  # Младший инженер не имеет доступа к настройкам вообще
 def settings_page(request):
     """Единый интерактивный центр управления системой (без JS, горизонтальные вкладки)"""
     active_tab = request.GET.get('tab', 'rules')
+    
+    # Защита вкладок на уровне бэкенда для Старшего инженера
+    if active_tab in ['notifications', 'users'] and not request.user.is_admin_or_higher:
+        active_tab = 'rules'  # Старшего инженера сбрасываем на доступную ему вкладку правил
+
     context = {'active_tab': active_tab}
 
     # 1. ВКЛАДКА: Правила планирования ТО
     if active_tab == 'rules':
-        # Считаем объекты и делаем prefetch подключенных объектов
         rules_query = DateUpdateRule.objects.prefetch_related('data_objects').annotate(
             objects_count=Count('data_objects')
         ).order_by('name')
         
-        # Мапа названий месяцев для вывода в краткой информации
         month_names = {
             1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
             5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
             9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
         }
         
-        # Форматируем сезонные даты в человекопонятный вид на бэкенде
         for r in rules_query:
             rule_data = r.rule or {}
             if rule_data.get('strategy') == 'fixed':
@@ -56,13 +60,13 @@ def settings_page(request):
             relations_count=Count('relations')
         ).order_by('type')
 
-    # 4. ВКЛАДКА: Уведомления Mattermost
-    elif active_tab == 'notifications':
+    # 4. ВКЛАДКА: Уведомления Mattermost (Только для Админов и Суперпользователей)
+    elif active_tab == 'notifications' and request.user.is_admin_or_higher:
         from notifications.models import MattermostSetting
         context['settings'] = MattermostSetting.objects.all().order_by('-updated_at')
 
-    # 5. ВКЛАДКА: Пользователи
-    elif active_tab == 'users':
+    # 5. ВКЛАДКА: Пользователи (Только для Админов и Суперпользователей)
+    elif active_tab == 'users' and request.user.is_admin_or_higher:
         User = get_user_model()
         context['users_list'] = User.objects.all().order_by('username')
 
@@ -71,6 +75,7 @@ def settings_page(request):
     return render(request, 'data/settings.html', context)
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def create_object_type_view(request):
     """Создание нового типа оборудования из настроек"""
     if request.method == 'POST':
@@ -78,18 +83,16 @@ def create_object_type_view(request):
         if name:
             ObjectType.objects.get_or_create(type=name)
             
-    # Возвращаем обновленный блок вкладок через перенаправление HTMX
     response = HttpResponse()
     response['HX-Redirect'] = '/settings/?tab=object_types'
     return response
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def delete_object_type_view(request, pk):
     """Удаление типа оборудования с проверкой на использование"""
     obj_type = get_object_or_404(ObjectType, pk=pk)
-    # Проверяем, привязан ли этот тип к моделям
     if obj_type.models.exists():
-        # Если привязан — возвращаем сообщение об ошибке с кодом 400
         return HttpResponse(
             '<div class="alert alert-danger py-2 px-3 m-0 rounded-3 small animate-fade">'
             '<i class="bi bi-exclamation-triangle-fill me-1"></i> '
@@ -104,6 +107,7 @@ def delete_object_type_view(request, pk):
     return response
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def create_dependency_type_view(request):
     """Создание нового типа связи из настроек"""
     if request.method == 'POST':
@@ -116,6 +120,7 @@ def create_dependency_type_view(request):
     return response
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def delete_dependency_type_view(request, pk):
     """Удаление типа связи с защитой целостности данных"""
     dep_type = get_object_or_404(DependencyType, pk=pk)
@@ -134,8 +139,9 @@ def delete_dependency_type_view(request, pk):
     return response
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def edit_rule_settings_view(request, pk):
-    """Редактирование параметров правила планирования ТО (с автообновлением дат у объектов)"""
+    """Редактирование параметров правила планирования ТО"""
     rule_obj = get_object_or_404(DateUpdateRule, pk=pk)
     
     if request.method == 'POST':
@@ -177,7 +183,6 @@ def edit_rule_settings_view(request, pk):
         rule_obj.rule = rule_json
         rule_obj.save()
         
-        # Пересчитываем расписание обслуживания у всех подключенных объектов
         for obj in rule_obj.data_objects.all():
             obj.next_maintenance_date = calculate_next_maintenance_date(obj, base_date=timezone.now())
             obj.save()
@@ -186,7 +191,6 @@ def edit_rule_settings_view(request, pk):
         response['HX-Redirect'] = '/settings/?tab=rules'
         return response
 
-    # GET-запрос: парсим текущие параметры JSON-правила для автозаполнения полей формы
     rule_data = rule_obj.rule or {}
     strategy = rule_data.get('strategy', 'relative')
     anchor = rule_data.get('anchor', 'actual')
@@ -216,8 +220,9 @@ def edit_rule_settings_view(request, pk):
     })
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def delete_rule_view(request, pk):
-    """Удаление правила планирования (только если нет привязанных объектов)"""
+    """Удаление правила планирования"""
     rule = get_object_or_404(DateUpdateRule, pk=pk)
     if rule.data_objects.exists():
         return HttpResponse(
@@ -234,12 +239,12 @@ def delete_rule_view(request, pk):
     return response
 
 @login_required
+@role_required(['admin', 'superuser'])  # Изменять статус учетных записей могут только Администраторы
 def toggle_user_status_view(request, pk):
     """Быстрая активация/блокировка пользователя из настроек"""
     User = get_user_model()
     target_user = get_object_or_404(User, pk=pk)
     
-    # Администратор не может заблокировать сам себя во избежание потери доступа
     if target_user != request.user:
         target_user.is_active = not target_user.is_active
         target_user.save()
@@ -248,7 +253,9 @@ def toggle_user_status_view(request, pk):
     response['HX-Redirect'] = '/settings/?tab=users'
     return response
 
-# (Существующие вспомогательные функции для дашборда)
+
+# --- ДАШБОРД (Доступен всем авторизованным пользователям) ---
+
 def get_period_limits(period_type):
     now = timezone.now()
     today = now.date()
@@ -355,13 +362,10 @@ def search_view(request):
     return render(request, 'data/includes/search_results_list.html', {'results': results[:10]})
 
 
-# ==========================================
-# ЭТАП 1: СПРАВОЧНИК И ПРОВОДНИК
-# ==========================================
+# --- СПРАВОЧНИК И ПРОВОДНИК (Доступен всем на чтение) ---
 
 @login_required
 def dict_view(request):
-    """Главная страница справочника (содержит разметку левого и правого окон)"""
     active_tab = request.GET.get('tab', 'objects')
     
     selected_object_id = request.GET.get('object')
@@ -369,13 +373,12 @@ def dict_view(request):
     
     active_object = None
     active_model = None
-    parent_uuids = [] # Список UUID всех родителей для автоматического раскрытия дерева
+    parent_uuids = []
     
     if selected_object_id:
         active_tab = 'objects'
         active_object = get_object_or_404(DataObject, pk=selected_object_id)
         
-        # Рекурсивно собираем всю цепочку родителей вверх
         current = active_object
         while True:
             relation = Relation.objects.filter(subject=current).select_related('main').first()
@@ -398,7 +401,7 @@ def dict_view(request):
         'active_tab': active_tab,
         'active_object': active_object,
         'active_model': active_model,
-        'parent_uuids': parent_uuids, # Передаем в контекст
+        'parent_uuids': parent_uuids,
     }
     
     if active_tab == 'models':
@@ -417,23 +420,18 @@ def dict_view(request):
 
 @login_required
 def object_tree_view(request):
-    """Возвращает только дерево объектов (для вкладки 'Объекты')"""
-    # Добавляем prefetch_related('subject_relations')
     roots = DataObject.objects.exclude(
         main_relations__isnull=False
     ).prefetch_related('subject_relations').order_by('name')
     return render(request, 'data/tree/object_tree_list.html', {'objects': roots})
 
-
 @login_required
 def object_children_view(request, parent_uuid):
-    """Возвращает дочерние объекты конкретного родителя с поддержкой сквозной иерархии"""
     parent = get_object_or_404(DataObject, pk=parent_uuid)
     children = DataObject.objects.filter(
         main_relations__main=parent
     ).prefetch_related('subject_relations').order_by('name')
     
-    # Считываем переданный из HTMX-запроса ID активного объекта
     active_object_id = request.GET.get('active_object')
     active_object = None
     parent_uuids = []
@@ -441,7 +439,6 @@ def object_children_view(request, parent_uuid):
     if active_object_id:
         try:
             active_object = DataObject.objects.get(pk=active_object_id)
-            # Рекурсивно выстраиваем цепочку родителей для текущего уровня дерева
             current = active_object
             while True:
                 relation = Relation.objects.filter(subject=current).select_related('main').first()
@@ -456,21 +453,19 @@ def object_children_view(request, parent_uuid):
     return render(request, 'data/tree/object_tree_list_nodes.html', {
         'objects': children,
         'parent': parent,
-        'active_object': active_object, # Передаем активный объект дальше
-        'parent_uuids': parent_uuids,   # Передаем список раскрытых родителей дальше
+        'active_object': active_object,
+        'parent_uuids': parent_uuids,
     })
-
 
 @login_required
 def model_tree_view(request):
-    """Возвращает дерево моделей, сгруппированных по типам объектов"""
-    # Выбираем типы объектов и подгружаем связанные модели, отсортированные по алфавиту
     object_types = ObjectType.objects.prefetch_related(
         Prefetch('models', queryset=ObjectModel.objects.all().order_by('name'))
     ).order_by('type')
-    
     return render(request, 'data/tree/model_tree_list.html', {'object_types': object_types})
 
+
+# --- ОБСЛУЖИВАНИЕ (Доступно всем ролям, включая Младшего инженера) ---
 
 @login_required
 def service_object_view(request, pk):
@@ -484,7 +479,6 @@ def service_object_view(request, pk):
             obj.next_maintenance_date = maintenance_date
             obj.save()
             
-            # Запись в историю действий
             ActionHistory.objects.create(
                 user=request.user,
                 data_object=obj,
@@ -495,7 +489,6 @@ def service_object_view(request, pk):
         response['HX-Trigger'] = 'objectServiced'
         return response
 
-    # GET запрос: рассчитываем рекомендованную дату на основе правила
     proposed_date = calculate_next_maintenance_date(obj)
     
     return render(request, 'data/tree/service_modal_body.html', {
@@ -504,19 +497,20 @@ def service_object_view(request, pk):
     })
 
 
+# --- УДАЛЕНИЕ ОБЪЕКТОВ И МОДЕЛЕЙ (Только Senior, Admin, Superuser) ---
+
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def delete_object_view(request, pk):
-    """Удаление объекта. При вызове через HTMX возвращает пустой ответ, тем самым удаляя узел из дерева"""
     if request.method in ['POST', 'DELETE']:
         obj = get_object_or_404(DataObject, pk=pk)
         obj.delete()
-        return HttpResponse("", status=200) # HTMX удалит элемент благодаря hx-target="this" и swap="delete"
+        return HttpResponse("", status=200)
     return HttpResponse("Метод не разрешен", status=405)
 
-
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def delete_model_view(request, pk):
-    """Удаление модели"""
     if request.method in ['POST', 'DELETE']:
         model_obj = get_object_or_404(ObjectModel, pk=pk)
         model_obj.delete()
@@ -524,9 +518,11 @@ def delete_model_view(request, pk):
     return HttpResponse("Метод не разрешен", status=405)
 
 
+# --- СОЗДАНИЕ ОБЪЕКТОВ И МОДЕЛЕЙ (Только Senior, Admin, Superuser) ---
+
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def create_object_view(request):
-    """Быстрое создание объекта / Загрузка чистой формы"""
     if request.method == 'POST':
         name = request.POST.get('name')
         model_uuid = request.POST.get('model')
@@ -537,7 +533,6 @@ def create_object_view(request):
         dep_type_uuid = request.POST.get('dependency_type')
         new_dep_type_name = request.POST.get('new_dependency_type')
         
-        # Данные по правилу
         rule_uuid = request.POST.get('date_update_rule')
         new_rule_name = request.POST.get('new_date_update_rule')
         
@@ -552,13 +547,10 @@ def create_object_view(request):
             except ValueError:
                 pass
 
-        # Инициализация правила
         selected_rule = None
         if rule_uuid:
             selected_rule = get_object_or_404(DateUpdateRule, pk=rule_uuid)
         elif new_rule_name:
-            from .models import DateUpdateRule
-            
             strategy = request.POST.get('new_rule_strategy', 'relative')
             
             if strategy == 'relative':
@@ -576,7 +568,7 @@ def create_object_view(request):
                         "days": days
                     }
                 }
-            elif strategy == 'fixed': # Универсальный парсер фиксированных дат (одной или нескольких)
+            elif strategy == 'fixed':
                 fixed_months = request.POST.getlist('fixed_months')
                 fixed_days = request.POST.getlist('fixed_days')
                 
@@ -606,7 +598,6 @@ def create_object_view(request):
 
         scheduling_mode = request.POST.get('maintenance_scheduling_mode', 'manual')
         if scheduling_mode == 'auto' and selected_rule:
-            # Расчет даты, отталкиваясь от текущего момента
             first_date = calculate_next_maintenance_date(new_obj, base_date=timezone.now())
             new_obj.next_maintenance_date = first_date
             new_obj.save()
@@ -642,12 +633,11 @@ def create_object_view(request):
         }
         return render(request, 'data/tree/dict_sidebar.html', context)
 
-    # ЕСЛИ GET-ЗАПРОС: Возвращаем чистый бланк формы
     return render(request, 'data/includes/create_object_modal_body.html')
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def create_model_view(request):
-    """Быстрое создание модели / Загрузка чистой формы"""
     if request.method == 'POST':
         name = request.POST.get('name')
         type_uuid = request.POST.get('object_type')
@@ -679,19 +669,14 @@ def create_model_view(request):
         }
         return render(request, 'data/tree/dict_sidebar.html', context)
 
-    # ЕСЛИ GET-ЗАПРОС: Возвращаем чистый бланк формы
     return render(request, 'data/includes/create_model_modal_body.html')
-    
-    # ==========================================
-# ЭТАП 2: ДЕТАЛИ ОБЪЕКТА (ПРАВОЕ ОКНО)
-# ==========================================
+
+
+# --- ДЕТАЛИ ОБЪЕКТА (Доступ на чтение) ---
 
 @login_required
 def object_detail_view(request, pk):
-    """Отображает правое окно объекта с вкладками и обновляет подсветку в дереве"""
     obj = get_object_or_404(DataObject.objects.select_related('model', 'model__object_type'), pk=pk)
-    
-    # Считываем прошлый активный объект из сессии и сохраняем новый
     prev_active_id = request.session.get('active_object_id')
     request.session['active_object_id'] = str(pk)
     
@@ -704,13 +689,9 @@ def object_detail_view(request, pk):
         'active_tab': 'short_info',
     }
     
-    # Рендерим основную карточку деталей
     response_content = render_to_string('data/object/object_details.html', context, request=request)
-    
-    # Подготавливаем OOB-элементы для обновления подсветки в дереве на лету
     oob_elements = []
     
-    # Шаблон для нового подсвеченного элемента
     new_node_html = render_to_string('data/tree/object_tree_node_label.html', {
         'node': obj,
         'is_active': True,
@@ -718,7 +699,6 @@ def object_detail_view(request, pk):
     }, request=request)
     oob_elements.append(new_node_html)
     
-    # Шаблон для удаления подсветки со старого элемента (если он изменился)
     if prev_active_id and prev_active_id != str(pk):
         try:
             prev_obj = DataObject.objects.get(pk=prev_active_id)
@@ -731,10 +711,8 @@ def object_detail_view(request, pk):
         except DataObject.DoesNotExist:
             pass
             
-    # Объединяем детали и OOB-свопы в один ответ
     combined_content = response_content + "\n" + "\n".join(oob_elements)
     
-    # Если перешли по ссылке из модели — переключим левый сайдбар на "Объекты" на лету
     if request.GET.get('sidebar'):
         roots = DataObject.objects.exclude(main_relations__isnull=False).order_by('name')
         sidebar_context = {
@@ -749,22 +727,18 @@ def object_detail_view(request, pk):
     return HttpResponse(combined_content)
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])  # Отвязка правила — только для старших
 def unlink_rule_view(request, pk):
-    """Отвязка правила от объекта внутри модального окна (без JS)"""
     obj = get_object_or_404(DataObject, pk=pk)
-    
-    # Отвязываем правило в БД
     obj.date_update_rule = None
     obj.save()
     
-    # Записываем действие в историю объекта
     ActionHistory.objects.create(
         user=request.user,
         data_object=obj,
         action="Правило автоматического расчета ТО отвязано от объекта."
     )
     
-    # Возвращаем обновленный контент модального окна в режиме 'auto', но уже без привязанного правила
     return render(request, 'data/object/edit_rule_modal_body.html', {
         'obj': obj,
         'current_mode': 'auto',
@@ -773,19 +747,15 @@ def unlink_rule_view(request, pk):
 
 @login_required
 def object_tab_view(request, pk, tab_name):
-    """Возвращает содержимое конкретной вкладки объекта"""
     obj = get_object_or_404(DataObject, pk=pk)
-    
     context = {'obj': obj}
     
     if tab_name == 'short_info':
-        # Находим превью-изображение
         preview = Attachment.objects.filter(data_object=obj, is_preview=True).first()
         context['preview'] = preview
         template = 'data/object/object_tab_short_info.html'
         
     elif tab_name == 'specs':
-        # Характеристики берутся из JSON модели
         context['specifications'] = obj.model.specifications or {}
         template = 'data/object/object_tab_specs.html'
         
@@ -795,8 +765,6 @@ def object_tab_view(request, pk, tab_name):
         template = 'data/object/object_tab_comments.html'
         
     elif tab_name == 'files':
-        # Выводим все файлы, кроме тех, что помечены как превью (или вообще все, но превью отдельно)
-        # Удобнее показать все файлы списком для скачивания
         files = obj.attachments.select_related('user').order_by('-created_at')
         context['files'] = files
         template = 'data/object/object_tab_files.html'
@@ -812,19 +780,17 @@ def object_tab_view(request, pk, tab_name):
     return render(request, template, context)
 
 
-# --- Inline-редактирование в мини-шапке и описании ---
+# --- Inline-редактирование в мини-шапке и описании (Только Senior, Admin, Superuser) ---
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def edit_inventory_view(request, pk):
-    """Редактирование инвентарного номера объекта"""
     obj = get_object_or_404(DataObject, pk=pk)
-    
     if request.method == 'POST':
         new_inv = request.POST.get('inventory_number', '').strip()
         obj.inventory_number = new_inv if new_inv else None
         obj.save()
         
-        # Логируем изменение инвентарного номера
         ActionHistory.objects.create(
             user=request.user,
             data_object=obj,
@@ -832,19 +798,16 @@ def edit_inventory_view(request, pk):
         )
         return render(request, 'data/object/inline_inventory.html', {'obj': obj, 'editing': False})
         
-    # GET-запрос: если нажата кнопка отмены, возвращаем обычный режим просмотра
     if request.GET.get('cancel') == '1':
         return render(request, 'data/object/inline_inventory.html', {'obj': obj, 'editing': False})
         
     return render(request, 'data/object/inline_inventory.html', {'obj': obj, 'editing': True})
 
-
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def edit_parent_view(request, pk):
-    """Выбор родительского объекта с использованием умных подсказок поиска"""
     obj = get_object_or_404(DataObject, pk=pk)
     
-    # Легкий обработчик отмены редактирования (возвращает только текстовый вид)
     if request.method == 'GET' and request.GET.get('cancel') == '1':
         current_relation = Relation.objects.filter(subject=obj).select_related('main__model').first()
         parent = current_relation.main if current_relation else None
@@ -859,7 +822,6 @@ def edit_parent_view(request, pk):
         
     if request.method == 'POST':
         parent_uuid = request.POST.get('parent') or request.POST.get('parent_uuid')
-        
         Relation.objects.filter(subject=obj).delete()
         
         parent_name = "отсутствует"
@@ -906,33 +868,29 @@ def edit_parent_view(request, pk):
         'current_parent': current_parent
     })
 
-
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def edit_description_view(request, pk):
-    """Редактирование описания объекта во вкладке 'Краткая информация'"""
     obj = get_object_or_404(DataObject, pk=pk)
     if request.method == 'POST':
         desc = request.POST.get('description', '').strip()
         obj.description = desc if desc else None
         obj.save()
         
-        # Логируем изменение описания
         ActionHistory.objects.create(
             user=request.user,
             data_object=obj,
             action="Обновлено краткое описание объекта."
         )
-        
         return render(request, 'data/object/inline_description.html', {'obj': obj, 'editing': False})
         
     return render(request, 'data/object/inline_description.html', {'obj': obj, 'editing': True})
 
 
-# --- Вкладка: Комментарии (Комментарии CRUD + Массовое удаление) ---
+# --- Вкладка: Комментарии (Доступно всем авторизованным пользователям) ---
 
 @login_required
 def add_comment_view(request, pk):
-    """Добавление нового комментария к объекту"""
     obj = get_object_or_404(DataObject, pk=pk)
     text = request.POST.get('text', '').strip()
     if text:
@@ -941,16 +899,17 @@ def add_comment_view(request, pk):
             data_object=obj,
             text=text
         )
-    # Возвращаем обновленный список комментариев для этой вкладки
     comments = obj.comments.select_related('user').order_by('-created_at')
     return render(request, 'data/object/object_tab_comments.html', {'obj': obj, 'comments': comments})
 
-
 @login_required
 def edit_comment_view(request, pk):
-    """Поштучное редактирование комментария"""
     comment = get_object_or_404(Comment, pk=pk)
     
+    # Редактировать комментарий может только его автор или администратор
+    if comment.user != request.user and not request.user.is_admin_or_higher:
+        return HttpResponseForbidden("Вы не можете редактировать чужие комментарии.")
+        
     if request.method == 'POST':
         text = request.POST.get('text', '').strip()
         if text:
@@ -960,33 +919,33 @@ def edit_comment_view(request, pk):
         
     return render(request, 'data/object/comment_item_edit.html', {'comment': comment})
 
-
 @login_required
 def delete_comments_bulk(request):
-    """Массовое и одиночное удаление комментариев"""
     comment_ids = request.POST.getlist('comment_ids')
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
     
     if comment_ids:
-        Comment.objects.filter(uuid__in=comment_ids, data_object=obj).delete()
+        # Обычный пользователь может удалять только свои комментарии, админ — любые
+        queryset = Comment.objects.filter(uuid__in=comment_ids, data_object=obj)
+        if not request.user.is_admin_or_higher:
+            queryset = queryset.filter(user=request.user)
+        queryset.delete()
         
     comments = obj.comments.select_related('user').order_by('-created_at')
     return render(request, 'data/object/object_tab_comments.html', {'obj': obj, 'comments': comments})
 
 
-# --- Вкладка: Файлы (Вложения CRUD + Загрузка Превью) ---
+# --- Вкладка: Файлы (Доступно всем авторизованным пользователям) ---
 
 @login_required
 def add_attachment_view(request, pk):
-    """Добавление нового файла/превью изображения"""
     obj = get_object_or_404(DataObject, pk=pk)
     file = request.FILES.get('file')
     is_preview_upload = request.POST.get('is_preview') == 'true'
     
     if file:
         if is_preview_upload:
-            # Снимаем флаг превью со всех старых вложений объекта
             Attachment.objects.filter(data_object=obj, is_preview=True).update(is_preview=False)
             
         Attachment.objects.create(
@@ -996,7 +955,6 @@ def add_attachment_view(request, pk):
             is_preview=is_preview_upload
         )
         
-    # Если загружали превью, перерендерим Краткую информацию, иначе вкладку файлов
     if is_preview_upload:
         preview = Attachment.objects.filter(data_object=obj, is_preview=True).first()
         return render(request, 'data/object/object_tab_short_info.html', {'obj': obj, 'preview': preview})
@@ -1004,30 +962,28 @@ def add_attachment_view(request, pk):
     files = obj.attachments.select_related('user').order_by('-created_at')
     return render(request, 'data/object/object_tab_files.html', {'obj': obj, 'files': files})
 
-
 @login_required
 def delete_attachments_bulk(request):
-    """Массовое удаление файлов"""
     file_ids = request.POST.getlist('file_ids')
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
     
     if file_ids:
-        Attachment.objects.filter(uuid__in=file_ids, data_object=obj).delete()
+        queryset = Attachment.objects.filter(uuid__in=file_ids, data_object=obj)
+        # Обычный пользователь удаляет только свои, администратор — любые
+        if not request.user.is_admin_or_higher:
+            queryset = queryset.filter(user=request.user)
+        queryset.delete()
         
     files = obj.attachments.select_related('user').order_by('-created_at')
     return render(request, 'data/object/object_tab_files.html', {'obj': obj, 'files': files})
 
-# ==========================================
-# ЭТАП 3: ДЕТАЛИ МОДЕЛИ И JSON-РЕДАКТОР
-# ==========================================
 
-login_required
+# --- ДЕТАЛИ МОДЕЛИ (Доступ на чтение) ---
+
+@login_required
 def model_detail_view(request, pk):
-    """Отображает правое окно детализации модели и обновляет подсветку в дереве"""
     model_obj = get_object_or_404(ObjectModel.objects.select_related('object_type'), pk=pk)
-    
-    # Считываем прошлую активную модель из сессии и сохраняем новую
     prev_active_id = request.session.get('active_model_id')
     request.session['active_model_id'] = str(pk)
     
@@ -1036,10 +992,7 @@ def model_detail_view(request, pk):
         'active_tab': 'specs',
     }
     
-    # Рендерим карточку деталей модели
     response_content = render_to_string('data/model/model_details.html', context, request=request)
-    
-    # Готовим OOB-свопы подсветки дерева моделей
     oob_elements = []
     
     new_node_html = render_to_string('data/tree/model_tree_node_label.html', {
@@ -1078,59 +1031,48 @@ def model_detail_view(request, pk):
         
     return HttpResponse(combined_content)
 
-
 @login_required
 def model_tab_view(request, pk, tab_name):
-    """Возвращает контент вкладок модели"""
     model_obj = get_object_or_404(ObjectModel, pk=pk)
-    
     context = {'model_obj': model_obj}
     
     if tab_name == 'specs':
         context['specifications'] = model_obj.specifications or {}
         template = 'data/model/model_tab_specs.html'
-        
     elif tab_name == 'objects':
-        # Находим все объекты, созданные на основе этой модели
         objects = model_obj.data_objects.all().select_related('model__object_type').order_by('name')
         context['objects'] = objects
         template = 'data/model/model_tab_objects.html'
-        
     else:
         return HttpResponse("Вкладка не найдена", status=404)
         
     return render(request, template, context)
 
 
-# --- JSON Характеристики CRUD ---
+# --- JSON ХАРАКТЕРИСТИКИ МОДЕЛИ (Только Senior, Admin, Superuser) ---
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def model_spec_add_view(request, pk):
-    """Добавление новой пары ключ-значение в характеристики модели"""
     model_obj = get_object_or_404(ObjectModel, pk=pk)
-    
     if request.method == 'POST':
         key = request.POST.get('key', '').strip()
         value = request.POST.get('value', '').strip()
-        
         if key and value:
-            # Получаем текущий словарь, мержим и сохраняем
             specs = model_obj.specifications or {}
             specs[key] = value
             model_obj.specifications = specs
             model_obj.save()
             
-        # Возвращаем обновленный шаблон вкладки характеристик
         context = {
             'model_obj': model_obj,
             'specifications': model_obj.specifications
         }
         return render(request, 'data/model/model_tab_specs.html', context)
 
-
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def model_spec_edit_view(request, pk):
-    """Inline-редактирование строки характеристики"""
     model_obj = get_object_or_404(ObjectModel, pk=pk)
     key = request.GET.get('key') or request.POST.get('key')
     
@@ -1138,11 +1080,9 @@ def model_spec_edit_view(request, pk):
         old_key = request.POST.get('old_key')
         new_key = request.POST.get('key', '').strip()
         value = request.POST.get('value', '').strip()
-        
         specs = model_obj.specifications or {}
         
         if old_key and new_key and value:
-            # Если ключ изменился, удаляем старый
             if old_key != new_key:
                 specs.pop(old_key, None)
             specs[new_key] = value
@@ -1155,7 +1095,6 @@ def model_spec_edit_view(request, pk):
         }
         return render(request, 'data/model/model_tab_specs.html', context)
         
-    # GET запрос: возвращаем строку таблицы в режиме редактирования
     value = model_obj.specifications.get(key, '')
     return render(request, 'data/model/inline_spec_row.html', {
         'model_obj': model_obj,
@@ -1164,14 +1103,13 @@ def model_spec_edit_view(request, pk):
         'editing': True
     })
 
-
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def model_spec_delete_view(request, pk):
-    """Удаление ключа из характеристик"""
     model_obj = get_object_or_404(ObjectModel, pk=pk)
     key = request.POST.get('key')
-    
     specs = model_obj.specifications or {}
+    
     if key in specs:
         specs.pop(key)
         model_obj.specifications = specs
@@ -1183,14 +1121,15 @@ def model_spec_delete_view(request, pk):
     }
     return render(request, 'data/model/model_tab_specs.html', context)
 
+
+# --- ВСПОМОГАТЕЛЬНЫЕ ПРОВЕРКИ И ПОДСКАЗКИ (Доступно всем авторизованным) ---
+
 @login_required
 def check_model_name_view(request):
-    """Умная проверка имени модели на точные совпадения и схожесть"""
     name = request.GET.get('name', '').strip()
     if not name or len(name) < 2:
         return HttpResponse('')
 
-    # 1. Сначала жесткая проверка на точное совпадение
     exact_match = ObjectModel.objects.filter(name__iexact=name).first()
     if exact_match:
         return HttpResponse(
@@ -1205,7 +1144,6 @@ def check_model_name_view(request):
             f'</div>'
         )
 
-    # 2. Умный поиск похожих названий моделей (исключая предлоги и короткие слова)
     stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по', 'of', 'and', 'the'}
     words = [
         w.lower() for w in name.split() 
@@ -1214,12 +1152,10 @@ def check_model_name_view(request):
 
     similar_models = []
     if words:
-        # Ищем совпадения по словам в названии модели или в типе оборудования
         query = Q()
         for word in words:
             query |= Q(name__icontains=word) | Q(object_type__type__icontains=word)
-            
-        similar_models = ObjectModel.objects.filter(query).select_related('object_type').distinct()[:5]
+            similar_models = ObjectModel.objects.filter(query).select_related('object_type').distinct()[:5]
 
     if similar_models:
         links = []
@@ -1241,7 +1177,7 @@ def check_model_name_view(request):
             f'<i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> '
             f'Обнаружены похожие модели ({len(similar_models)} шт.):'
             f'</div>'
-            f'<ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">'  # Добавлен скролл
+            f'<ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">'
             f'{"".join(links)}'
             f'</ul>'
             f'<div class="text-muted" style="font-size: 0.75rem;">'
@@ -1250,7 +1186,6 @@ def check_model_name_view(request):
             f'</div>'
         )
 
-    # 3. Если всё свободно
     return HttpResponse(
         '<div class="text-success small mt-1">'
         '<i class="bi bi-check-circle-fill me-1"></i>'
@@ -1258,15 +1193,12 @@ def check_model_name_view(request):
         '</div>'
     )
 
-
 @login_required
 def check_object_name_view(request):
-    """Умная проверка имени объекта на точные совпадения и схожесть"""
     name = request.GET.get('name', '').strip()
     if not name or len(name) < 2:
         return HttpResponse('')
 
-    # 1. Сначала жесткая проверка на точное совпадение
     exact_match = DataObject.objects.filter(name__iexact=name).first()
     if exact_match:
         exact_name = exact_match.name or exact_match.model.name
@@ -1282,7 +1214,6 @@ def check_object_name_view(request):
             f'</div>'
         )
 
-    # 2. Умный поиск похожих названий (исключая предлоги и короткие слова)
     stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по'}
     words = [
         w.lower() for w in name.split() 
@@ -1291,18 +1222,15 @@ def check_object_name_view(request):
 
     similar_objects = []
     if words:
-        # Строим Q-запрос для поиска вхождений любых из значимых слов в имя объекта или имя его модели
         query = Q()
         for word in words:
             query |= Q(name__icontains=word) | Q(model__name__icontains=word)
-            
-        similar_objects = DataObject.objects.filter(query).select_related('model').distinct()[:5]
+            similar_objects = DataObject.objects.filter(query).select_related('model').distinct()[:5]
 
     if similar_objects:
         links = []
         for obj in similar_objects:
             obj_name = obj.name or obj.model.name
-            # Каждая ссылка при клике загружает детали в правое окно и закрывает модальное окно создания
             links.append(
                 f'<li class="mb-1">'
                 f'<a href="#" class="alert-link text-primary fw-semibold" '
@@ -1320,7 +1248,7 @@ def check_object_name_view(request):
             f'<i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> '
             f'Обнаружены похожие объекты ({len(similar_objects)} шт.):'
             f'</div>'
-            f'<ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">'  # Добавлен скролл
+            f'<ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">'
             f'{"".join(links)}'
             f'</ul>'
             f'<div class="text-muted" style="font-size: 0.75rem;">'
@@ -1329,7 +1257,6 @@ def check_object_name_view(request):
             f'</div>'
         )
 
-    # 3. Если всё чисто
     return HttpResponse(
         '<div class="text-success small mt-1">'
         '<i class="bi bi-check-circle-fill me-1"></i>'
@@ -1337,10 +1264,8 @@ def check_object_name_view(request):
         '</div>'
     )
 
-
 @login_required
 def suggest_view(request):
-    """Единый эндпоинт для умных подсказок (с сужением результатов через AND)"""
     field = request.GET.get('field')
     q = request.GET.get('q', '').strip()
     
@@ -1352,7 +1277,6 @@ def suggest_view(request):
     
     if field == 'object_type':
         exact = ObjectType.objects.filter(type__iexact=q)
-        # Сужение поиска через оператор &= (И)
         word_filter = Q()
         for w in words:
             word_filter &= Q(type__icontains=w)
@@ -1406,10 +1330,8 @@ def suggest_view(request):
         'show_create_option': show_create_option
     })
 
-
 @login_required
 def select_suggestion_view(request):
-    """Рендеринг состояния выбранного элемента (Badge с кнопкой Сбросить)"""
     field = request.GET.get('field')
     uuid_val = request.GET.get('uuid')
     name_val = request.GET.get('name')
@@ -1445,44 +1367,35 @@ def select_suggestion_view(request):
         'display_name': display_name,
         'hidden_name': hidden_name,
         'hidden_value': hidden_value,
-        'is_new_rule': is_new_rule  # Передаем маркер, чтобы вывести доп. поле настройки периода
+        'is_new_rule': is_new_rule
     })
-
 
 @login_required
 def reset_suggestion_view(request):
-    """Сброс выбранного значения обратно к строке поиска"""
     field = request.GET.get('field')
     placeholders = {
         'object_type': 'Введите тип оборудования...',
         'model': 'Введите модель оборудования...',
         'parent': 'Поиск родительского объекта...',
         'dependency_type': 'Введите тип связи...',
-        'date_update_rule': 'Введите правило обновления...' # Добавлено
+        'date_update_rule': 'Введите правило обновления...'
     }
     return render(request, 'data/includes/suggestion_input.html', {
         'field': field,
         'placeholder': placeholders.get(field, 'Начните вводить...')
     })
 
-
 @login_required
 def specs_builder_view(request):
-    """Обработка добавления и удаления временных спецификаций модели на стороне HTML"""
-    # Собираем текущие списки ключей и значений из скрытых полей
     keys = request.POST.getlist('spec_keys')
     values = request.POST.getlist('spec_values')
-    
-    # Объединяем их в один словарь
     specs = dict(zip(keys, values))
     
-    # Обработка добавления нового элемента
     new_key = request.POST.get('new_key', '').strip()
     new_value = request.POST.get('new_value', '').strip()
     if new_key and new_value:
         specs[new_key] = new_value
         
-    # Обработка удаления
     remove_key = request.POST.get('remove_key')
     if remove_key:
         specs.pop(remove_key, None)
@@ -1491,14 +1404,10 @@ def specs_builder_view(request):
         'specifications': specs
     })
 
-# ==========================================
-# ЭТАП 4: Конструктор обслуживания
-# ==========================================
+
+# --- КОНСТРУКТОР ОБСЛУЖИВАНИЯ ---
 
 def calculate_next_maintenance_date(data_object, base_date=None):
-    """
-    Рассчитывает дату следующего обслуживания для объекта на основе привязанного правила.
-    """
     if not data_object.date_update_rule:
         return None
         
@@ -1521,7 +1430,7 @@ def calculate_next_maintenance_date(data_object, base_date=None):
         )
         return base_date + delta
         
-    elif strategy == 'fixed': # Универсальный расчет для фиксированных дат (списка любой длины)
+    elif strategy == 'fixed':
         if not isinstance(value, list) or not value:
             return None
             
@@ -1532,34 +1441,29 @@ def calculate_next_maintenance_date(data_object, base_date=None):
             try:
                 dates_in_year.append(base_date.replace(month=m, day=d))
             except ValueError:
-                # На случай некорректных чисел (например, 31 ноября)
                 dates_in_year.append(base_date.replace(month=m, day=28))
                 
         dates_in_year.sort()
         
-        # Ищем первую дату в этом году, которая наступит ПОСЛЕ базовой даты
         for candidate in dates_in_year:
             if candidate > base_date:
                 return candidate
                 
-        # Если в текущем году будущих дат больше нет, берем самую первую дату следующего года
         first_candidate = dates_in_year[0]
         return first_candidate + relativedelta(years=1)
         
     return None
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def rules_dates_builder_view(request):
-    """Динамический конструктор списка сезонных дат для правил через HTMX"""
     months = request.POST.getlist('fixed_months')
     days = request.POST.getlist('fixed_days')
     
-    # Объединяем полученные списки
     dates = []
     for m, d in zip(months, days):
         dates.append({'month': int(m), 'day': int(d)})
         
-    # Обработка добавления новой даты
     new_month = request.POST.get('new_fixed_month')
     new_day = request.POST.get('new_fixed_day')
     if new_month and new_day:
@@ -1567,7 +1471,6 @@ def rules_dates_builder_view(request):
         if new_date not in dates:
             dates.append(new_date)
             
-    # Обработка удаления даты по индексу
     remove_idx = request.POST.get('remove_idx')
     if remove_idx is not None:
         try:
@@ -1575,10 +1478,8 @@ def rules_dates_builder_view(request):
         except IndexError:
             pass
             
-    # Сортируем даты по календарному порядку (сначала месяц, потом день)
     dates.sort(key=lambda x: (x['month'], x['day']))
     
-    # Мапа названий месяцев для красивого вывода в шаблоне
     month_names = {
         1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
         5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
@@ -1591,14 +1492,13 @@ def rules_dates_builder_view(request):
     })
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def rule_constructor_view(request):
-    """Возвращает поля конструктора правил за один чистый запрос к серверу"""
     strategy = request.GET.get('new_rule_strategy', 'relative')
     context = {'strategy': strategy}
     
     if strategy == 'fixed':
-        # Прямо здесь готовим контекст для билдера дат, исключая второй запрос
-        context['dates'] = []  # При создании нового правила список дат изначально пуст
+        context['dates'] = []
         context['month_names'] = {
             1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
             5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
@@ -1608,21 +1508,18 @@ def rule_constructor_view(request):
     return render(request, 'data/includes/rule_constructor_fields.html', context)
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def toggle_scheduling_mode_view(request):
-    """Переключает поля формы создания/редактирования объекта"""
     mode = request.GET.get('maintenance_scheduling_mode', 'manual')
     is_inline = request.GET.get('inline', '0') == '1'
-    
-    # Выбираем соответствующий шаблон, чтобы избежать конфликта ID в DOM
     template = 'data/includes/scheduling_mode_fields_inline.html' if is_inline else 'data/includes/scheduling_mode_fields.html'
-    
     return render(request, template, {
         'mode': mode
     })
 
 @login_required
+@role_required(['senior', 'admin', 'superuser'])
 def edit_rule_view(request, pk):
-    """Редактирование правила планирования ТО через модальное окно объекта"""
     obj = get_object_or_404(DataObject, pk=pk)
     
     if request.method == 'POST':
@@ -1687,7 +1584,6 @@ def edit_rule_view(request, pk):
             action=f"Изменено правило планирования ТО на: {rule_name}."
         )
         
-        # OOB-свопы для моментального обновления шапки карточки без перезагрузки всей страницы
         rule_name_display = f"{obj.date_update_rule.name} <i class='bi bi-pencil-square ms-1 text-muted small'></i>" if obj.date_update_rule else "<span class='text-muted italic small'>ручной ввод <i class='bi bi-pencil-square ms-1'></i></span>"
         
         oob_rule_html = f"""
@@ -1708,11 +1604,9 @@ def edit_rule_view(request, pk):
         
         return HttpResponse(f"{oob_rule_html}\n{oob_date_html}")
 
-    # --- ОБРАБОТКА GET-ЗАПРОСА ---
     current_mode = 'auto' if obj.date_update_rule else 'manual'
     rule_details = None
     
-    # Формируем человекочитаемое описание параметров текущего правила для вывода в окне
     if obj.date_update_rule:
         rule_data = obj.date_update_rule.rule or {}
         strategy = rule_data.get('strategy', 'relative')

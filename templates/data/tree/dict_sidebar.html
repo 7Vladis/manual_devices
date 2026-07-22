@@ -1,6 +1,6 @@
 <div class="d-flex flex-column h-100 pe-1">
     
-    <!-- Переключатель вкладок (Без JS, управляется через Django и HTMX) -->
+    <!-- Переключатель вкладок (Объекты / Модели) -->
     <div class="d-flex bg-light p-1 rounded-3 my-2" style="font-size: 0.85rem;">
         <button class="btn {% if active_tab == 'objects' %}btn-white shadow-sm text-dark{% else %}btn-light text-muted{% endif %} flex-fill fw-bold py-2 border-0 rounded-2" 
                 hx-get="{% url 'dict' %}?tab=objects&sidebar=1" 
@@ -14,7 +14,8 @@
         </button>
     </div>
 
-    <!-- Кнопка Создать -->
+    <!-- Кнопка Создать (Отображается для всех, КРОМЕ Младшего инженера) -->
+    {% if not request.user.is_junior %}
     <div class="dropdown mb-2">
         <button class="btn w-100 py-2 text-white fw-bold d-flex align-items-center justify-content-between px-3" 
                 type="button" 
@@ -26,7 +27,7 @@
         </button>
         <ul class="dropdown-menu w-100 border-0 shadow-lg mt-1 p-2">
             <li>
-                <!-- КНОПКА СОЗДАНИЯ МОДЕЛИ (Теперь первая) -->
+                <!-- КНОПКА СОЗДАНИЯ МОДЕЛИ -->
                 <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
                         type="button" 
                         data-bs-toggle="modal" 
@@ -44,7 +45,7 @@
             </li>
             <li><hr class="dropdown-divider my-2 opacity-50"></li>
             <li>
-                <!-- КНОПКА СОЗДАНИЯ ОБЪЕКТА (Теперь вторая) -->
+                <!-- КНОПКА СОЗДАНИЯ ОБЪЕКТА -->
                 <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
                         type="button" 
                         data-bs-toggle="modal" 
@@ -62,6 +63,7 @@
             </li>
         </ul>
     </div>
+    {% endif %}
 
     <!-- Контейнер дерева/списка моделей -->
     <div id="tree-container" class="flex-grow-1 overflow-auto pb-3">

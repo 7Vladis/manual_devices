@@ -1,15 +1,18 @@
 from django.shortcuts import render, get_object_or_404
-from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
+from users.decorators import role_required
 from .models import MattermostSetting
 from .services import test_specific_webhook
 
-@staff_member_required
+@login_required
+@role_required(['admin', 'superuser'])  # Доступ только Администраторам и Суперюзерам
 def notification_settings(request):
     settings = MattermostSetting.objects.all().order_by('-updated_at')
     return render(request, 'notifications/settings.html', {'settings': settings})
 
-@staff_member_required
+@login_required
+@role_required(['admin', 'superuser'])
 def activate_webhook(request, pk):
     webhook = get_object_or_404(MattermostSetting, pk=pk)
     # Если мы хотим, чтобы активным был только один, раскомментируй строку ниже:
@@ -19,13 +22,15 @@ def activate_webhook(request, pk):
     return render(request, 'notifications/includes/webhook_list.html', 
                   {'settings': MattermostSetting.objects.all().order_by('-updated_at')})
 
-@staff_member_required
+@login_required
+@role_required(['admin', 'superuser'])
 def test_webhook(request, pk):
     success, message = test_specific_webhook(pk)
     color = "success" if success else "danger"
     return HttpResponse(f'<small class="text-{color} ms-2">{message}</small>')
 
-@staff_member_required
+@login_required
+@role_required(['admin', 'superuser'])
 def add_webhook(request):
     url = request.POST.get('webhook_url')
     if url:
@@ -33,7 +38,8 @@ def add_webhook(request):
     return render(request, 'notifications/includes/webhook_list.html', 
                   {'settings': MattermostSetting.objects.all().order_by('-updated_at')})
 
-@staff_member_required
+@login_required
+@role_required(['admin', 'superuser'])
 def delete_webhooks(request):
     ids = request.POST.getlist('webhook_ids')
     MattermostSetting.objects.filter(uuid__in=ids).delete()
