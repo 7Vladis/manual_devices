@@ -18,15 +18,17 @@
                     {% include 'data/tree/model_tree_node_label.html' with model=model %}
                     
                     <div class="tree-actions d-flex align-items-center gap-1 opacity-100 ms-2">
-                        <!-- Кнопка удаления модели -->
-                        <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center"
-                                hx-post="{% url 'delete_model' model.uuid %}"
-                                hx-target="#model-node-{{ model.uuid }}"
-                                hx-swap="outerHTML"
-                                hx-confirm="Вы уверены, что хотите удалить модель '{{ model.name }}'? Все связанные объекты потеряют ссылку на модель."
-                                title="Удалить">
-                            <i class="bi bi-trash3 small"></i>
-                        </button>
+                        <!-- Кнопку удаления модели показываем всем, КРОМЕ младшего инженера (Junior) -->
+                        {% if not request.user.is_junior %}
+                            <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center"
+                                    hx-post="{% url 'delete_model' model.uuid %}"
+                                    hx-target="#model-node-{{ model.uuid }}"
+                                    hx-swap="outerHTML"
+                                    hx-confirm="Вы уверены, что хотите удалить модель '{{ model.name }}'? Все связанные объекты потеряют ссылку на модель."
+                                    title="Удалить">
+                                <i class="bi bi-trash3 small"></i>
+                            </button>
+                        {% endif %}
                     </div>
                 </li>
                 {% endfor %}

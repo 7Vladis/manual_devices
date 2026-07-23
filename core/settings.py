@@ -10,8 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 import ldap
-from django_auth_ldap.config import LDAPSearch
+from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
 from pathlib import Path
+
+# Settings LDAP
+
+# LDAP_CA_FILE = "path/for/your/crt"
+# ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, LDAP_CA_FILE)
+# ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+# ldap.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -36,33 +43,53 @@ AUTH_USER_MODEL = 'users.User'
 
 SESSION_COOKIE_AGE = 1209600
 
-# Authentication
+# Authentication LDAP
 
-AUTHENTICATION_BACKENDS = [
-#    'django_auth_ldap.backend.LDAPBackend',          
-    'django.contrib.auth.backends.ModelBackend',
-]
+# AUTHENTICATION_BACKENDS = [
+#     "django_auth_ldap.backend.LDAPBackend",
+#     "django.contrib.auth.backends.ModelBackend",
+# ]
 
-AUTH_LDAP_SERVER_URI = "ldap://192.168.1.10"
+# AUTH_LDAP_SERVER_URI = "ldap://your.domain.ru"
+# AUTH_LDAP_START_TLS = True
 
-AUTH_LDAP_BIND_DN = "uid=django_service,cn=users,cn=accounts,dc=example,dc=com"
-AUTH_LDAP_BIND_PASSWORD = "your_secure_service_password"
+# AUTH_LDAP_BIND_DN = (
+#     "uid=django_service,cn=sysaccounts,cn=etc,"
+#     "dc=your,dc=domain,dc=ru"
+# )
 
-AUTH_LDAP_USER_SEARCH = LDAPSearch(
-    "cn=users,cn=accounts,dc=example,dc=com",  
-    ldap.SCOPE_SUBTREE,
-    "(mail=%(user)s)"                         
-)
+# AUTH_LDAP_BIND_PASSWORD = "your_password"
 
-AUTH_LDAP_USER_ATTR_MAP = {
-    "first_name": "givenName",
-    "last_name": "sn",
-    "email": "mail",
-    "name": "displayName", 
-}
+# AUTH_LDAP_USER_SEARCH = LDAPSearch(
+#     "cn=users,cn=accounts,dc=your,dc=domain,dc=ru",
+#     ldap.SCOPE_SUBTREE,
+#     "(uid=%(user)s)",
+# )
 
-AUTH_LDAP_ALWAYS_UPDATE_USER_FLAGS = False
-AUTH_LDAP_CREATE_USER = True 
+# AUTH_LDAP_USER_QUERY_FIELD = 'email'
+
+# AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+#     "cn=groups,cn=accounts,dc=your,dc=domain,dc=ru",
+#     ldap.SCOPE_SUBTREE,
+#     "(objectClass=groupOfNames)",
+# )
+
+# AUTH_LDAP_GROUP_TYPE = GroupOfNamesType(name_attr="cn")
+
+# AUTH_LDAP_REQUIRE_GROUP = (
+#     "cn=django-users,cn=groups,cn=accounts,"
+#     "dc=your,dc=domain,dc=ru"
+# )
+
+# AUTH_LDAP_USER_ATTR_MAP = {
+#     "first_name": "givenName",
+#     "last_name": "sn",
+#     "email": "mail",
+#     "username": "mail",
+# }
+
+# AUTH_LDAP_ALWAYS_UPDATE_USER = False
+# AUTH_LDAP_NO_NEW_USERS = False
 
 # Application definition
 
