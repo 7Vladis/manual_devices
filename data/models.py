@@ -1,5 +1,8 @@
 import uuid
+import os
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.utils import timezone
 from django.conf import settings
 
@@ -130,3 +133,14 @@ class Attachment(models.Model):
         db_table = 'attachment'
         verbose_name = 'Вложение'
         verbose_name_plural = 'Вложения'
+
+
+@receiver(post_delete, sender=Attachment)
+def delete_attachment_file(sender, instance, **kwargs):
+    """Автоматически удаляет физический файл с диска при удалении записи Attachment из БД"""
+    if instance.path:
+        if os.path.isfile(instance.path.path):
+            try:
+                os.remove(instance.path.path)
+            except Exception:
+                pass

@@ -1,22 +1,104 @@
-/* --- 1. ПЕРЕМЕННЫЕ И ОСНОВА --- */
+/* --- 1. ПЕРЕМЕННЫЕ И ПАЛИТРА (60-30-10) --- */
 :root {
-    --app-bg: #f8f9fa;
-    --card-shadow: 4px 4px 12px rgba(0,0,0,0.05);
-    --card-hover-shadow: 6px 8px 20px rgba(0,0,0,0.1);
-    --border-radius: 12px;
-    --primary-color: #0d4ba9;
-    --danger-color: #e63946;
-    --success-color: #198754;
-    --transition: all 0.3s ease;
+    /* 60% Доминирующий цвет (спокойный светлый фон интерфейса) */
+    --app-bg: #f8fafc;
+    --card-bg: #ffffff;
+    
+    /* 30% Вторичный цвет (структура, текст, рамочные элементы) */
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    
+    /* 10% Акцентный цвет (ключевые CTA-действия, акценты) */
+    --accent-color: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-active: #1e40af;
+    
+    /* Дополнительные системные цвета */
+    --primary-color: #2563eb;
+    --danger-color: #ef4444;
+    --success-color: #22c55e;
+    
+    --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+    --card-hover-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+    --border-radius: 10px;
+    --transition: all 0.2s ease-in-out;
 }
 
 body {
     background-color: var(--app-bg);
-    font-family: 'Segoe UI', Roboto, sans-serif;
-    color: #333;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-main);
 }
 
 a { text-decoration: none; color: inherit; }
+
+/* --- СИСТЕМА ИНТЕРАКТИВНЫХ ЭЛЕМЕНТОВ И КНОПОК --- */
+
+/* Первичная кнопка (Primary / CTA - Акцентный цвет 10%) */
+.btn-primary, .btn-success, .btn-outline-primary {
+    background-color: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    color: #ffffff !important;
+    transition: var(--transition);
+}
+
+.btn-outline-primary {
+    background-color: transparent !important;
+    color: var(--accent-color) !important;
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--accent-color) !important;
+    color: #ffffff !important;
+}
+
+.btn-primary:hover, .btn-success:hover {
+    background-color: var(--accent-hover) !important;
+    border-color: var(--accent-hover) !important;
+}
+
+.btn-primary:active, .btn-success:active, .btn-outline-primary:active {
+    background-color: var(--accent-active) !important;
+    border-color: var(--accent-active) !important;
+    color: #ffffff !important;
+    transform: translateY(1px);
+}
+
+.btn-primary:disabled, .btn-success:disabled, .btn-outline-primary:disabled {
+    background-color: #cbd5e1 !important;
+    border-color: #cbd5e1 !important;
+    color: #94a3b8 !important;
+    cursor: not-allowed;
+}
+
+/* Вторичная кнопка (Secondary - альтернативные действия) */
+.btn-secondary, .btn-outline-secondary, .btn-light {
+    transition: var(--transition);
+}
+
+.btn-outline-secondary, .btn-light {
+    background-color: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+    color: var(--text-main) !important;
+}
+
+.btn-outline-secondary:hover, .btn-light:hover {
+    background-color: #e2e8f0 !important;
+    border-color: #94a3b8 !important;
+}
+
+.btn-outline-secondary:active, .btn-light:active {
+    background-color: #cbd5e1 !important;
+    transform: translateY(1px);
+}
+
+.btn-outline-secondary:disabled, .btn-light:disabled {
+    background-color: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+    color: #cbd5e1 !important;
+    cursor: not-allowed;
+}
 
 /* --- 2. БАЗОВЫЕ КОМПОНЕНТЫ --- */
 
@@ -177,6 +259,17 @@ a { text-decoration: none; color: inherit; }
 
 .hover-bg-light:hover {
     background-color: #f1f5f9;
+}
+
+/* Корректное усечение длинных имен на маленьких экранах */
+.tree-item .text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.tree-actions {
+    flex-shrink: 0;
 }
 
 /* Вращение стрелочки при разворачивании */

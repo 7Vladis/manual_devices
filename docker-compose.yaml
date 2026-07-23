@@ -12,5 +12,23 @@ services:
     ports:
       - "5432:5432"
 
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+      # Монтирование LDAP сертификата из хоста в контейнер (укажите ваш путь к .crt файлу слева)
+      - ./ldap_cert.crt:/app/ldap_cert.crt:ro
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=my_project_db
+      - DB_USER=my_user
+      - DB_PASSWORD=my_password
+      - LDAP_CA_FILE=/app/ldap_cert.crt
+    depends_on:
+      - db
+
 volumes:
   postgres_data:

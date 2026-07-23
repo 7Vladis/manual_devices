@@ -5,5 +5,5 @@
      hx-target="#detail-container"
      {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
     <i class="bi bi-layers text-secondary me-2 fs-6"></i>
-    <span class="text-dark small fw-semibold text-truncate">{{ model.name }}</span>
+    <span class="text-dark small fw-semibold text-truncate" title="{{ model.name }}">{{ model.name }}</span>
 </div>

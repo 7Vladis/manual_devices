@@ -11,7 +11,7 @@
         <i class="bi bi-file-text text-secondary me-2 fs-5"></i>
     {% endif %}
     
-    <span class="text-dark fw-medium text-truncate small">
+    <span class="text-dark fw-medium text-truncate small" title="{{ node.name|default:node.model.name }}">
         {{ node.name|default:node.model.name }}
     </span>
 </div>

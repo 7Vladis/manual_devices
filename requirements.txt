@@ -4,3 +4,4 @@ django-apscheduler
 python-dateutil
 requests
 django-auth-ldap
+openpyxl
