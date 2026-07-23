@@ -2,21 +2,6 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<style>
-    main.container-fluid {
-        padding: 0 !important;
-        margin: 0 !important;
-        max-width: 100vw !important;
-    }
-    #main-content {
-        width: 100%;
-    }
-    .settings-layout {
-        height: calc(100vh - 56px); /* Высота под обрез шапки */
-        overflow: hidden;
-    }
-</style>
-
 <div class="container-fluid px-0 settings-layout bg-light animate-fade" id="settings-page-wrapper">
     {% include 'data/settings/settings_layout_inner.html' %}
 </div>

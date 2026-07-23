@@ -20,7 +20,7 @@
         
         <div class="d-flex justify-content-between align-items-center mb-3 px-1">
             <h6 class="fw-bold mb-0 text-dark">Лента комментариев ({{ comments|length }})</h6>
-            {% if comments %}
+            {% if comments and not request.user.is_junior %}
             <button type="submit" class="btn btn-outline-danger btn-sm fw-bold" hx-confirm="Удалить выбранные комментарии?">
                 <i class="bi bi-trash me-1"></i> Удалить выбранные
             </button>
@@ -31,7 +31,9 @@
             {% for comment in comments %}
             <div class="card p-3 border-0 shadow-sm bg-white hover-bg-light transition-all" id="comment-item-{{ comment.uuid }}" style="border-radius: 8px;">
                 <div class="d-flex align-items-start">
+                    {% if not request.user.is_junior %}
                     <input type="checkbox" name="comment_ids" value="{{ comment.uuid }}" class="form-check-input me-3 mt-1 shadow-none" style="width: 18px; height: 18px; cursor: pointer;">
+                    {% endif %}
                     
                     <div class="flex-grow-1">
                         <div class="d-flex justify-content-between align-items-center mb-1">

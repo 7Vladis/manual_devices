@@ -39,52 +39,65 @@
             <div id="search-results" class="position-absolute w-100 shadow-lg bg-white rounded-3 mt-1 overflow-hidden" style="z-index: 1050;"></div>
         </div>
 
-        <!-- ПРАВАЯ ЧАСТЬ: Профиль пользователя -->
-        <div class="dropdown user-block d-flex align-items-center justify-content-end">
+        <!-- ПРАВАЯ ЧАСТЬ: Экспорт и Профиль пользователя -->
+        <div class="d-flex align-items-center gap-2 user-block justify-content-end">
             
-            <!-- Триггер меню -->
-            <button class="btn btn-link text-white text-decoration-none d-flex align-items-center gap-2 p-0 shadow-none border-0" 
-                    type="button" 
-                    id="userMenu" 
-                    data-bs-toggle="dropdown" 
-                    aria-expanded="false">
-                <span class="fw-bold d-none d-sm-inline" style="font-size: 0.85rem;">
-                    {{ user.username|default:"Пользователь" }} <i class="bi bi-chevron-down ms-1 small"></i>
-                </span>
-                <span class="rounded-circle bg-primary shadow-sm d-flex align-items-center justify-content-center text-white" 
-                      style="width: 32px; height: 32px; border: 2px solid rgb(255, 255, 255); font-weight: bold; font-size: 0.75rem;">
-                    {{ user.email|slice:":2"|upper }}
-                </span>
+            <!-- Кнопка экспорта XLSX (доступна Администратору и Суперпользователю) -->
+            {% if request.user.is_admin_or_higher %}
+            <button type="button" 
+                    class="btn btn-outline-light nav-btn-compact text-success bg-white border-white shadow-sm" 
+                    data-bs-toggle="modal"
+                    data-bs-target="#exportModal"
+                    title="Экспорт данных в XLSX">
+                <i class="bi bi-cloud-arrow-down-fill fs-6"></i>
             </button>
+            {% endif %}
 
-            <!-- Выпадающее меню профиля -->
-            <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 rounded-3 mt-2 p-0 overflow-hidden" 
-                aria-labelledby="userMenu" 
-                style="min-width: 240px; z-index: 1100;">
-                
-                <li class="user-info-header px-3 py-3" style="background-color: #ffffff; border-bottom: 1px solid #dfe5ed;">
-                    <div class="fw-bold text-dark text-truncate d-flex align-items-center justify-content-between" style="font-size: 0.9rem;">
-                        <span>{{ user.username|default:"Пользователь" }}</span>
-                        <!-- Бейдж текущей роли в системе -->
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill fw-semibold" style="font-size: 0.7rem;">
-                            {{ user.get_role_display }}
-                        </span>
-                    </div>
-                    <div class="text-muted small text-truncate mt-1" style="font-size: 0.8rem;">{{ user.email }}</div>
-                </li>
-                
-                <li><hr class="dropdown-divider m-0" style="opacity: 0.1;"></li>
-                
-                <li class="p-1">
-                    <form action="{% url 'logout' %}" method="post" class="m-0">
-                        {% csrf_token %}
-                        <button type="submit" class="dropdown-item text-danger logout-btn border-0 rounded-2 d-flex align-items-center py-2 px-3">
-                            <i class="bi bi-box-arrow-right me-3"></i>
-                            <span class="fw-bold" style="font-size: 0.85rem;">Выйти</span>
-                        </button>
-                    </form>
-                </li>
-            </ul>
+            <!-- Триггер меню -->
+            <div class="dropdown">
+                <button class="btn btn-link text-white text-decoration-none d-flex align-items-center gap-2 p-0 shadow-none border-0" 
+                        type="button" 
+                        id="userMenu" 
+                        data-bs-toggle="dropdown" 
+                        aria-expanded="false">
+                    <span class="fw-bold d-none d-sm-inline" style="font-size: 0.85rem;">
+                        {{ user.username|default:"Пользователь" }} <i class="bi bi-chevron-down ms-1 small"></i>
+                    </span>
+                    <span class="rounded-circle bg-primary shadow-sm d-flex align-items-center justify-content-center text-white" 
+                          style="width: 32px; height: 32px; border: 2px solid rgb(255, 255, 255); font-weight: bold; font-size: 0.75rem;">
+                        {{ user.email|slice:":2"|upper }}
+                    </span>
+                </button>
+
+                <!-- Выпадающее меню профиля -->
+                <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 rounded-3 mt-2 p-0 overflow-hidden" 
+                    aria-labelledby="userMenu" 
+                    style="min-width: 240px; z-index: 1100;">
+                    
+                    <li class="user-info-header px-3 py-3" style="background-color: #ffffff; border-bottom: 1px solid #dfe5ed;">
+                        <div class="fw-bold text-dark text-truncate d-flex align-items-center justify-content-between" style="font-size: 0.9rem;">
+                            <span>{{ user.username|default:"Пользователь" }}</span>
+                            <!-- Бейдж текущей роли в системе -->
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill fw-semibold" style="font-size: 0.7rem;">
+                                {{ user.get_role_display }}
+                            </span>
+                        </div>
+                        <div class="text-muted small text-truncate mt-1" style="font-size: 0.8rem;">{{ user.email }}</div>
+                    </li>
+                    
+                    <li><hr class="dropdown-divider m-0" style="opacity: 0.1;"></li>
+                    
+                    <li class="p-1">
+                        <form action="{% url 'logout' %}" method="post" class="m-0">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item text-danger logout-btn border-0 rounded-2 d-flex align-items-center py-2 px-3">
+                                <i class="bi bi-box-arrow-right me-3"></i>
+                                <span class="fw-bold" style="font-size: 0.85rem;">Выйти</span>
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
         </div>
 
     </div>

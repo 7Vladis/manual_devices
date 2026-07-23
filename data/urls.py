@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+import users.views
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
@@ -13,9 +14,11 @@ urlpatterns = [
     path('settings/object-types/<uuid:pk>/delete/', views.delete_object_type_view, name='delete_object_type'),
     path('settings/dependency-types/create/', views.create_dependency_type_view, name='create_dependency_type'),
     path('settings/dependency-types/<uuid:pk>/delete/', views.delete_dependency_type_view, name='delete_dependency_type'),
+    path('settings/rules/create/', views.create_rule_settings_view, name='create_rule_settings'),
     path('settings/rules/<uuid:pk>/delete/', views.delete_rule_view, name='delete_rule'),
     path('settings/rules/<uuid:pk>/edit/', views.edit_rule_settings_view, name='edit_rule_settings'),
-    path('settings/users/<uuid:pk>/toggle/', views.toggle_user_status_view, name='toggle_user_status'),
+    path('settings/rules/<uuid:pk>/edit/', views.edit_rule_settings_view, name='edit_rule_settings'),
+    path('settings/users/<uuid:pk>/toggle/', users.views.toggle_user_status_view, name='toggle_user_status'),
     
     # Дерево объектов
     path('dict/objects/', views.object_tree_view, name='object_tree'),
@@ -62,4 +65,6 @@ urlpatterns = [
     path('dict/rules/constructor/', views.rule_constructor_view, name='rule_constructor'), 
     path('dict/rules/dates-builder/', views.rules_dates_builder_view, name='rules_dates_builder'),
     path('dict/rules/toggle-mode/', views.toggle_scheduling_mode_view, name='toggle_scheduling_mode'),
+    path('export/xlsx/', views.export_xlsx_view, name='export_xlsx'),
+    path('export/modal/', views.export_modal_view, name='export_modal'),
 ]

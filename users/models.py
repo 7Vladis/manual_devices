@@ -72,3 +72,7 @@ class User(AbstractUser):
     @property
     def is_admin_or_higher(self):
         return self.role in ['admin', 'superuser'] or self.is_superuser
+
+    @property
+    def can_manage_content(self):
+        return self.role in ['senior', 'admin', 'superuser'] or self.is_superuser

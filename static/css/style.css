@@ -206,3 +206,17 @@ a { text-decoration: none; color: inherit; }
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* Дополнительные стили для макета настроек */
+main.container-fluid {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100vw !important;
+}
+#main-content {
+    width: 100%;
+}
+.settings-layout {
+    height: calc(100vh - 56px);
+    overflow: hidden;
+}

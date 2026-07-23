@@ -23,7 +23,7 @@
         
         <div class="d-flex justify-content-between align-items-center mb-3 px-1">
             <h6 class="fw-bold mb-0 text-dark">Документы и вложения ({{ files|length }})</h6>
-            {% if files %}
+            {% if files and not request.user.is_junior %}
             <button type="submit" class="btn btn-outline-danger btn-sm fw-bold" hx-confirm="Удалить выбранные документы?">
                 <i class="bi bi-trash me-1"></i> Удалить выбранные
             </button>
@@ -35,7 +35,9 @@
             <div class="card p-3 border-0 shadow-sm bg-white hover-bg-light transition-all" style="border-radius: 8px;">
                 <div class="d-flex align-items-center justify-content-between">
                     <div class="d-flex align-items-center text-truncate flex-grow-1">
+                        {% if not request.user.is_junior %}
                         <input type="checkbox" name="file_ids" value="{{ file.uuid }}" class="form-check-input me-3 shadow-none" style="width: 18px; height: 18px; cursor: pointer;">
+                        {% endif %}
                         
                         <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3" style="width: 42px; height: 42px; min-width: 42px;">
                             <i class="bi bi-file-earmark-arrow-down-fill text-primary fs-4"></i>

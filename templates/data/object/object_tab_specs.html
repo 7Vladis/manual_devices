@@ -1,12 +1,14 @@
 <div class="card border-0 shadow-sm p-4 bg-white animate-fade" style="border-radius: 8px;">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-cpu me-2"></i>Технические характеристики</h6>
-        <!-- Клик по кнопке загружает модель справа и переключает сайдбар на вкладку "Модели" слева -->
-        <button class="btn btn-outline-primary btn-sm fw-bold"
-                hx-get="{% url 'model_detail' obj.model.uuid %}?sidebar=1"
-                hx-target="#detail-container">
+        <!-- Клик по кнопке загружает модель справа и переключает сайдбар на вкладку "Модели" слева (скрыто для младшего инженера) -->
+        {% if not request.user.is_junior %}
+        <a href="{% url 'dict' %}?model={{ obj.model.uuid }}" 
+           target="_blank" 
+           class="btn btn-outline-primary btn-sm fw-bold text-decoration-none">
             <i class="bi bi-pencil-square me-1"></i> Изменить в модели
-        </button>
+        </a>
+        {% endif %}
     </div>
 
     <div class="table-responsive">

@@ -32,6 +32,7 @@
                     <i class="bi bi-bezier2 me-2"></i>Типы связей
                 </a>
 
+                {% if request.user.is_admin_or_higher %}
                 <a href="?tab=notifications" 
                    class="nav-link px-3 py-1.5 rounded-2 d-flex align-items-center {% if active_tab == 'notifications' %}active text-white shadow-sm{% else %}text-secondary hover-bg-light{% endif %}"
                    hx-get="{% url 'settings_page' %}?tab=notifications"
@@ -47,6 +48,7 @@
                    hx-push-url="true">
                     <i class="bi bi-people-fill me-2"></i>Пользователи
                 </a>
+                {% endif %}
             </div>
         </div>
         
@@ -63,9 +65,9 @@
             {% include 'data/settings/tab_object_types.html' %}
         {% elif active_tab == 'dependency_types' %}
             {% include 'data/settings/tab_dependency_types.html' %}
-        {% elif active_tab == 'notifications' %}
+        {% elif active_tab == 'notifications' and request.user.is_admin_or_higher %}
             {% include 'data/settings/tab_notifications.html' %}
-        {% elif active_tab == 'users' %}
+        {% elif active_tab == 'users' and request.user.is_admin_or_higher %}
             {% include 'data/settings/tab_users.html' %}
         {% endif %}
     </div>

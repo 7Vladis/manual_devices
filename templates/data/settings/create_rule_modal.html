@@ -1,0 +1,85 @@
+<!-- templates/data/settings/create_rule_modal.html -->
+<div class="modal-header border-0 pb-0">
+    <h5 class="modal-title fw-bold text-dark">Создание нового правила планирования ТО</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<form hx-post="{% url 'create_rule_settings' %}" 
+      hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('createRuleSettingsModal')).hide(); }">
+    {% csrf_token %}
+    <div class="modal-body py-3">
+        
+        <!-- Название -->
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase">Название правила</label>
+            <input type="text" name="name" class="form-control bg-light border-0 py-2 shadow-none" placeholder="Например: Ежегодное ТО (май)" required autocomplete="off" style="font-size: 0.9rem;">
+        </div>
+
+        <!-- Стратегия -->
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Тип расчета даты</label>
+            <select name="new_rule_strategy" 
+                    class="form-select form-select-sm"
+                    hx-get="{% url 'rule_constructor' %}"
+                    hx-target="#constructor-fields-container-create"
+                    hx-swap="outerHTML"
+                    hx-trigger="change">
+                <option value="relative" {% if strategy == 'relative' %}selected{% endif %}>Относительный интервал (через промежуток времени)</option>
+                <option value="fixed" {% if strategy == 'fixed' %}selected{% endif %}>Фиксированные календарные даты (одна или несколько)</option>
+            </select>
+        </div>
+
+        <!-- Конструктор полей с подсказками -->
+        <div id="constructor-fields-container-create" class="animate-fade">
+            {% if strategy == 'relative' %}
+                
+                <!-- Подсказка для Точки отсчета -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Точка отсчета</label>
+                    <select name="new_rule_anchor" class="form-select form-select-sm">
+                        <option value="actual" {% if anchor == 'actual' %}selected{% endif %}>От даты фактического обслуживания (Рекомендуется)</option>
+                        <option value="scheduled" {% if anchor == 'scheduled' %}selected{% endif %}>От предыдущей плановой даты (Жесткий график)</option>
+                    </select>
+                    <div class="form-text text-muted mt-2" style="font-size: 0.75rem; line-height: 1.35;">
+                        <span class="text-primary">●</span> <strong>От факта:</strong> Расписание сдвигается вперед от реального дня выполнения работ.<br>
+                        <span class="text-warning">●</span> <strong>От плана:</strong> Срок считается строго от старой плановой даты, сохраняя исходный темп.
+                    </div>
+                </div>
+                
+                <!-- Подсказка для Интервала -->
+                <div class="mb-2">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Интервал планирования</label>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <div class="input-group input-group-sm">
+                                <input type="number" name="new_rule_years" class="form-control text-center" value="{{ years }}" min="0">
+                                <span class="input-group-text px-1 text-muted" style="font-size: 0.7rem;">лет</span>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="input-group input-group-sm">
+                                <input type="number" name="new_rule_months" class="form-control text-center" value="{{ months }}" min="0">
+                                <span class="input-group-text px-1 text-muted" style="font-size: 0.7rem;">мес.</span>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="input-group input-group-sm">
+                                <input type="number" name="new_rule_days" class="form-control text-center" value="{{ days }}" min="0">
+                                <span class="input-group-text px-1 text-muted" style="font-size: 0.7rem;">дн.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-text text-muted mt-2" style="font-size: 0.75rem;">
+                        Укажите временной период, по истечении которого будет автоматически назначено следующее техническое обслуживание.
+                    </div>
+                </div>
+                
+            {% endif %}
+        </div>
+
+    </div>
+    <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary px-4 fw-bold">Создать правило</button>
+    </div>
+</form>

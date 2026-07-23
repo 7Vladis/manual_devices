@@ -2,6 +2,16 @@
 <div class="animate-fade">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h5 class="fw-bold text-dark m-0"><i class="bi bi-calendar-range text-primary me-2"></i>Правила расчета дат ТО</h5>
+        {% if not request.user.is_junior %}
+        <button type="button" 
+                class="btn btn-primary btn-sm px-3 fw-bold d-flex align-items-center"
+                hx-get="{% url 'create_rule_settings' %}"
+                hx-target="#create-rule-settings-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#createRuleSettingsModal">
+            <i class="bi bi-plus-lg me-1"></i> Создать правило
+        </button>
+        {% endif %}
     </div>
 
     {% for item in rules %}
@@ -91,6 +101,15 @@
 <div class="modal fade" id="editRuleSettingsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 500px;">
         <div class="modal-content border-0 shadow-lg" id="edit-rule-settings-modal-content" style="border-radius: 12px;">
+            <!-- Контент формы подгрузится динамически через HTMX -->
+        </div>
+    </div>
+</div>
+
+<!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ПРАВИЛА -->
+<div class="modal fade" id="createRuleSettingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 500px;">
+        <div class="modal-content border-0 shadow-lg" id="create-rule-settings-modal-content" style="border-radius: 12px;">
             <!-- Контент формы подгрузится динамически через HTMX -->
         </div>
     </div>

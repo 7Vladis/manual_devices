@@ -18,22 +18,35 @@
             <!-- Инвентарный номер -->
             <div class="col-md-6 d-flex align-items-center">
                 <span class="text-muted me-2">Инвентарный №:</span>
+                {% if not request.user.is_junior %}
                 <span id="inventory-display-container" hx-get="{% url 'edit_inventory' obj.uuid %}" hx-target="#inventory-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="fw-semibold text-dark">
                     {% if obj.inventory_number %}{{ obj.inventory_number }}{% else %}<span class="text-muted italic small">добавить <i class="bi bi-pencil-square ms-1"></i></span>{% endif %}
                 </span>
+                {% else %}
+                <span class="fw-semibold text-dark">
+                    {% if obj.inventory_number %}{{ obj.inventory_number }}{% else %}<span class="text-muted italic small">отсутствует</span>{% endif %}
+                </span>
+                {% endif %}
             </div>
             
             <!-- Родительский объект -->
             <div class="col-md-6 d-flex align-items-center">
                 <span class="text-muted me-2">Входит в состав:</span>
+                {% if not request.user.is_junior %}
                 <span id="parent-display-container" hx-get="{% url 'edit_parent' obj.uuid %}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-primary fw-semibold">
                     {% if parent %}{{ parent.name|default:parent.model.name }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>{% else %}<span class="text-muted italic small">указать родителя <i class="bi bi-pencil-square ms-1"></i></span>{% endif %}
                 </span>
+                {% else %}
+                <span class="text-dark fw-semibold">
+                    {% if parent %}{{ parent.name|default:parent.model.name }}{% else %}<span class="text-muted italic small">отсутствует</span>{% endif %}
+                </span>
+                {% endif %}
             </div>
 
             <div class="col-md-12 d-flex align-items-center mt-2 border-top pt-2">
                 <span class="text-muted me-2">Правило расчета ТО:</span>
                 
+                {% if not request.user.is_junior %}
                 <span id="rule-display-container" 
                       data-bs-toggle="modal" 
                       data-bs-target="#editRuleModal"
@@ -47,6 +60,15 @@
                         <span class="text-muted italic small">ручной ввод <i class="bi bi-pencil-square ms-1"></i></span>
                     {% endif %}
                 </span>
+                {% else %}
+                <span class="fw-semibold text-dark">
+                    {% if obj.date_update_rule %}
+                        {{ obj.date_update_rule.name }}
+                    {% else %}
+                        <span class="text-muted italic small">ручной ввод</span>
+                    {% endif %}
+                </span>
+                {% endif %}
             </div>
         </div>
     </div>

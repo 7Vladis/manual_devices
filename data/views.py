@@ -1,5 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from django.template.loader import render_to_string
 from django.http import HttpResponse, HttpResponseForbidden
@@ -138,6 +139,91 @@ def delete_dependency_type_view(request, pk):
     response['HX-Redirect'] = '/settings/?tab=dependency_types'
     return response
 
+def parse_rule_from_request(request):
+    """Вспомогательная функция для разбора параметров правила планирования из POST-запроса"""
+    strategy = request.POST.get('new_rule_strategy', 'relative')
+    if strategy == 'relative':
+        anchor = request.POST.get('new_rule_anchor', 'actual')
+        try:
+            years = int(request.POST.get('new_rule_years', 0))
+        except (ValueError, TypeError):
+            years = 0
+        try:
+            months = int(request.POST.get('new_rule_months', 6))
+        except (ValueError, TypeError):
+            months = 6
+        try:
+            days = int(request.POST.get('new_rule_days', 0))
+        except (ValueError, TypeError):
+            days = 0
+            
+        return {
+            "strategy": "relative",
+            "anchor": anchor,
+            "value": {
+                "years": years,
+                "months": months,
+                "days": days
+            }
+        }
+    elif strategy == 'fixed':
+        fixed_months = request.POST.getlist('fixed_months')
+        fixed_days = request.POST.getlist('fixed_days')
+        
+        dates_list = []
+        for m, d in zip(fixed_months, fixed_days):
+            try:
+                dates_list.append({"month": int(m), "day": int(d)})
+            except (ValueError, TypeError):
+                pass
+                
+        return {
+            "strategy": "fixed",
+            "anchor": "yearly",
+            "value": dates_list
+        }
+    return {"strategy": "relative", "anchor": "actual", "value": {"years": 0, "months": 6, "days": 0}}
+
+@login_required
+@role_required(['senior', 'admin', 'superuser'])
+def create_rule_settings_view(request):
+    """Создание нового правила планирования ТО из настроек"""
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        if name:
+            rule_json = parse_rule_from_request(request)
+            DateUpdateRule.objects.get_or_create(
+                name=name,
+                defaults={"rule": rule_json}
+            )
+            
+        response = HttpResponse()
+        response['HX-Redirect'] = '/settings/?tab=rules'
+        return response
+
+    strategy = 'relative'
+    anchor = 'actual'
+    years = 0
+    months = 6
+    days = 0
+    fixed_dates = []
+    
+    month_names = {
+        1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
+        5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
+        9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
+    }
+    
+    return render(request, 'data/settings/create_rule_modal.html', {
+        'strategy': strategy,
+        'anchor': anchor,
+        'years': years,
+        'months': months,
+        'days': days,
+        'fixed_dates': fixed_dates,
+        'month_names': month_names,
+    })
+
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
 def edit_rule_settings_view(request, pk):
@@ -239,18 +325,116 @@ def delete_rule_view(request, pk):
     return response
 
 @login_required
-@role_required(['admin', 'superuser'])  # Изменять статус учетных записей могут только Администраторы
-def toggle_user_status_view(request, pk):
-    """Быстрая активация/блокировка пользователя из настроек"""
-    User = get_user_model()
-    target_user = get_object_or_404(User, pk=pk)
+@role_required(['admin', 'superuser'])
+def export_modal_view(request):
+    """Модальное окно выбора опции экспорта данных в XLSX"""
+    export_url = reverse('export_xlsx')
+    return HttpResponse(f'''
+        <div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content border-0 shadow-lg rounded-3">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title fs-6 fw-bold" id="exportModalLabel">
+                            <i class="bi bi-file-earmark-excel-fill text-success me-2"></i> Экспорт данных в XLSX
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                    </div>
+                    <form action="{export_url}" method="get">
+                        <div class="modal-body p-4">
+                            <p class="text-muted small mb-3">
+                                Выберите режим экспорта объектов системы. Отчет будет сформирован и скачан в формате Excel.
+                            </p>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold small text-dark mb-2">Режим отбора объектов:</label>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="export_mode" id="modeAll" value="all" checked>
+                                    <label class="form-check-label small" for="modeAll" style="cursor: pointer;">
+                                        Экспортировать все объекты (включая без инвентарного номера)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="export_mode" id="modeWithInv" value="with_inventory">
+                                    <label class="form-check-label small" for="modeWithInv" style="cursor: pointer;">
+                                        Только с заполненным инвентарным номером
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light px-4 py-3">
+                            <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Отмена</button>
+                            <button type="submit" class="btn btn-success btn-sm px-4 fw-bold" onclick="bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();">
+                                <i class="bi bi-download me-1"></i> Скачать XLSX
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    ''')
+
+@login_required
+@role_required(['admin', 'superuser'])
+def export_xlsx_view(request):
+    """Генерация и отдача XLSX файла с данными оборудования"""
+    import openpyxl
+    from django.http import HttpResponse
+
+    export_mode = request.GET.get('export_mode', 'all')
     
-    if target_user != request.user:
-        target_user.is_active = not target_user.is_active
-        target_user.save()
+    queryset = DataObject.objects.select_related('model', 'model__object_type').all()
+    if export_mode == 'with_inventory':
+        queryset = queryset.filter(inventory_number__isnull=False).exclude(inventory_number='')
+    
+    queryset = queryset.order_by('inventory_number', 'name')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Оборудование"
+
+    # Заголовки столбцов
+    headers = [
+        "Инвентарный номер",
+        "Название объекта (DataObject.name)",
+        "Название модели (ObjectModel.name)",
+        "Характеристики спецификации (JSON)"
+    ]
+    ws.append(headers)
+
+    # Настройка стилей шапки
+    for col_num in range(1, 5):
+        cell = ws.cell(row=1, column=col_num)
+        cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
+        cell.fill = openpyxl.styles.PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+        cell.alignment = openpyxl.styles.Alignment(horizontal="center", vertical="center")
+
+    for obj in queryset:
+        inv_num = obj.inventory_number or ""
+        obj_name = obj.name or ""
+        model_name = obj.model.name if obj.model else ""
         
-    response = HttpResponse()
-    response['HX-Redirect'] = '/settings/?tab=users'
+        # Парсим JSON specifications в строку вида "ключ: значение; ключ2: значение2"
+        specs = obj.model.specifications if obj.model and obj.model.specifications else {}
+        specs_str_list = []
+        if isinstance(specs, dict):
+            for k, v in specs.items():
+                specs_str_list.append(f"{k}: {v}")
+        specs_formatted = "; ".join(specs_str_list)
+
+        ws.append([inv_num, obj_name, model_name, specs_formatted])
+
+    # Автоподгонка ширины столбцов
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = openpyxl.utils.get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 15)
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    filename = f"manual_devices_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    wb.save(response)
     return response
 
 
@@ -485,7 +669,12 @@ def service_object_view(request, pk):
                 action=f"Техническое обслуживание выполнено. Следующее ТО запланировано на {maintenance_date.strftime('%d.%m.%Y')}."
             )
         
-        response = render(request, 'data/tree/object_tree_node.html', {'node': obj})
+        node_html = render_to_string('data/tree/object_tree_node.html', {'node': obj}, request=request)
+        
+        date_display_str = obj.next_maintenance_date.strftime('%d.%m.%Y') if obj.next_maintenance_date else "Не запланировано"
+        oob_date_html = f'<strong id="maintenance-date-display" class="text-danger" hx-swap-oob="innerHTML">{date_display_str}</strong>'
+        
+        response = HttpResponse(node_html + "\n" + oob_date_html)
         response['HX-Trigger'] = 'objectServiced'
         return response
 
@@ -926,9 +1115,9 @@ def delete_comments_bulk(request):
     obj = get_object_or_404(DataObject, pk=obj_pk)
     
     if comment_ids:
-        # Обычный пользователь может удалять только свои комментарии, админ — любые
         queryset = Comment.objects.filter(uuid__in=comment_ids, data_object=obj)
-        if not request.user.is_admin_or_higher:
+        # Старший инженер, админ или суперпользователь могут удалять любые комментарии, младший — только свои
+        if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
         queryset.delete()
         
@@ -946,6 +1135,23 @@ def add_attachment_view(request, pk):
     
     if file:
         if is_preview_upload:
+            # Проверяем, что загружаемый файл является картинкой (изображением)
+            content_type = getattr(file, 'content_type', '')
+            filename_lower = file.name.lower()
+            image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg')
+            is_image_mime = content_type.startswith('image/')
+            is_image_ext = filename_lower.endswith(image_extensions)
+            
+            if not (is_image_mime or is_image_ext):
+                # Возвращаем ошибку в виде HTMX-фрагмента или HttpResponse с кодом 400
+                return HttpResponse(
+                    '<div class="alert alert-danger py-2 px-3 mb-3 rounded-3 small animate-fade">'
+                    '<i class="bi bi-exclamation-triangle-fill me-1"></i> '
+                    'Ошибка: файл превью должен быть изображением (картинкой)!'
+                    '</div>',
+                    status=400
+                )
+            
             Attachment.objects.filter(data_object=obj, is_preview=True).update(is_preview=False)
             
         Attachment.objects.create(
@@ -970,8 +1176,8 @@ def delete_attachments_bulk(request):
     
     if file_ids:
         queryset = Attachment.objects.filter(uuid__in=file_ids, data_object=obj)
-        # Обычный пользователь удаляет только свои, администратор — любые
-        if not request.user.is_admin_or_higher:
+        # Старший инженер, админ или суперпользователь могут удалять любые файлы, младший — только свои
+        if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
         queryset.delete()
         

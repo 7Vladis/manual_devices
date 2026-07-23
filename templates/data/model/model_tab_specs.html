@@ -1,28 +1,38 @@
 <div class="card border-0 shadow-sm p-4 bg-white animate-fade" style="border-radius: 8px;">
     <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-cpu me-2"></i>Шаблон технических характеристик</h6>
 
-    <div class="table-responsive mb-4">
+    <div class="table-responsive {% if not request.user.is_junior %}mb-4{% endif %}">
         <table class="table table-striped table-hover table-borderless align-middle mb-0" style="font-size: 0.9rem;">
             <thead>
                 <tr class="border-bottom text-muted" style="font-size: 0.75rem; letter-spacing: 0.5px;">
-                    <th class="py-2 w-40 text-uppercase">Параметр (Ключ)</th>
-                    <th class="py-2 w-40 text-uppercase">Значение по умолчанию</th>
+                    <th class="py-2 {% if request.user.is_junior %}w-50{% else %}w-40{% endif %} text-uppercase">Параметр (Ключ)</th>
+                    <th class="py-2 {% if request.user.is_junior %}w-50{% else %}w-40{% endif %} text-uppercase">Значение по умолчанию</th>
+                    {% if not request.user.is_junior %}
                     <th class="py-2 w-20 text-end text-uppercase">Действия</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
                 {% for key, val in specifications.items %}
-                    {% include 'data/model/inline_spec_row.html' with key=key value=val %}
+                    {% if request.user.is_junior %}
+                    <tr class="border-bottom border-light">
+                        <td class="text-muted fw-semibold py-2">{{ key }}</td>
+                        <td class="fw-bold text-dark py-2">{{ val }}</td>
+                    </tr>
+                    {% else %}
+                        {% include 'data/model/inline_spec_row.html' with key=key value=val %}
+                    {% endif %}
                 {% empty %}
                 <tr id="empty-specs-row">
-                    <td colspan="3" class="text-center py-4 text-muted small">Характеристики модели ещё не заданы. Добавьте первый параметр ниже.</td>
+                    <td colspan="{% if request.user.is_junior %}2{% else %}3{% endif %}" class="text-center py-4 text-muted small">Характеристики модели ещё не заданы. {% if not request.user.is_junior %}Добавьте первый параметр ниже.{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    <!-- Форма быстрого добавления нового параметра в JSON -->
+    <!-- Форма быстрого добавления нового параметра в JSON (только для роли не junior) -->
+    {% if not request.user.is_junior %}
     <div class="border-top pt-3">
         <form hx-post="{% url 'model_spec_add' model_obj.uuid %}" hx-target="#tab-pane-model-specs" class="row g-2">
             {% csrf_token %}
@@ -37,4 +47,5 @@
             </div>
         </form>
     </div>
+    {% endif %}
 </div>
