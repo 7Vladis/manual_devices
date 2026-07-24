@@ -5,5 +5,9 @@ class UsersConfig(AppConfig):
     name = 'users'
 
     def ready(self):
-
-        import users.signals
+        from django.conf import settings
+        if getattr(settings, 'USE_LDAP', False):
+            try:
+                import users.signals
+            except ImportError:
+                pass

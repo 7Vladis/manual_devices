@@ -6,29 +6,35 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
-      - POSTGRES_DB=my_project_db
-      - POSTGRES_USER=my_user
-      - POSTGRES_PASSWORD=my_password
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5  
 
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: >
+      sh -c "python manage.py migrate --noinput && 
+             python manage.py createsuperuser --noinput || true && 
+             python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
-      # Монтирование LDAP сертификата из хоста в контейнер (укажите ваш путь к .crt файлу слева)
       - ./ldap_cert.crt:/app/ldap_cert.crt:ro
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - DB_HOST=db
-      - DB_NAME=my_project_db
-      - DB_USER=my_user
-      - DB_PASSWORD=my_password
-      - LDAP_CA_FILE=/app/ldap_cert.crt
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:
