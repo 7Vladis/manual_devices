@@ -3,5 +3,7 @@ psycopg2-binary
 django-apscheduler
 python-dateutil
 requests
-django-auth-ldap
 openpyxl
+python-dotenv
+# Дополнительно для LDAP (раскомментируйте при необходимости использования LDAP):
+# django-auth-ldap
