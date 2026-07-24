@@ -19,10 +19,14 @@ services:
 
   web:
     build: .
-    command: >
-      sh -c "python manage.py migrate --noinput && 
-             python manage.py createsuperuser --noinput || true && 
-             python manage.py runserver 0.0.0.0:8000"
+    user: "1000:1000"
+    command:
+      - sh
+      - -c
+      - |
+        python manage.py migrate --noinput &&
+        (python manage.py shell -c "import os; from django.contrib.auth import get_user_model; exit(0 if get_user_model().objects.filter(email=os.getenv('DJANGO_SUPERUSER_EMAIL')).exists() else 1)" || python manage.py createsuperuser --noinput) &&
+        python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
       - ./ldap_cert.crt:/app/ldap_cert.crt:ro
