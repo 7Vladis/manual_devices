@@ -464,11 +464,13 @@ def dashboard(request):
     
     def get_stats(period):
         start, end = get_period_limits(period)
-        planned = DataObject.objects.filter(next_maintenance_date__range=(start, end)).count()
+        # Выполненные ТО за период
         completed = ActionHistory.objects.filter(
             created_at__range=(start, end),
             action__icontains="Техническое обслуживание выполнено"
         ).count()
+        current_planned = DataObject.objects.filter(next_maintenance_date__range=(start, end)).count()
+        planned = current_planned + completed
         return completed, planned
 
     week_done, week_all = get_stats('week')
