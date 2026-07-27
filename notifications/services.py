@@ -2,11 +2,15 @@ import requests
 import json
 from .models import MattermostSetting
 
-def send_mattermost_notification(text):
+def send_mattermost_notification(text, username="Дисптечер", emoji=":wrench:"):
     config = MattermostSetting.objects.filter(is_active=True).last()
     if not config:
         return False, "Настройка webhook на найдена или деактивирована."
-    payload = {"text": text}
+    payload = {
+        "text": text,
+        "username": username,
+        "icon_emoji": emoji
+        }
     try:
         response = requests.post(
             config.webhook_url,

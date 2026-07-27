@@ -661,7 +661,7 @@ def service_object_view(request, pk):
     if request.method == 'POST':
         date_str = request.POST.get('maintenance_date')
         if date_str:
-            maintenance_date = timezone.make_aware(datetime.strptime(date_str, '%Y-%m-%d'))
+            maintenance_date = timezone.make_aware(datetime.strptime(date_str, '%Y-%m-%d').replace(hour=13, minute=0))
             obj.next_maintenance_date = maintenance_date
             obj.save()
             
@@ -733,7 +733,7 @@ def create_object_view(request):
         if maintenance_str:
             try:
                 next_maintenance_date = timezone.make_aware(
-                    datetime.strptime(maintenance_str, '%Y-%m-%d')
+                    datetime.strptime(maintenance_str, '%Y-%m-%d').replace(hour=13, minute=0)
                 )
             except ValueError:
                 pass
