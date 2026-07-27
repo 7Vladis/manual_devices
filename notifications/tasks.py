@@ -36,13 +36,13 @@ def run_daily_maintenance_check():
     ).select_related('model')
 
     if to_today.exists():
-        msg = f"### ⚠️ Список объектов на обслуживание {str_today}:\n" + format_object_list(to_today)
+        msg = f"⚠️ Список объектов на обслуживание {str_today}:\n" + format_object_list(to_today)
         send_mattermost_notification(msg)
         
     if to_week.exists():
-        msg = f"### 📅 Список объектов на обслуживание {str_7_days} (через 7 дней):\n" + format_object_list(to_week)
+        msg = f"📅 Список объектов на обслуживание {str_7_days} (через 7 дней):\n" + format_object_list(to_week)
         send_mattermost_notification(msg)
         
     if to_month.exists():
-        msg = f"### 🛠️ Список объектов на обслуживание {str_30_days} (через 30 дней):\n" + format_object_list(to_month)
+        msg = f"🛠️ Список объектов на обслуживание {str_30_days} (через 30 дней):\n" + format_object_list(to_month)
         send_mattermost_notification(msg)
