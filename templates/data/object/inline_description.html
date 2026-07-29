@@ -1,21 +1,28 @@
 <!-- templates/data/object/inline_description.html -->
-<div id="description-container">
+<div id="description-container" class="animate-fade">
 {% if editing %}
     <form hx-post="{% url 'edit_description' obj.uuid %}" hx-target="#description-container" hx-swap="outerHTML">
         {% csrf_token %}
-        <textarea name="description" rows="5" class="form-control bg-light border-0 shadow-none small mb-2" placeholder="Введите подробное описание объекта (необязательно)...">{{ obj.description|default:'' }}</textarea>
+        <!-- Заменили rows на min-height для предотвращения сжатия большого текста -->
+        <textarea name="description" 
+                  class="form-control bg-light border-0 shadow-none small mb-2" 
+                  style="min-height: 280px; resize: vertical; font-size: 0.9rem; line-height: 1.6;"
+                  placeholder="Введите подробное описание объекта (необязательно)...">{{ obj.description|default:'' }}</textarea>
         <div class="text-end">
-            <button type="button" class="btn btn-light btn-sm px-3 me-1 border" hx-get="{% url 'edit_description' obj.uuid %}?cancel=1" hx-target="#description-container" hx-swap="outerHTML">Отмена</button>
+            <button type="button" class="btn btn-light btn-sm px-3 me-1 border" 
+                    hx-get="{% url 'edit_description' obj.uuid %}?cancel=1" 
+                    hx-target="#description-container" 
+                    hx-swap="outerHTML">Отмена</button>
             <button type="submit" class="btn btn-primary btn-sm px-3 fw-bold">Сохранить</button>
         </div>
     </form>
 {% else %}
     <div hx-get="{% url 'edit_description' obj.uuid %}" hx-target="#description-container" hx-swap="outerHTML" style="cursor: pointer;">
         {% if obj.description %}
-            <p class="text-muted small" style="white-space: pre-line;">{{ obj.description }}</p>
+            <p class="text-muted small" style="white-space: pre-line; font-size: 0.9rem; line-height: 1.6;">{{ obj.description }}</p>
             <button class="btn btn-sm btn-light border text-muted mt-2"><i class="bi bi-pencil me-1"></i> Редактировать</button>
         {% else %}
-            <div class="text-center py-4 text-muted small">
+            <div class="text-center py-5 text-muted small">
                 <i class="bi bi-pencil-square d-block fs-3 mb-1 opacity-50"></i>
                 Кликните, чтобы добавить описание...
             </div>

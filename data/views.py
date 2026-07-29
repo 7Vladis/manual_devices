@@ -1098,6 +1098,10 @@ def edit_name_view(request, pk):
 @role_required(['senior', 'admin', 'superuser'])
 def edit_description_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
+
+    if request.method == 'GET' and request.GET.get('cancel') == '1':
+        return render(request, 'data/object/inline_description.html', {'obj': obj, 'editing': False})
+
     if request.method == 'POST':
         desc = request.POST.get('description', '').strip()
         obj.description = desc if desc else None
