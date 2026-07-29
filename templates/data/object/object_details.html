@@ -3,28 +3,27 @@
     <!-- МИНИ-ШАПКА ОБЪЕКТА -->
     <div class="px-4 py-3 border-bottom bg-white">
         <div class="d-flex justify-content-between align-items-start mb-2">
-            <!-- Контейнер названия с проверкой роли -->
-            <div id="name-display-container" class="d-inline-block">
-                {% if not request.user.is_junior %}
-                    <!-- Интерактивный режим для Senior/Admin -->
-                    <h4 hx-get="{% url 'edit_name' obj.uuid %}" 
-                        hx-target="#name-display-container" 
-                        hx-swap="outerHTML" 
-                        style="cursor: pointer;" 
-                        class="fw-bold mb-1 text-dark d-inline-block">
-                        {{ obj.name|default:obj.model.name }} <i class="bi bi-pencil-square ms-1 text-muted" style="font-size: 0.9rem;"></i>
-                    </h4>
-                {% else %}
-                    <!-- Обычный некликабельный заголовок для Junior -->
-                    <h4 class="fw-bold mb-1 text-dark d-inline-block">{{ obj.name|default:obj.model.name }}</h4>
-                {% endif %}
-            </div>
-            
-            <div class="text-muted small d-flex flex-wrap gap-3 mt-1">
-                <span><i class="bi bi-tag me-1"></i>Модель: <strong class="text-dark">{{ obj.model.name }}</strong></span>
-                <span><i class="bi bi-calendar-event me-1"></i>Следующее ТО: 
-                    <strong id="maintenance-date-display" class="text-danger">{{ obj.next_maintenance_date|date:"d.m.Y"|default:"Не запланировано" }}</strong>
-                </span>
+            <div>
+                <div id="name-display-container" class="d-inline-block">
+                    {% if not request.user.is_junior %}
+                        <h4 hx-get="{% url 'edit_name' obj.uuid %}" 
+                            hx-target="#name-display-container" 
+                            hx-swap="outerHTML" 
+                            style="cursor: pointer;" 
+                            class="fw-bold mb-1 text-dark d-inline-block">
+                            {{ obj.name|default:obj.model.name }} <i class="bi bi-pencil-square ms-1 text-muted" style="font-size: 0.9rem;"></i>
+                        </h4>
+                    {% else %}
+                        <h4 class="fw-bold mb-1 text-dark d-inline-block">{{ obj.name|default:obj.model.name }}</h4>
+                    {% endif %}
+                </div>
+                
+                <div class="text-muted small d-flex flex-wrap gap-3 mt-1">
+                    <span><i class="bi bi-tag me-1"></i>Модель: <strong class="text-dark">{{ obj.model.name }}</strong></span>
+                    <span><i class="bi bi-calendar-event me-1"></i>Следующее ТО: 
+                        <strong id="maintenance-date-display" class="text-danger">{{ obj.next_maintenance_date|date:"d.m.Y"|default:"Не запланировано" }}</strong>
+                    </span>
+                </div>
             </div>
         </div>
 

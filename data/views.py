@@ -525,7 +525,7 @@ def search_view(request):
     base_filters = (
         Q(name__icontains=query) |
         Q(inventory_number__icontains=query) |
-        Q(descriotion__icontains=query) |
+        Q(description__icontains=query) |
         Q(model__name__icontains=query) |
         Q(model__specifications__icontains=query) |
         Q(comments__text__icontains=query) |
