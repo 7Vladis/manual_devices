@@ -2,7 +2,19 @@
     
     <!-- МИНИ-ШАПКА МОДЕЛИ -->
     <div class="px-4 py-3 border-bottom bg-white">
-        <h4 class="fw-bold mb-1 text-dark">{{ model_obj.name }}</h4>
+        <div id="model-name-display-container" class="d-inline-block">
+            {% if not request.user.is_junior %}
+                <h4 hx-get="{% url 'edit_model_name' model_obj.uuid %}" 
+                    hx-target="#model-name-display-container" 
+                    hx-swap="outerHTML" 
+                    style="cursor: pointer;" 
+                    class="fw-bold mb-1 text-dark d-inline-block">
+                    {{ model_obj.name }} <i class="bi bi-pencil-square ms-1 text-muted" style="font-size: 0.9rem;"></i>
+                </h4>
+            {% else %}
+                <h4 class="fw-bold mb-1 text-dark d-inline-block">{{ model_obj.name }}</h4>
+            {% endif %}
+        </div>
         <div class="text-muted small">
             <span><i class="bi bi-tag me-1"></i>Тип оборудования: <strong class="text-primary">{{ model_obj.object_type.type }}</strong></span>
         </div>

@@ -1876,3 +1876,74 @@ def edit_rule_view(request, pk):
         'current_mode': current_mode,
         'rule_details': rule_details
     })
+
+@login_required
+@role_required(['senior', 'admin', 'superuser'])
+def edit_object_model_view(request, pk):
+    """Смена модели у конкретного объекта оборудования"""
+    obj = get_object_or_404(DataObject, pk=pk)
+    
+    if request.method == 'GET' and request.GET.get('cancel') == '1':
+        return render(request, 'data/object/inline_model.html', {'obj': obj, 'editing': False})
+        
+    if request.method == 'POST':
+        model_uuid = request.POST.get('model')  # Получаем UUID из скрытого инпута умного поиска
+        
+        if model_uuid:
+            new_model = get_object_or_404(ObjectModel, pk=model_uuid)
+            old_model = obj.model
+            
+            if old_model != new_model:
+                obj.model = new_model
+                obj.save()
+                
+                # Записываем событие в историю объекта
+                ActionHistory.objects.create(
+                    user=request.user,
+                    data_object=obj,
+                    action=f"Модель оборудования изменена с '{old_model.name}' на '{new_model.name}'."
+                )
+                
+        model_html = render_to_string('data/object/inline_model.html', {'obj': obj, 'editing': False}, request=request)
+        
+        # Обновляем плашку в левом дереве проводника объектов (если имя объекта наследовалось от модели)
+        sidebar_node_html = render_to_string('data/tree/object_tree_node_label.html', {
+            'node': obj,
+            'is_active': True,
+            'oob': True
+        }, request=request)
+        
+        return HttpResponse(model_html + "\n" + sidebar_node_html)
+        
+    return render(request, 'data/object/inline_model.html', {'obj': obj, 'editing': True})
+
+
+@login_required
+@role_required(['senior', 'admin', 'superuser'])
+def edit_model_name_view(request, pk):
+    """Изменение названия шаблона модели (ObjectModel)"""
+    model_obj = get_object_or_404(ObjectModel, pk=pk)
+    
+    if request.method == 'GET' and request.GET.get('cancel') == '1':
+        return render(request, 'data/model/inline_model_name.html', {'model_obj': model_obj, 'editing': False})
+        
+    if request.method == 'POST':
+        old_name = model_obj.name
+        new_name = request.POST.get('name', '').strip()
+        
+        if new_name and old_name != new_name:
+            model_obj.name = new_name
+            model_obj.save()
+            
+        model_name_html = render_to_string('data/model/inline_model_name.html', {'model_obj': model_obj, 'editing': False}, request=request)
+        
+        # Обновляем узел модели в левом сайдбаре (вкладка "Модели") в реальном времени через OOB
+        sidebar_model_node_html = render_to_string('data/tree/model_tree_node_label.html', {
+            'model': model_obj,
+            'is_active': True,
+            'oob': True
+        }, request=request)
+        
+        return HttpResponse(model_name_html + "\n" + sidebar_model_node_html)
+        
+    return render(request, 'data/model/inline_model_name.html', {'model_obj': model_obj, 'editing': True})

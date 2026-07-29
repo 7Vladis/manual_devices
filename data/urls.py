@@ -37,6 +37,7 @@ urlpatterns = [
     # Детализация объектов
     path('dict/objects/<uuid:pk>/', views.object_detail_view, name='object_detail'),
     path('dict/objects/<uuid:pk>/edit-name/', views.edit_name_view, name='edit_name'),
+    path('dict/objects/<uuid:pk>/edit-model/', views.edit_object_model_view, name='edit_object_model'),
     path('dict/objects/<uuid:pk>/tab/<str:tab_name>/', views.object_tab_view, name='object_tab'),
     path('dict/objects/<uuid:pk>/edit-rule/', views.edit_rule_view, name='edit_rule'),
     path('dict/objects/<uuid:pk>/edit-inventory/', views.edit_inventory_view, name='edit_inventory'),
@@ -51,6 +52,7 @@ urlpatterns = [
     
     # Детализация моделей
     path('dict/models/<uuid:pk>/', views.model_detail_view, name='model_detail'),
+    path('dict/models/<uuid:pk>/edit-name/', views.edit_model_name_view, name='edit_model_name'),
     path('dict/models/<uuid:pk>/tab/<str:tab_name>/', views.model_tab_view, name='model_tab'),
     path('dict/models/<uuid:pk>/specs/add/', views.model_spec_add_view, name='model_spec_add'),
     path('dict/models/<uuid:pk>/specs/edit/', views.model_spec_edit_view, name='model_spec_edit'),
