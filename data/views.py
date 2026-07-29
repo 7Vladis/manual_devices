@@ -525,6 +525,7 @@ def search_view(request):
     base_filters = (
         Q(name__icontains=query) |
         Q(inventory_number__icontains=query) |
+        Q(descriotion__icontains=query) |
         Q(model__name__icontains=query) |
         Q(model__specifications__icontains=query) |
         Q(comments__text__icontains=query) |
@@ -540,6 +541,7 @@ def search_view(request):
             for word in words:
                 word_filters |= (
                     Q(name__icontains=word) | 
+                    Q(description__icontains=word) | 
                     Q(model__name__icontains=word) |
                     Q(model__specifications__icontains=word)
                 )
@@ -1058,6 +1060,39 @@ def edit_parent_view(request, pk):
         'obj': obj,
         'current_parent': current_parent
     })
+
+@login_required
+@role_required(['senior', 'admin', 'superuser'])  # Запрет доступа для младших инженеров
+def edit_name_view(request, pk):
+    obj = get_object_or_404(DataObject, pk=pk)
+    
+    if request.method == 'GET' and request.GET.get('cancel') == '1':
+        return render(request, 'data/object/inline_name.html', {'obj': obj, 'editing': False})
+        
+    if request.method == 'POST':
+        old_name = obj.name or obj.model.name
+        new_name = request.POST.get('name', '').strip()
+        
+        if new_name and old_name != new_name:
+            obj.name = new_name
+            obj.save()
+        
+            ActionHistory.objects.create(
+                user=request.user,
+                data_object=obj,
+                action=f"Имя объекта изменено с '{old_name}' на '{new_name}'."
+            )
+            
+        name_html = render_to_string('data/object/inline_name.html', {'obj': obj, 'editing': False}, request=request)
+        sidebar_node_html = render_to_string('data/tree/object_tree_node_label.html', {
+            'node': obj,
+            'is_active': True,
+            'oob': True
+        }, request=request)
+        
+        return HttpResponse(name_html + "\n" + sidebar_node_html)
+
+    return render(request, 'data/object/inline_name.html', {'obj': obj, 'editing': True})
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])

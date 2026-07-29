@@ -1,3 +1,4 @@
+<!-- templates/data/object/object_tab_files.html -->
 <div class="animate-fade">
     
     <!-- Форма загрузки документов -->
@@ -8,7 +9,7 @@
         {% csrf_token %}
         <input type="hidden" name="is_preview" value="false">
         <div class="card border-0 shadow-sm p-3 bg-white" style="border-radius: 8px;">
-            <label class="form-label small fw-bold text-muted mb-2 text-uppercase">Загрузить новый документ</label>
+            <label class="form-label small fw-bold text-muted mb-2 text-uppercase">Загрузить новый документ или фото</label>
             <div class="input-group">
                 <input type="file" name="file" class="form-control form-control-sm bg-light border-0 shadow-none" required>
                 <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Загрузить</button>
@@ -39,9 +40,22 @@
                         <input type="checkbox" name="file_ids" value="{{ file.uuid }}" class="form-check-input me-3 shadow-none" style="width: 18px; height: 18px; cursor: pointer;">
                         {% endif %}
                         
-                        <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3" style="width: 42px; height: 42px; min-width: 42px;">
-                            <i class="bi bi-file-earmark-arrow-down-fill text-primary fs-4"></i>
-                        </div>
+                        <!-- БЛОК ИКОНКИ / ПРЕВЬЮ ФОТО -->
+                        {% if file.is_image %}
+                            <!-- Кликабельная миниатюра изображения -->
+                            <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3 overflow-hidden border shadow-sm" 
+                                 style="width: 52px; height: 52px; min-width: 52px; cursor: pointer;"
+                                 data-bs-toggle="modal" 
+                                 data-bs-target="#imageFullscreenModal-{{ file.uuid }}">
+                                <img src="{{ file.path.url }}" style="width: 100%; height: 100%; object-fit: cover;" title="Нажмите, чтобы увеличить">
+                            </div>
+                        {% else %}
+                            <!-- Стандартная иконка для документов -->
+                            <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3 border" 
+                                 style="width: 52px; height: 52px; min-width: 52px;">
+                                <i class="bi bi-file-earmark-arrow-down-fill text-primary fs-4"></i>
+                            </div>
+                        {% endif %}
                         
                         <div class="text-truncate">
                             <span class="fw-bold text-dark small d-block text-truncate">{{ file.path.name|cut:"attachments/" }}</span>
@@ -54,6 +68,27 @@
                     </a>
                 </div>
             </div>
+
+            <!-- МОДАЛЬНОЕ ОКНО ПРОСМОТРА КАРТИНКИ (Рендерится для каждого изображения отдельно) -->
+            {% if file.is_image %}
+            <div class="modal fade" id="imageFullscreenModal-{{ file.uuid }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-xl">
+                    <div class="modal-content bg-transparent border-0 shadow-none">
+                        <div class="modal-body text-center p-0 position-relative">
+                            <button type="button" 
+                                    class="btn-close btn-close-white position-absolute top-0 end-0 m-3 shadow-none" 
+                                    data-bs-dismiss="modal" 
+                                    aria-label="Close" 
+                                    style="z-index: 1060; width: 25px; height: 25px;"></button>
+                            <img src="{{ file.path.url }}" 
+                                 class="img-fluid rounded-3" 
+                                 style="max-height: 85vh; object-fit: contain; box-shadow: 0 10px 45px rgba(0,0,0,0.6);">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             {% empty %}
             <div class="text-center py-5 text-muted small bg-white rounded-3 shadow-sm">
                 <i class="bi bi-file-earmark-slash fs-3 d-block mb-2 text-secondary opacity-50"></i>

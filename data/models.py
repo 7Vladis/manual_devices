@@ -134,6 +134,14 @@ class Attachment(models.Model):
         verbose_name = 'Вложение'
         verbose_name_plural = 'Вложения'
 
+    @property
+    def is_image(self):
+        """Проверяет по расширению, является ли вложение изображением"""
+        if not self.path:
+            return False
+        ext = os.path.splitext(self.path.name)[1].lower()
+        return ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
+
 
 @receiver(post_delete, sender=Attachment)
 def delete_attachment_file(sender, instance, **kwargs):

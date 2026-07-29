@@ -1,0 +1,41 @@
+<!-- templates/data/object/inline_name.html -->
+<div id="name-display-container" class="animate-fade">
+{% if editing %}
+    <form hx-post="{% url 'edit_name' obj.uuid %}" 
+          hx-target="#name-display-container" 
+          hx-swap="outerHTML" 
+          class="d-inline-flex gap-2 align-items-center mb-1">
+        {% csrf_token %}
+        <input type="text" 
+               name="name" 
+               value="{{ obj.name|default:'' }}" 
+               placeholder="{{ obj.model.name }}"
+               class="form-control form-control-lg fw-bold border-0 bg-light py-1 shadow-none" 
+               style="max-width: 400px; font-size: 1.35rem;"
+               autocomplete="off"
+               required>
+               
+        <!-- Сохранить -->
+        <button type="submit" class="btn btn-success btn-sm py-1 px-2" title="Сохранить">
+            <i class="bi bi-check-lg"></i>
+        </button>
+        <!-- Отмена -->
+        <button type="button" class="btn btn-light btn-sm py-1 px-2 border" 
+                hx-get="{% url 'edit_name' obj.uuid %}?cancel=1" 
+                hx-target="#name-display-container" 
+                hx-swap="outerHTML"
+                title="Отмена">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </form>
+{% else %}
+    <!-- При клике открывается форма редактирования (только для ролей выше Junior) -->
+    <h4 hx-get="{% url 'edit_name' obj.uuid %}" 
+        hx-target="#name-display-container" 
+        hx-swap="outerHTML" 
+        style="cursor: pointer;" 
+        class="fw-bold mb-1 text-dark d-inline-block">
+        {{ obj.name|default:obj.model.name }} <i class="bi bi-pencil-square ms-1 text-muted" style="font-size: 0.9rem;"></i>
+    </h4>
+{% endif %}
+</div>

@@ -1,8 +1,9 @@
+<!-- templates/data/object/inline_description.html -->
 <div id="description-container">
 {% if editing %}
     <form hx-post="{% url 'edit_description' obj.uuid %}" hx-target="#description-container" hx-swap="outerHTML">
         {% csrf_token %}
-        <textarea name="description" rows="5" class="form-control bg-light border-0 shadow-none small mb-2" required>{{ obj.description|default:'' }}</textarea>
+        <textarea name="description" rows="5" class="form-control bg-light border-0 shadow-none small mb-2" placeholder="Введите подробное описание объекта (необязательно)...">{{ obj.description|default:'' }}</textarea>
         <div class="text-end">
             <button type="button" class="btn btn-light btn-sm px-3 me-1 border" hx-get="{% url 'edit_description' obj.uuid %}?cancel=1" hx-target="#description-container" hx-swap="outerHTML">Отмена</button>
             <button type="submit" class="btn btn-primary btn-sm px-3 fw-bold">Сохранить</button>

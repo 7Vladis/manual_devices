@@ -36,6 +36,7 @@ urlpatterns = [
 
     # Детализация объектов
     path('dict/objects/<uuid:pk>/', views.object_detail_view, name='object_detail'),
+    path('dict/objects/<uuid:pk>/edit-name/', views.edit_name_view, name='edit_name'),
     path('dict/objects/<uuid:pk>/tab/<str:tab_name>/', views.object_tab_view, name='object_tab'),
     path('dict/objects/<uuid:pk>/edit-rule/', views.edit_rule_view, name='edit_rule'),
     path('dict/objects/<uuid:pk>/edit-inventory/', views.edit_inventory_view, name='edit_inventory'),
