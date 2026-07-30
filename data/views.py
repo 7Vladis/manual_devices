@@ -328,49 +328,7 @@ def delete_rule_view(request, pk):
 @role_required(['admin', 'superuser'])
 def export_modal_view(request):
     """Модальное окно выбора опции экспорта данных в XLSX"""
-    export_url = reverse('export_xlsx')
-    return HttpResponse(f'''
-        <div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content border-0 shadow-lg rounded-3">
-                    <div class="modal-header bg-dark text-white">
-                        <h5 class="modal-title fs-6 fw-bold" id="exportModalLabel">
-                            <i class="bi bi-file-earmark-excel-fill text-success me-2"></i> Экспорт данных в XLSX
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Закрыть"></button>
-                    </div>
-                    <form action="{export_url}" method="get">
-                        <div class="modal-body p-4">
-                            <p class="text-muted small mb-3">
-                                Выберите режим экспорта объектов системы. Отчет будет сформирован и скачан в формате Excel.
-                            </p>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold small text-dark mb-2">Режим отбора объектов:</label>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="radio" name="export_mode" id="modeAll" value="all" checked>
-                                    <label class="form-check-label small" for="modeAll" style="cursor: pointer;">
-                                        Экспортировать все объекты (включая без инвентарного номера)
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="export_mode" id="modeWithInv" value="with_inventory">
-                                    <label class="form-check-label small" for="modeWithInv" style="cursor: pointer;">
-                                        Только с заполненным инвентарным номером
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="modal-footer bg-light px-4 py-3">
-                            <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Отмена</button>
-                            <button type="submit" class="btn btn-success btn-sm px-4 fw-bold" onclick="bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();">
-                                <i class="bi bi-download me-1"></i> Скачать XLSX
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    ''')
+    return render(request, 'data/export_modal.html')
 
 @login_required
 @role_required(['admin', 'superuser'])
@@ -381,27 +339,52 @@ def export_xlsx_view(request):
 
     export_mode = request.GET.get('export_mode', 'all')
     
+    # Основной запрос объектов
     queryset = DataObject.objects.select_related('model', 'model__object_type').all()
     if export_mode == 'with_inventory':
         queryset = queryset.filter(inventory_number__isnull=False).exclude(inventory_number='')
     
     queryset = queryset.order_by('inventory_number', 'name')
 
+    # Оптимизация N+1: загружаем все связи для построения карты родителей в памяти
+    all_relations = Relation.objects.select_related('main', 'main__model', 'subject').all()
+    
+    # Словарь связи: uuid дочернего -> родительский объект (DataObject)
+    parent_map = {}
+    for rel in all_relations:
+        parent_map[rel.subject.uuid] = rel.main
+
+    def get_object_hierarchy_path(obj, parents_dict):
+        """Вспомогательная функция для сборки пути от корня до текущего объекта"""
+        path_segments = []
+        current = obj
+        visited = set()  # Защита от потенциального зацикливания в БД
+        
+        while current and current.uuid not in visited:
+            visited.add(current.uuid)
+            name = current.name or (current.model.name if current.model else "Без имени")
+            path_segments.append(name)
+            current = parents_dict.get(current.uuid)
+            
+        path_segments.reverse()
+        return " → ".join(path_segments)
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Оборудование"
 
-    # Заголовки столбцов
     headers = [
         "Инвентарный номер",
         "Название объекта (DataObject.name)",
+        "Иерархический путь (от корня)",
+        "Описание объекта",
         "Название модели (ObjectModel.name)",
         "Характеристики спецификации (JSON)"
     ]
     ws.append(headers)
 
-    # Настройка стилей шапки
-    for col_num in range(1, 5):
+    # Настройка стилей шапки (6 колонок)
+    for col_num in range(1, 7):
         cell = ws.cell(row=1, column=col_num)
         cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
         cell.fill = openpyxl.styles.PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
@@ -410,6 +393,11 @@ def export_xlsx_view(request):
     for obj in queryset:
         inv_num = obj.inventory_number or ""
         obj_name = obj.name or ""
+        
+        # Вычисляем путь и описание
+        hierarchy_path = get_object_hierarchy_path(obj, parent_map)
+        description = obj.description or ""
+        
         model_name = obj.model.name if obj.model else ""
         
         # Парсим JSON specifications в строку вида "ключ: значение; ключ2: значение2"
@@ -420,13 +408,15 @@ def export_xlsx_view(request):
                 specs_str_list.append(f"{k}: {v}")
         specs_formatted = "; ".join(specs_str_list)
 
-        ws.append([inv_num, obj_name, model_name, specs_formatted])
+        # Добавляем строку с новыми данными
+        ws.append([inv_num, obj_name, hierarchy_path, description, model_name, specs_formatted])
 
     # Автоподгонка ширины столбцов
     for col in ws.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = openpyxl.utils.get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 15)
+        # Ограничиваем максимальную авто-ширину разумным пределом, чтобы длинные описания не растягивали ячейку бесконечно
+        ws.column_dimensions[col_letter].width = min(max(max_len + 3, 15), 50)
 
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -873,12 +863,14 @@ def object_detail_view(request, pk):
     prev_active_id = request.session.get('active_object_id')
     request.session['active_object_id'] = str(pk)
     
-    parent_relation = Relation.objects.filter(subject=obj).select_related('main').first()
+    parent_relation = Relation.objects.filter(subject=obj).select_related('main', 'dependency_type').first()
     parent = parent_relation.main if parent_relation else None
+    dependency_type_name = parent_relation.dependency_type.type if parent_relation else None
     
     context = {
         'obj': obj,
         'parent': parent,
+        'dependency_type_name': dependency_type_name,
         'active_tab': 'short_info',
     }
     
@@ -1002,14 +994,19 @@ def edit_parent_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
     
     if request.method == 'GET' and request.GET.get('cancel') == '1':
-        current_relation = Relation.objects.filter(subject=obj).select_related('main__model').first()
+        current_relation = Relation.objects.filter(subject=obj).select_related('main__model', 'dependency_type').first()
         parent = current_relation.main if current_relation else None
-        parent_name = parent.name or parent.model.name if parent else "отсутствует"
+        dep_type_name = current_relation.dependency_type.type if current_relation else "Входит в состав"
         
+        if parent:
+            parent_name = parent.name or parent.model.name
+            inner_html = f'<span class="text-muted me-1">{dep_type_name}:</span><strong class="text-primary fw-semibold">{parent_name}</strong><i class="bi bi-pencil-square edit-icon"></i>'
+        else:
+            inner_html = '<span class="text-muted me-1">Родитель:</span><strong class="text-muted fw-semibold">отсутствует</strong><i class="bi bi-pencil-square edit-icon"></i>'
+            
         return HttpResponse(
-            f'<div id="parent-display-container" hx-get="{request.path}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-primary fw-semibold d-inline-block animate-fade">'
-            f'{parent_name if parent else "<span class=\'text-muted italic small\'>указать родителя <i class=\'bi bi-pencil-square ms-1\'></i></span>"}'
-            f'{f" <i class=\'bi bi-pencil-square ms-1 text-muted small\'></i>" if parent else ""}'
+            f'<div id="parent-display-container" hx-get="{request.path}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="d-inline-block animate-fade editable-trigger">'
+            f'{inner_html}'
             f'</div>'
         )
         
@@ -1018,10 +1015,24 @@ def edit_parent_view(request, pk):
         Relation.objects.filter(subject=obj).delete()
         
         parent_name = "отсутствует"
+        dep_type_name = "Родитель"
+        parent_obj = None
+        
         if parent_uuid:
             parent_obj = get_object_or_404(DataObject, pk=parent_uuid)
             parent_name = parent_obj.name or parent_obj.model.name
-            dep_type, _ = DependencyType.objects.get_or_create(type="Входит в состав")
+            
+            dep_type_uuid = request.POST.get('dependency_type')
+            new_dep_type_name = request.POST.get('new_dependency_type')
+            
+            if new_dep_type_name:
+                dep_type, _ = DependencyType.objects.get_or_create(type=new_dep_type_name)
+            elif dep_type_uuid:
+                dep_type = get_object_or_404(DependencyType, pk=dep_type_uuid)
+            else:
+                dep_type, _ = DependencyType.objects.get_or_create(type="Входит в состав")
+                
+            dep_type_name = dep_type.type
             Relation.objects.create(
                 main=parent_obj,
                 subject=obj,
@@ -1043,9 +1054,14 @@ def edit_parent_view(request, pk):
         }
         sidebar_html = render(request, 'data/tree/dict_sidebar.html', sidebar_context).content.decode('utf-8')
         
+        if parent_obj:
+            inner_html = f'<span class="text-muted me-1">{dep_type_name}:</span><strong class="text-primary fw-semibold">{parent_name}</strong><i class="bi bi-pencil-square edit-icon"></i>'
+        else:
+            inner_html = '<span class="text-muted me-1">Родитель:</span><strong class="text-muted fw-semibold">отсутствует</strong><i class="bi bi-pencil-square edit-icon"></i>'
+            
         response_html = f"""
-            <div id="parent-display-container" hx-get="{request.path}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-primary fw-semibold d-inline-block animate-fade">
-                {parent_name} <i class="bi bi-pencil-square ms-1 text-muted small"></i>
+            <div id="parent-display-container" hx-get="{request.path}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="d-inline-block animate-fade editable-trigger">
+                {inner_html}
             </div>
             <div id="sidebar-container" hx-swap-oob="innerHTML">
                 {sidebar_html}
@@ -1831,7 +1847,10 @@ def edit_rule_view(request, pk):
             action=f"Изменено правило планирования ТО на: {rule_name}."
         )
         
-        rule_name_display = f"{obj.date_update_rule.name} <i class='bi bi-pencil-square ms-1 text-muted small'></i>" if obj.date_update_rule else "<span class='text-muted italic small'>ручной ввод <i class='bi bi-pencil-square ms-1'></i></span>"
+        if obj.date_update_rule:
+            rule_name_display = f'<span class="text-muted me-1">Правило ТО:</span><strong class="text-dark fw-semibold">{obj.date_update_rule.name}</strong><i class="bi bi-pencil-square edit-icon"></i>'
+        else:
+            rule_name_display = '<span class="text-muted me-1">Правило ТО:</span><strong class="text-dark fw-semibold">ручной ввод</strong><i class="bi bi-pencil-square edit-icon"></i>'
         
         oob_rule_html = f"""
         <span id="rule-display-container" 
@@ -1840,7 +1859,7 @@ def edit_rule_view(request, pk):
               hx-get="/dict/objects/{obj.uuid}/edit-rule/" 
               hx-target="#edit-rule-modal-content"
               style="cursor: pointer;" 
-              class="fw-semibold text-primary transition-all"
+              class="transition-all editable-trigger"
               hx-swap-oob="outerHTML">
             {rule_name_display}
         </span>

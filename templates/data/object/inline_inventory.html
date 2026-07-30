@@ -30,15 +30,17 @@
 {% else %}
     <!-- Клик по значению снова переведет поле в режим редактирования -->
     <span hx-get="{% url 'edit_inventory' obj.uuid %}" 
-          hx-target="#inventory-display-container" 
-          hx-swap="outerHTML" 
-          style="cursor: pointer;" 
-          class="fw-semibold text-dark">
+            hx-target="#inventory-display-container" 
+            hx-swap="outerHTML" 
+            style="cursor: pointer;" 
+            class="editable-trigger">
+        <span class="text-muted me-1">Инвентарный №:</span>
         {% if obj.inventory_number %}
-            {{ obj.inventory_number }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>
+            <strong class="text-dark fw-semibold">{{ obj.inventory_number }}</strong>
         {% else %}
-            <span class="text-muted italic small">добавить <i class="bi bi-pencil-square ms-1"></i></span>
+            <span class="text-muted italic small">добавить</span>
         {% endif %}
+        <i class="bi bi-pencil-square edit-icon"></i>
     </span>
 {% endif %}
 </span>

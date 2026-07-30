@@ -7,7 +7,6 @@
           class="d-inline-flex gap-2 align-items-center flex-wrap">
         {% csrf_token %}
         
-        <!-- Контейнер умного поиска модели -->
         <div id="search-wrapper-model" class="position-relative" style="min-width: 250px;">
             <input type="text" name="q" class="form-control form-control-sm bg-light py-1 shadow-none" 
                    placeholder="Начните вводить название модели..."
@@ -28,13 +27,14 @@
                 title="Отмена"><i class="bi bi-x-lg"></i></button>
     </form>
 {% else %}
-    <i class="bi bi-tag me-1"></i>Модель: 
-    <strong class="text-dark" 
+    <strong class="text-dark editable-trigger" 
             hx-get="{% url 'edit_object_model' obj.uuid %}" 
             hx-target="#model-display-container" 
             hx-swap="outerHTML" 
-            style="cursor: pointer;">
-        {{ obj.model.name }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>
+            style="cursor: pointer; font-weight: normal;">
+        <span class="text-muted me-1"><i class="bi bi-tag me-1"></i>Модель:</span>
+        <strong class="text-dark fw-bold">{{ obj.model.name }}</strong>
+        <i class="bi bi-pencil-square edit-icon"></i>
     </strong>
 {% endif %}
 </span>

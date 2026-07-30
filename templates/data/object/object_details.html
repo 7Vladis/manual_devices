@@ -4,32 +4,36 @@
     <div class="px-4 py-3 border-bottom bg-white">
         <div class="d-flex justify-content-between align-items-start mb-2">
             <div>
+                <!-- Контейнер названия объекта -->
                 <div id="name-display-container" class="d-inline-block">
                     {% if not request.user.is_junior %}
                         <h4 hx-get="{% url 'edit_name' obj.uuid %}" 
                             hx-target="#name-display-container" 
                             hx-swap="outerHTML" 
                             style="cursor: pointer;" 
-                            class="fw-bold mb-1 text-dark d-inline-block">
-                            {{ obj.name|default:obj.model.name }} <i class="bi bi-pencil-square ms-1 text-muted" style="font-size: 0.9rem;"></i>
+                            class="fw-bold mb-1 text-dark d-inline-block editable-trigger">
+                            {{ obj.name|default:obj.model.name }} <i class="bi bi-pencil-square edit-icon"></i>
                         </h4>
                     {% else %}
                         <h4 class="fw-bold mb-1 text-dark d-inline-block">{{ obj.name|default:obj.model.name }}</h4>
                     {% endif %}
                 </div>
                 
-                <div class="text-muted small d-flex flex-wrap gap-3 mt-1">
-                    <span id="model-display-container">
-                        <i class="bi bi-tag me-1"></i>Модель: 
+                <!-- Подстрока с моделью и плановым ТО -->
+                <div class="text-muted small d-flex flex-wrap gap-3 mt-1 align-items-center">
+                    <span id="model-display-container" class="d-inline-flex align-items-center">
                         {% if not request.user.is_junior %}
-                            <strong class="text-dark" 
+                            <strong class="text-dark editable-trigger" 
                                     hx-get="{% url 'edit_object_model' obj.uuid %}" 
                                     hx-target="#model-display-container" 
                                     hx-swap="outerHTML" 
-                                    style="cursor: pointer;">
-                                {{ obj.model.name }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>
+                                    style="cursor: pointer; font-weight: normal;">
+                                <span class="text-muted me-1"><i class="bi bi-tag me-1"></i>Модель:</span>
+                                <strong class="text-dark fw-bold">{{ obj.model.name }}</strong>
+                                <i class="bi bi-pencil-square edit-icon"></i>
                             </strong>
                         {% else %}
+                            <span class="text-muted me-1"><i class="bi bi-tag me-1"></i>Модель:</span>
                             <strong class="text-dark">{{ obj.model.name }}</strong>
                         {% endif %}
                     </span>
@@ -40,38 +44,66 @@
             </div>
         </div>
 
-        <div class="row g-2 mt-2 pt-2 border-top border-light" style="font-size: 0.85rem;">
-            <!-- Инвентарный номер -->
-            <div class="col-md-6 d-flex align-items-center">
-                <span class="text-muted me-2">Инвентарный №:</span>
+        <div class="row g-3 mt-2 border-top border-light align-items-center" style="font-size: 0.85rem;">
+            
+            <!-- 1. Инвентарный номер -->
+            <div class="col-md-4">
                 {% if not request.user.is_junior %}
-                <span id="inventory-display-container" hx-get="{% url 'edit_inventory' obj.uuid %}" hx-target="#inventory-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="fw-semibold text-dark">
-                    {% if obj.inventory_number %}{{ obj.inventory_number }}{% else %}<span class="text-muted italic small">добавить <i class="bi bi-pencil-square ms-1"></i></span>{% endif %}
+                <span id="inventory-display-container" 
+                      hx-get="{% url 'edit_inventory' obj.uuid %}" 
+                      hx-target="#inventory-display-container" 
+                      hx-swap="outerHTML" 
+                      style="cursor: pointer;" 
+                      class="editable-trigger">
+                    <span class="text-muted me-1">Инвентарный №:</span>
+                    {% if obj.inventory_number %}
+                        <strong class="text-dark fw-semibold">{{ obj.inventory_number }}</strong>
+                    {% else %}
+                        <span class="text-muted italic small">добавить</span>
+                    {% endif %}
+                    <i class="bi bi-pencil-square edit-icon"></i>
                 </span>
                 {% else %}
-                <span class="fw-semibold text-dark">
-                    {% if obj.inventory_number %}{{ obj.inventory_number }}{% else %}<span class="text-muted italic small">отсутствует</span>{% endif %}
+                <span>
+                    <span class="text-muted me-1">Инвентарный №:</span>
+                    <strong class="text-dark fw-semibold">{% if obj.inventory_number %}{{ obj.inventory_number }}{% else %}отсутствует{% endif %}</strong>
                 </span>
                 {% endif %}
             </div>
             
-            <!-- Родительский объект -->
-            <div class="col-md-6 d-flex align-items-center">
-                <span class="text-muted me-2">Входит в состав:</span>
+            <!-- 2. Иерархическая связь -->
+            <div class="col-md-4">
                 {% if not request.user.is_junior %}
-                <span id="parent-display-container" hx-get="{% url 'edit_parent' obj.uuid %}" hx-target="#parent-display-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-primary fw-semibold">
-                    {% if parent %}{{ parent.name|default:parent.model.name }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>{% else %}<span class="text-muted italic small">указать родителя <i class="bi bi-pencil-square ms-1"></i></span>{% endif %}
+                <span id="parent-display-container" 
+                      hx-get="{% url 'edit_parent' obj.uuid %}" 
+                      hx-target="#parent-display-container" 
+                      hx-swap="outerHTML" 
+                      style="cursor: pointer;" 
+                      class="editable-trigger">
+                    {% if parent %}
+                        <span class="text-muted me-1">{{ dependency_type_name|default:"Входит в состав" }}:</span>
+                        <strong class="text-primary fw-semibold">{{ parent.name|default:parent.model.name }}</strong>
+                    {% else %}
+                        <span class="text-muted me-1">Родитель:</span>
+                        <strong class="text-muted fw-semibold">отсутствует</strong>
+                    {% endif %}
+                    <i class="bi bi-pencil-square edit-icon"></i>
                 </span>
                 {% else %}
-                <span class="text-dark fw-semibold">
-                    {% if parent %}{{ parent.name|default:parent.model.name }}{% else %}<span class="text-muted italic small">отсутствует</span>{% endif %}
+                <span>
+                    {% if parent %}
+                        <span class="text-muted me-1">{{ dependency_type_name|default:"Входит в состав" }}:</span>
+                        <strong class="text-primary fw-semibold">{{ parent.name|default:parent.model.name }}</strong>
+                    {% else %}
+                        <span class="text-muted me-1">Родитель:</span>
+                        <span class="text-muted italic small">отсутствует</span>
+                    {% endif %}
                 </span>
                 {% endif %}
             </div>
 
-            <div class="col-md-12 d-flex align-items-center mt-2 border-top pt-2">
-                <span class="text-muted me-2">Правило расчета ТО:</span>
-                
+            <!-- 3. Правило планирования ТО -->
+            <div class="col-md-4">
                 {% if not request.user.is_junior %}
                 <span id="rule-display-container" 
                       data-bs-toggle="modal" 
@@ -79,23 +111,25 @@
                       hx-get="{% url 'edit_rule' obj.uuid %}" 
                       hx-target="#edit-rule-modal-content"
                       style="cursor: pointer;" 
-                      class="fw-semibold text-primary transition-all">
-                    {% if obj.date_update_rule %}
-                        {{ obj.date_update_rule.name }} <i class="bi bi-pencil-square ms-1 text-muted small"></i>
-                    {% else %}
-                        <span class="text-muted italic small">ручной ввод <i class="bi bi-pencil-square ms-1"></i></span>
-                    {% endif %}
+                      class="transition-all editable-trigger">
+                    <span class="text-muted me-1">Правило ТО:</span>
+                    <strong class="text-dark fw-semibold">
+                        {% if obj.date_update_rule %}
+                            {{ obj.date_update_rule.name }}
+                        {% else %}
+                            ручной ввод
+                        {% endif %}
+                    </strong>
+                    <i class="bi bi-pencil-square edit-icon"></i>
                 </span>
                 {% else %}
-                <span class="fw-semibold text-dark">
-                    {% if obj.date_update_rule %}
-                        {{ obj.date_update_rule.name }}
-                    {% else %}
-                        <span class="text-muted italic small">ручной ввод</span>
-                    {% endif %}
+                <span>
+                    <span class="text-muted me-1">Правило ТО:</span>
+                    <strong class="text-dark fw-semibold">{% if obj.date_update_rule %}{{ obj.date_update_rule.name }}{% else %}ручной ввод{% endif %}</strong>
                 </span>
                 {% endif %}
             </div>
+            
         </div>
     </div>
 

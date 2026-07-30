@@ -313,3 +313,43 @@ main.container-fluid {
     height: calc(100vh - 56px);
     overflow: hidden;
 }
+
+/* --- СТИЛИ ДЛЯ ИНЛАЙН-РЕДАКТИРОВАНИЯ БЕЗ ВИЗУАЛЬНОГО ШУМА --- */
+
+/* Контейнер интерактивного поля */
+.editable-trigger {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    margin: -2px -6px; /* Компенсируем padding, чтобы текст не сдвигался */
+    border-radius: 6px;
+    transition: background-color 0.15s ease-in-out;
+    cursor: pointer;
+}
+
+/* Эффект наведения на всю интерактивную область */
+.editable-trigger:hover {
+    background-color: #e2e8f0; /* Очень мягкий серый фон */
+}
+
+/* Иконка карандаша по умолчанию скрыта */
+.editable-trigger .edit-icon {
+    opacity: 0;
+    margin-left: 6px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    transition: opacity 0.15s ease-in-out, color 0.15s ease-in-out;
+    display: inline-block;
+}
+
+/* Проявление иконки при наведении на интерактивную область */
+.editable-trigger:hover .edit-icon {
+    opacity: 0.6;
+}
+
+/* Дополнительный акцент, если навели непосредственно на сам карандаш */
+.editable-trigger .edit-icon:hover {
+    opacity: 1;
+    color: var(--accent-color);
+}
