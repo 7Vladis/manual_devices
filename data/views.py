@@ -553,6 +553,11 @@ def dict_view(request):
     active_model = None
     parent_uuids = []
     
+    # Чтение настроек плоского проводника из сессии
+    explorer_mode = request.session.get('explorer_mode', 'tree')
+    explorer_parent_uuid = request.session.get('explorer_parent_uuid')
+    explorer_parent = None
+    
     if selected_object_id:
         active_tab = 'objects'
         active_object = get_object_or_404(DataObject, pk=selected_object_id)
@@ -566,9 +571,28 @@ def dict_view(request):
             else:
                 break
                 
+        # UX Улучшение: если объект открывается извне, автоматически 
+        # навигируемся в его родительскую директорию в плоском режиме
+        if explorer_mode == 'flat':
+            parent_relation = Relation.objects.filter(subject=active_object).select_related('main').first()
+            if parent_relation:
+                explorer_parent_uuid = str(parent_relation.main.pk)
+                request.session['explorer_parent_uuid'] = explorer_parent_uuid
+            else:
+                explorer_parent_uuid = None
+                request.session['explorer_parent_uuid'] = None
+                
     elif selected_model_id:
         active_tab = 'models'
         active_model = get_object_or_404(ObjectModel, pk=selected_model_id)
+        
+    # Извлекаем объект текущей "директории" для плоского режима
+    if explorer_mode == 'flat' and explorer_parent_uuid:
+        try:
+            explorer_parent = DataObject.objects.get(pk=explorer_parent_uuid)
+        except DataObject.DoesNotExist:
+            explorer_parent_uuid = None
+            request.session['explorer_parent_uuid'] = None
     
     models = ObjectModel.objects.all().order_by('name')
     object_types = ObjectType.objects.all().order_by('type')
@@ -580,6 +604,8 @@ def dict_view(request):
         'active_object': active_object,
         'active_model': active_model,
         'parent_uuids': parent_uuids,
+        'explorer_mode': explorer_mode,
+        'explorer_parent': explorer_parent,
     }
     
     if active_tab == 'models':
@@ -587,14 +613,90 @@ def dict_view(request):
             Prefetch('models', queryset=ObjectModel.objects.all().order_by('name'))
         ).order_by('type')
     else:
-        context['initial_objects'] = DataObject.objects.exclude(
-            main_relations__isnull=False
-        ).prefetch_related('subject_relations').order_by('name')
+        # Выбор объектов в зависимости от режима проводника
+        if explorer_mode == 'flat' and explorer_parent:
+            # Выводим дочерние элементы текущей "папки"
+            context['initial_objects'] = DataObject.objects.filter(
+                main_relations__main=explorer_parent
+            ).prefetch_related('subject_relations').order_by('name')
+        else:
+            # Стандартный вывод корневых элементов
+            context['initial_objects'] = DataObject.objects.exclude(
+                main_relations__isnull=False
+            ).prefetch_related('subject_relations').order_by('name')
         
     if request.headers.get('HX-Request') and request.GET.get('sidebar'):
         return render(request, 'data/tree/dict_sidebar.html', context)
         
     return render(request, 'data/dict.html', context)
+
+@login_required
+def toggle_explorer_mode_view(request):
+    """Переключает режим отображения проводника и возвращает обновленный элемент с точными пропорциями"""
+    if request.method == 'POST':
+        current_mode = request.session.get('explorer_mode', 'tree')
+        new_mode = 'flat' if current_mode == 'tree' else 'tree'
+        request.session['explorer_mode'] = new_mode
+        request.session['explorer_parent_uuid'] = None
+        
+        mode_display = "Проводник" if new_mode == 'flat' else "Дерево"
+        checked_attr = "checked" if new_mode == 'flat' else ""
+        
+        # Возвращаем обновленный блок, сохраняя высоту min-height: 40px и размер тумблера scale(1.1)
+        html = f"""
+        <div id="explorer-toggle-wrapper" class="d-flex align-items-center justify-content-between w-100" style="min-height: 40px;">
+            <div class="d-flex flex-column text-start" style="user-select: none;">
+                <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px; line-height: 1.2;">
+                    Режим справочника
+                </small>
+                <span class="text-primary fw-bold" id="explorer-mode-text" style="font-size: 0.85rem; line-height: 1.2; margin-top: 2px;">
+                    {mode_display}
+                </span>
+            </div>
+            <div class="form-check form-switch m-0 d-flex align-items-center">
+                <input class="form-check-input" 
+                       type="checkbox" 
+                       id="explorerModeToggle"
+                       hx-post="/dict/toggle-explorer-mode/"
+                       hx-target="#explorer-toggle-wrapper"
+                       hx-swap="outerHTML"
+                       style="cursor: pointer; transform: scale(1.1); margin: 0;"
+                       {checked_attr}>
+            </div>
+        </div>
+        """
+        
+        response = HttpResponse(html)
+        response['HX-Trigger'] = 'explorerModeChanged'
+        return response
+        
+    return HttpResponse("Метод не разрешен", status=405)
+
+
+@login_required
+def explorer_navigate_view(request, pk):
+    """Переход внутрь объекта (глубже по иерархии) в плоском режиме"""
+    request.session['explorer_parent_uuid'] = str(pk)
+    response = HttpResponse()
+    response['HX-Trigger'] = 'explorerModeChanged'
+    return response
+
+
+@login_required
+def explorer_up_view(request):
+    """Переход на один уровень вверх в плоском режиме"""
+    parent_uuid = request.session.get('explorer_parent_uuid')
+    if parent_uuid:
+        # Находим родителя для текущей "папки"
+        relation = Relation.objects.filter(subject_id=parent_uuid).select_related('main').first()
+        if relation:
+            request.session['explorer_parent_uuid'] = str(relation.main.pk)
+        else:
+            request.session['explorer_parent_uuid'] = None
+            
+    response = HttpResponse()
+    response['HX-Trigger'] = 'explorerModeChanged'
+    return response
 
 @login_required
 def object_tree_view(request):

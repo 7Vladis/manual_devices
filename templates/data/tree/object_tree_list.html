@@ -1,7 +1,15 @@
-<ul class="list-unstyled mb-0" id="object-root-tree">
-    {% for obj in objects %}
-        {% include 'data/tree/object_tree_node.html' with node=obj %}
-    {% empty %}
-        <li class="p-3 text-center text-muted small">Объекты не найдены</li>
-    {% endfor %}
-</ul>
+<!-- templates/data/tree/object_tree_list.html -->
+
+{% if explorer_mode == 'flat' %}
+    <!-- Рендерим плоский режим -->
+    {% include 'data/tree/object_flat_list.html' with objects=objects %}
+{% else %}
+    <!-- Стандартное отображение классического дерева -->
+    <ul class="list-unstyled mb-0" id="object-root-tree">
+        {% for obj in objects %}
+            {% include 'data/tree/object_tree_node.html' with node=obj %}
+        {% empty %}
+            <li class="p-3 text-center text-muted small">Объекты не найдены</li>
+        {% endfor %}
+    </ul>
+{% endif %}

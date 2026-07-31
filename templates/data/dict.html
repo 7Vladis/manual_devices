@@ -24,6 +24,8 @@
         <!-- ЛЕВОЕ ОКНО: Проводник -->
         <div class="col-12 col-md-4 col-lg-3 bg-white border-end px-3 pt-2 d-flex flex-column h-100" 
              id="sidebar-container"
+             hx-get="{% url 'dict' %}?tab={{ active_tab }}&sidebar=1"
+             hx-trigger="explorerModeChanged from:body"
              style="box-shadow: 2px 0 5px rgba(0,0,0,0.02);">
             {% include 'data/tree/dict_sidebar.html' %}
         </div>
