@@ -52,8 +52,8 @@ class ObjectModelAdmin(admin.ModelAdmin):
 class DataObjectAdmin(admin.ModelAdmin):
     list_display = ('name', 'inventory_number', 'model', 'user', 'next_maintenance_date')
     list_filter = ('model__object_type', 'next_maintenance_date')
-    search_fields = ('name', 'inventory_number', 'model__name')
-    fields = ('name', 'inventory_number', 'model', 'user','date_update_rule', 'next_maintenance_date', 'description') 
+    search_fields = ('name', 'inventory_number', 'youtrack_issue_id', 'model__name')
+    fields = ('name', 'inventory_number', 'youtrack_issue_id', 'model', 'user','date_update_rule', 'next_maintenance_date', 'description') 
     
     inlines = [
         MainRelationsInline, 

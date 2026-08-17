@@ -96,7 +96,7 @@
                         <strong class="text-primary fw-semibold">{{ parent.name|default:parent.model.name }}</strong>
                     {% else %}
                         <span class="text-muted me-1">Родитель:</span>
-                        <span class="text-muted italic small">отсутствует</span>
+                        <strong class="text-muted fw-semibold">отсутствует</strong>
                     {% endif %}
                 </span>
                 {% endif %}
@@ -127,6 +127,28 @@
                     <span class="text-muted me-1">Правило ТО:</span>
                     <strong class="text-dark fw-semibold">{% if obj.date_update_rule %}{{ obj.date_update_rule.name }}{% else %}ручной ввод{% endif %}</strong>
                 </span>
+                {% endif %}
+            </div>
+
+            <div class="col-md-3">
+                {% if not request.user.is_junior %}
+                    <!-- Блок для инженеров с возможностью редактирования -->
+                    {% include 'data/object/inline_youtrack.html' %}
+                {% else %}
+                    <!-- Блок для младших инженеров (только чтение) -->
+                    <span>
+                        <span class="text-muted me-1">Youtrack:</span>
+                        {% if obj.youtrack_issue_id %}
+                            <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" 
+                               target="_blank" 
+                               class="text-primary fw-bold"
+                               title="Перейти в Youtrack">
+                                {{ obj.youtrack_issue_id }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted small">отсутствует</span>
+                        {% endif %}
+                    </span>
                 {% endif %}
             </div>
             

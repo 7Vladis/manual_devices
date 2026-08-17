@@ -1,0 +1,52 @@
+<!-- templates/data/object/inline_youtrack.html -->
+<span id="youtrack-display-container" class="animate-fade">
+{% if editing %}
+    <form hx-post="{% url 'edit_youtrack' obj.uuid %}" 
+          hx-target="#youtrack-display-container" 
+          hx-swap="outerHTML" 
+          class="d-inline-flex gap-1 align-items-center">
+        {% csrf_token %}
+        
+        <input type="text" 
+               name="youtrack_issue_id" 
+               value="{{ obj.youtrack_issue_id|default:'' }}" 
+               class="form-control form-control-sm bg-light py-1 shadow-none" 
+               style="width: 130px; font-size: 0.8rem;"
+               placeholder="PROJECT-123"
+               autocomplete="off">
+               
+        <!-- Кнопки управления -->
+        <button type="submit" class="btn btn-success btn-sm py-1 px-2" title="Сохранить">
+            <i class="bi bi-check-lg"></i>
+        </button>
+        <button type="button" class="btn btn-light btn-sm py-1 px-2 border" 
+                hx-get="{% url 'edit_youtrack' obj.uuid %}?cancel=1" 
+                hx-target="#youtrack-display-container" 
+                hx-swap="outerHTML"
+                title="Отмена">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </form>
+{% else %}    
+    <span hx-get="{% url 'edit_youtrack' obj.uuid %}" 
+          hx-target="#youtrack-display-container" 
+          hx-swap="outerHTML" 
+          style="cursor: pointer;" 
+          class="editable-trigger">
+        <span class="text-muted me-1">Youtrack:</span>
+        {% if obj.youtrack_issue_id %}
+            <!-- Текст ID теперь сам является ссылкой, event.stopPropagation() защищает от открытия редактора -->
+            <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" 
+               target="_blank" 
+               class="text-primary fw-bold" 
+               onclick="event.stopPropagation();"
+               title="Перейти в Youtrack">
+                {{ obj.youtrack_issue_id }}
+            </a>
+        {% else %}
+            <span class="text-muted italic small">добавить</span>
+        {% endif %}
+        <i class="bi bi-pencil-square edit-icon"></i>
+    </span>
+{% endif %}
+</span>

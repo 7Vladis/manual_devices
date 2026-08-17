@@ -30,6 +30,17 @@
             </div>
             {% endif %}
         </div>
+
+        {% if obj.youtrack_issue_id %}
+        <div class="mb-3 text-start">
+            <label class="form-label small fw-bold text-muted text-uppercase d-block">Потраченное время (для Youtrack)</label>
+            <input type="text" name="spent_time" class="form-control bg-light border-0 py-2" placeholder="Например: 1h 30m или 45m">
+            <div class="form-text text-muted" style="font-size: 0.73rem; line-height: 1.3;">
+                Время спишется в карточку задачи <strong class="text-primary">{{ obj.youtrack_issue_id }}</strong>. Допустимый формат: <code>1h</code>, <code>45m</code>, <code>1h 15m</code>. Оставьте пустым, если списывать время не нужно.
+            </div>
+        </div>
+        {% endif %}
+
     </div>
     <div class="modal-footer border-0 pt-0">
         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>

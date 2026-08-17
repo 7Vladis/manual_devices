@@ -67,6 +67,7 @@ class DataObject(models.Model):
     model = models.ForeignKey(ObjectModel, on_delete=models.CASCADE, related_name='data_objects', verbose_name="Модель")
     name = models.CharField(max_length=255, verbose_name="Имя объекта", blank=True, null=True)
     inventory_number = models.CharField(max_length=100, verbose_name="Инвентарный номер", blank=True, null=True)
+    youtrack_issue_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID задачи в Youtrack")
     next_maintenance_date = models.DateTimeField(blank=True, null=True, verbose_name="Дата следующего обслуживания")
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
     date_update_rule = models.ForeignKey(DateUpdateRule, on_delete=models.SET_NULL, blank=True, null=True, related_name='data_objects', verbose_name="Правило расчета ТО")

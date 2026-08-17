@@ -9,6 +9,7 @@ from django.utils import timezone
 from datetime import timedelta, datetime
 from dateutil.relativedelta import relativedelta
 from users.decorators import role_required
+from .youtrack_services import send_comment_to_youtrack, add_work_item_to_youtrack
 from .models import DateUpdateRule, DataObject, ActionHistory, ObjectModel, ObjectType, Relation, DependencyType, Attachment, Comment
 
 @login_required
@@ -754,6 +755,7 @@ def service_object_view(request, pk):
     
     if request.method == 'POST':
         date_str = request.POST.get('maintenance_date')
+        spent_time = request.POST.get('spent_time', '').strip()
         if date_str:
             maintenance_date = timezone.make_aware(datetime.strptime(date_str, '%Y-%m-%d').replace(hour=13, minute=0))
             obj.next_maintenance_date = maintenance_date
@@ -764,6 +766,23 @@ def service_object_view(request, pk):
                 data_object=obj,
                 action=f"Техническое обслуживание выполнено. Следующее ТО запланировано на {maintenance_date.strftime('%d.%m.%Y')}."
             )
+
+            if obj.youtrack_issue_id:
+                author = request.user.username or request.user.email
+                yt_message = f"🔧 Проведено техническое обслуживание оборудования.\nСледующая плановая дата ТО: **{maintenance_date.strftime('%d.%m.%Y')}**."
+                send_comment_to_youtrack(
+                    issue_id=obj.youtrack_issue_id,
+                    text=yt_message,
+                    author_name=author
+                )
+
+            if spent_time:
+                    add_work_item_to_youtrack(
+                        issue_id=obj.youtrack_issue_id,
+                        duration_str=spent_time,
+                        text="Техническое обслуживание оборудования",
+                        author_name=author
+                    )
         
         node_html = render_to_string('data/tree/object_tree_node.html', {'node': obj}, request=request)
         
@@ -812,6 +831,7 @@ def create_object_view(request):
         name = request.POST.get('name')
         model_uuid = request.POST.get('model')
         inventory_number = request.POST.get('inventory_number')
+        youtrack_issue_id = request.POST.get('youtrack_issue_id', '').strip()
         parent_uuid = request.POST.get('parent')
         maintenance_str = request.POST.get('next_maintenance_date')
         
@@ -876,6 +896,7 @@ def create_object_view(request):
             name=name,
             model=model_obj,
             inventory_number=inventory_number if inventory_number else None,
+            youtrack_issue_id=youtrack_issue_id if youtrack_issue_id else None,
             next_maintenance_date=next_maintenance_date,
             date_update_rule=selected_rule,
             user=request.user
@@ -1092,6 +1113,29 @@ def edit_inventory_view(request, pk):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+def edit_youtrack_view(request, pk):
+    """Инлайн-редактирование идентификатора задачи Youtrack"""
+    obj = get_object_or_404(DataObject, pk=pk)
+    
+    if request.method == 'POST':
+        new_yt = request.POST.get('youtrack_issue_id', '').strip()
+        obj.youtrack_issue_id = new_yt if new_yt else None
+        obj.save()
+        
+        ActionHistory.objects.create(
+            user=request.user,
+            data_object=obj,
+            action=f"Изменен ID задачи Youtrack на: {new_yt or 'отсутствует'}."
+        )
+        return render(request, 'data/object/inline_youtrack.html', {'obj': obj, 'editing': False})
+        
+    if request.GET.get('cancel') == '1':
+        return render(request, 'data/object/inline_youtrack.html', {'obj': obj, 'editing': False})
+        
+    return render(request, 'data/object/inline_youtrack.html', {'obj': obj, 'editing': True})
+
+@login_required
+@role_required(['senior', 'admin', 'superuser'])
 def edit_parent_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
     
@@ -1247,6 +1291,15 @@ def add_comment_view(request, pk):
             data_object=obj,
             text=text
         )
+        if obj.youtrack_issue_id:
+            # Берем username или email пользователя для подписи
+            author = request.user.username or request.user.email
+            send_comment_to_youtrack(
+                issue_id=obj.youtrack_issue_id,
+                text=text,
+                author_name=author
+            )
+    
     comments = obj.comments.select_related('user').order_by('-created_at')
     return render(request, 'data/object/object_tab_comments.html', {'obj': obj, 'comments': comments})
 

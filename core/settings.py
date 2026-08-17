@@ -109,6 +109,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.youtrack_settings',
             ],
         },
     },
@@ -149,6 +150,9 @@ TIME_ZONE = 'Asia/Yekaterinburg'
 USE_I18N = True
 
 USE_TZ = True
+
+YOUTRACK_BASE_URL = os.getenv('YOUTRACK_BASE_URL', 'https://youtrack.company.com').rstrip('/')
+YOUTRACK_API_TOKEN = os.getenv('YOUTRACK_API_TOKEN', '')
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
