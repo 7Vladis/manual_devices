@@ -1,3 +1,4 @@
+<!-- templates/data/tree/service_modal_body.html -->
 <div class="modal-header border-0 pb-0">
     <h5 class="modal-title fw-bold">Техническое обслуживание</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -12,6 +13,17 @@
         <p class="text-muted small">Подтвердите выполнение работ для объекта:<br>
             <strong class="text-dark">{{ obj.name|default:obj.model.name }}</strong>
         </p>
+
+        {% if obj.youtrack_issue_id and not request.user.youtrack_token %}
+        <div class="alert alert-warning py-2 px-3 text-start small mb-3 rounded-3 animate-fade">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-exclamation-triangle-fill me-2 text-warning fs-5"></i>
+                <div>
+                    <strong>Внимание:</strong> У вас не настроен персональный токен YouTrack. Запись о ТО и списание времени <strong>не попадут</strong> в задачу {{ obj.youtrack_issue_id }}.
+                </div>
+            </div>
+        </div>
+        {% endif %}
         
         <div class="mb-3 text-start">
             <label class="form-label small fw-bold text-muted text-uppercase d-block">Дата следующего ТО</label>
@@ -36,7 +48,7 @@
             <label class="form-label small fw-bold text-muted text-uppercase d-block">Потраченное время (для Youtrack)</label>
             <input type="text" name="spent_time" class="form-control bg-light border-0 py-2" placeholder="Например: 1h 30m или 45m">
             <div class="form-text text-muted" style="font-size: 0.73rem; line-height: 1.3;">
-                Время спишется в карточку задачи <strong class="text-primary">{{ obj.youtrack_issue_id }}</strong>. Допустимый формат: <code>1h</code>, <code>45m</code>, <code>1h 15m</code>. Оставьте пустым, если списывать время не нужно.
+                Время спишется в карточку задачи <strong class="text-primary">{{ obj.youtrack_issue_id }}</strong>. Допустимый формат: <code>1h</code>, <code>45m</code>, <code>1h 15m</code>.
             </div>
         </div>
         {% endif %}

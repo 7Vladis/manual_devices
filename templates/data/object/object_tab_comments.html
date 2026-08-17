@@ -1,5 +1,16 @@
+<!-- templates/data/object/object_tab_comments.html -->
 <div class="animate-fade">
     
+    {% if yt_error %}
+    <div class="alert alert-warning py-2 px-3 mb-3 rounded-3 small animate-fade d-flex align-items-center">
+        <i class="bi bi-exclamation-triangle-fill me-2 text-warning fs-5"></i>
+        <div>
+            <strong>YouTrack:</strong> {{ yt_error }}
+            <a href="#" data-bs-toggle="modal" data-bs-target="#userTokenModal" class="alert-link ms-1">Указать токен</a>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Добавление комментария -->
     <form hx-post="{% url 'add_comment' obj.uuid %}" hx-target="#tab-pane-comments" class="mb-4">
         {% csrf_token %}
@@ -7,6 +18,14 @@
             <div class="mb-2">
                 <textarea name="text" rows="2" class="form-control border-0 bg-light shadow-none small" placeholder="Напишите комментарий к объекту..." required></textarea>
             </div>
+
+            {% if obj.youtrack_issue_id and not request.user.youtrack_token %}
+            <div class="text-warning small mb-2" style="font-size: 0.78rem;">
+                <i class="bi bi-exclamation-circle me-1"></i> 
+                Токен YouTrack не указан в профиле. Комментарий сохранится только локально.
+            </div>
+            {% endif %}
+
             <div class="text-end">
                 <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Отправить</button>
             </div>

@@ -86,7 +86,7 @@
                     
                     <li><hr class="dropdown-divider m-0" style="opacity: 0.1;"></li>
                     
-                    <!-- Переключатель режима (Новая двухрядная структура с прижатием вправо) -->
+                    <!-- Переключатель режима -->
                     <li class="px-3 bg-light border-bottom" style="padding-top: 14px !important; padding-bottom: 14px !important;">
                         <div id="explorer-toggle-wrapper" class="d-flex align-items-center justify-content-between w-100" style="min-height: 40px;">
                             <!-- Блок текста (слева) -->
@@ -112,6 +112,18 @@
                         </div>
                     </li>
                     
+                    <li class="px-1 py-1 border-bottom">
+                        <button class="dropdown-item rounded-2 d-flex align-items-center py-2 px-3"
+                            type="button"
+                                data-bs-toggle="modal"
+                                data-bs-target="#userTokenModal"
+                                hx-get="{% url 'users:profile_youtrack_token' %}"
+                                hx-target="#user-token-modal-content">
+                            <i class="bi bi-key-fill text-warning me-3"></i>
+                            <span style="font-size: 0.85rem; font-weight: 500;">Токен YouTrack</span>
+                        </button>
+                    </li>
+
                     <li class="p-1">
                         <form action="{% url 'logout' %}" method="post" class="m-0">
                             {% csrf_token %}

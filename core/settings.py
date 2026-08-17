@@ -152,7 +152,6 @@ USE_I18N = True
 USE_TZ = True
 
 YOUTRACK_BASE_URL = os.getenv('YOUTRACK_BASE_URL', 'https://youtrack.company.com').rstrip('/')
-YOUTRACK_API_TOKEN = os.getenv('YOUTRACK_API_TOKEN', '')
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']

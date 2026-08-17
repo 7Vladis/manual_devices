@@ -1,5 +1,5 @@
 from django.contrib.auth.views import LoginView
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseForbidden
@@ -104,3 +104,18 @@ def delete_user_view(request, pk):
         return HttpResponse("", status=200)
         
     return HttpResponse("Метод не разрешен", status=405)
+
+
+@login_required
+def profile_youtrack_token_view(request):
+    """Модальное окно просмотра и сохранения персонального токена YouTrack"""
+    saved = False
+    if request.method == 'POST':
+        token = request.POST.get('youtrack_token', '').strip()
+        request.user.youtrack_token = token if token else None
+        request.user.save(update_fields=['youtrack_token'])
+        saved = True
+
+    return render(request, 'users/includes/youtrack_token_modal_body.html', {
+        'saved': saved
+    })

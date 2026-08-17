@@ -1,0 +1,52 @@
+<!-- templates/users/includes/youtrack_token_modal_body.html -->
+<div class="modal-header border-0 pb-0">
+    <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
+        <i class="bi bi-key-fill text-warning me-2"></i> Персональный токен YouTrack
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<form hx-post="{% url 'users:profile_youtrack_token' %}" 
+      hx-target="#user-token-modal-content"
+      hx-swap="innerHTML">
+    {% csrf_token %}
+    <div class="modal-body py-3">
+        {% if saved %}
+        <div class="alert alert-success py-2 px-3 mb-3 rounded-3 small animate-fade">
+            <i class="bi bi-check-circle-fill me-1"></i> Токен успешно сохранён!
+        </div>
+        {% endif %}
+
+        <p class="text-muted small mb-3">
+            Укажите ваш персональный <strong>Permanent Token</strong> из YouTrack. Все комментарии и списания времени по задачам оборудования будут публиковаться от вашего имени.
+        </p>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">
+                Permanent Token
+            </label>
+            <input type="password" 
+                   name="youtrack_token" 
+                   value="{{ request.user.youtrack_token|default:'' }}" 
+                   class="form-control bg-light border-0 py-2 shadow-none" 
+                   placeholder="perm:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx..."
+                   autocomplete="off"
+                   style="font-size: 0.85rem; border-radius: 8px;">
+        </div>
+
+        {% if request.user.youtrack_token %}
+            <div class="d-flex align-items-center text-success small">
+                <i class="bi bi-shield-check me-1"></i> Токен активен (все действия синхронизируются с YouTrack)
+            </div>
+            {% else %}
+            <div class="d-flex align-items-center text-danger small">
+                <i class="bi bi-shield-x me-1"></i> Токен отсутствует (синхронизация с YouTrack заблокирована)
+            </div>
+            {% endif %}
+    </div>
+
+    <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light btn-sm px-3" data-bs-dismiss="modal">Закрыть</button>
+        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Сохранить</button>
+    </div>
+</form>

@@ -70,6 +70,14 @@
     </div>
     {% endif %}
 
+     <!-- Модальное окно персонального токена YouTrack -->
+    <div class="modal fade" id="userTokenModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 480px;">
+            <div class="modal-content border-0 shadow-lg rounded-3" id="user-token-modal-content">
+            </div>
+        </div>
+    </div>
+
     <script>
         // Конфигурация HTMX для работы с CSRF (нужно для POST запросов)
         document.body.addEventListener('htmx:configRequest', (event) => {

@@ -34,19 +34,9 @@ class User(AbstractUser):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, verbose_name="Email адрес")
     username = models.CharField(max_length=150, blank=True, null=True)
-
-    role = models.CharField(
-        max_length=20,
-        choices=ROLE_CHOICES,
-        default='junior',
-        verbose_name="Роль в системе"
-    )
-    auth_source = models.CharField(
-        max_length=10,
-        choices=AUTH_SOURCE_CHOICES,
-        default='django',
-        verbose_name="Способ авторизации"
-    )
+    role = models.CharField(max_length=20,choices=ROLE_CHOICES,default='junior',verbose_name="Роль в системе")
+    auth_source = models.CharField(max_length=10,choices=AUTH_SOURCE_CHOICES,default='django',verbose_name="Способ авторизации")
+    youtrack_token = models.CharField(max_length=255,blank=True,null=True,verbose_name="Персональный токен YouTrack")
 
     objects = UserManager()
 

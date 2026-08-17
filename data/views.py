@@ -756,36 +756,43 @@ def service_object_view(request, pk):
     if request.method == 'POST':
         date_str = request.POST.get('maintenance_date')
         spent_time = request.POST.get('spent_time', '').strip()
+        
         if date_str:
-            maintenance_date = timezone.make_aware(datetime.strptime(date_str, '%Y-%m-%d').replace(hour=13, minute=0))
+            maintenance_date = timezone.make_aware(
+                datetime.strptime(date_str, '%Y-%m-%d').replace(hour=13, minute=0)
+            )
             obj.next_maintenance_date = maintenance_date
             obj.save()
             
+            # Запись в локальную историю объекта
             ActionHistory.objects.create(
                 user=request.user,
                 data_object=obj,
                 action=f"Техническое обслуживание выполнено. Следующее ТО запланировано на {maintenance_date.strftime('%d.%m.%Y')}."
             )
 
+            # 1. Отправка отметки о ТО в YouTrack от имени текущего инженера
             if obj.youtrack_issue_id:
-                author = request.user.username or request.user.email
                 yt_message = f"🔧 Проведено техническое обслуживание оборудования.\nСледующая плановая дата ТО: **{maintenance_date.strftime('%d.%m.%Y')}**."
                 send_comment_to_youtrack(
                     issue_id=obj.youtrack_issue_id,
                     text=yt_message,
-                    author_name=author
+                    user=request.user
                 )
 
-            if spent_time:
-                    add_work_item_to_youtrack(
-                        issue_id=obj.youtrack_issue_id,
-                        duration_str=spent_time,
-                        text="Техническое обслуживание оборудования",
-                        author_name=author
-                    )
+            # 2. Списание времени в YouTrack от имени текущего инженера
+            if spent_time and obj.youtrack_issue_id:
+                add_work_item_to_youtrack(
+                    issue_id=obj.youtrack_issue_id,
+                    duration_str=spent_time,
+                    text="Техническое обслуживание оборудования",
+                    user=request.user
+                )
         
+        # Рендерим обновленный узел дерева
         node_html = render_to_string('data/tree/object_tree_node.html', {'node': obj}, request=request)
         
+        # Обновляем дату в карточке объекта через Out-Of-Band (HTMX OOB)
         date_display_str = obj.next_maintenance_date.strftime('%d.%m.%Y') if obj.next_maintenance_date else "Не запланировано"
         oob_date_html = f'<strong id="maintenance-date-display" class="text-danger" hx-swap-oob="innerHTML">{date_display_str}</strong>'
         
@@ -1285,6 +1292,8 @@ def edit_description_view(request, pk):
 def add_comment_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
     text = request.POST.get('text', '').strip()
+    yt_error = None
+    
     if text:
         Comment.objects.create(
             user=request.user,
@@ -1292,16 +1301,20 @@ def add_comment_view(request, pk):
             text=text
         )
         if obj.youtrack_issue_id:
-            # Берем username или email пользователя для подписи
-            author = request.user.username or request.user.email
-            send_comment_to_youtrack(
+            success, msg = send_comment_to_youtrack(
                 issue_id=obj.youtrack_issue_id,
                 text=text,
-                author_name=author
+                user=request.user
             )
+            if not success:
+                yt_error = msg
     
     comments = obj.comments.select_related('user').order_by('-created_at')
-    return render(request, 'data/object/object_tab_comments.html', {'obj': obj, 'comments': comments})
+    return render(request, 'data/object/object_tab_comments.html', {
+        'obj': obj, 
+        'comments': comments,
+        'yt_error': yt_error
+    })
 
 @login_required
 def edit_comment_view(request, pk):
