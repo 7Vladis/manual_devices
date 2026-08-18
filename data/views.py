@@ -9,7 +9,15 @@ from django.utils import timezone
 from datetime import timedelta, datetime
 from dateutil.relativedelta import relativedelta
 from users.decorators import role_required
-from .youtrack_services import send_comment_to_youtrack, add_work_item_to_youtrack, upload_attachment_to_youtrack, sync_issue_from_youtrack
+from .youtrack_services import (
+    send_comment_to_youtrack,
+    add_work_item_to_youtrack,
+    upload_attachment_to_youtrack,
+    sync_issue_from_youtrack,
+    update_issue_description_in_youtrack,
+    delete_comment_from_youtrack,
+    delete_attachment_from_youtrack
+)
 from .models import DateUpdateRule, DataObject, ActionHistory, ObjectModel, ObjectType, Relation, DependencyType, Attachment, Comment
 
 @login_required
@@ -455,10 +463,9 @@ def dashboard(request):
     
     def get_stats(period):
         start, end = get_period_limits(period)
-        # Выполненные ТО за период
         completed = ActionHistory.objects.filter(
             created_at__range=(start, end),
-            action__icontains="Техническое обслуживание выполнено"
+            action_type='maintenance'
         ).count()
         current_planned = DataObject.objects.filter(next_maintenance_date__range=(start, end)).count()
         planned = current_planned + completed
@@ -748,7 +755,7 @@ def model_tree_view(request):
 
 # --- ОБСЛУЖИВАНИЕ (Доступно всем ролям, включая Младшего инженера) ---
 
-@login_required
+login_required
 def service_object_view(request, pk):
     """Обслуживание объекта: вывод формы и обработка сохранения"""
     obj = get_object_or_404(DataObject, pk=pk)
@@ -756,6 +763,7 @@ def service_object_view(request, pk):
     if request.method == 'POST':
         date_str = request.POST.get('maintenance_date')
         spent_time = request.POST.get('spent_time', '').strip()
+        custom_comment = request.POST.get('comment', '').strip()
         
         if date_str:
             maintenance_date = timezone.make_aware(
@@ -764,30 +772,33 @@ def service_object_view(request, pk):
             obj.next_maintenance_date = maintenance_date
             obj.save()
             
-            # Запись в локальную историю объекта
-            ActionHistory.objects.create(
+            # Текст для локальной истории объекта
+            action_text = custom_comment if custom_comment else "Плановое техническое обслуживание выполнено"
+            
+            # Создаем локальную запись истории
+            history_entry = ActionHistory.objects.create(
                 user=request.user,
                 data_object=obj,
-                action=f"Техническое обслуживание выполнено. Следующее ТО запланировано на {maintenance_date.strftime('%d.%m.%Y')}."
+                action_type='maintenance',
+                action=action_text
             )
 
-            # 1. Отправка отметки о ТО в YouTrack от имени текущего инженера
-            if obj.youtrack_issue_id:
-                yt_message = f"🔧 Проведено техническое обслуживание оборудования.\nСледующая плановая дата ТО: **{maintenance_date.strftime('%d.%m.%Y')}**."
-                send_comment_to_youtrack(
-                    issue_id=obj.youtrack_issue_id,
-                    text=yt_message,
-                    user=request.user
-                )
-
-            # 2. Списание времени в YouTrack от имени текущего инженера
-            if spent_time and obj.youtrack_issue_id:
-                add_work_item_to_youtrack(
+            # Отправляем ТОЛЬКО списание времени в YouTrack (Work Item)
+            if obj.youtrack_issue_id and spent_time:
+                # Текст описания работы в YouTrack берем из введенного комментария
+                work_item_desc = custom_comment if custom_comment else f"Техническое обслуживание (след. ТО: {maintenance_date.strftime('%d.%m.%Y')})"
+                
+                success_work, work_id_or_err = add_work_item_to_youtrack(
                     issue_id=obj.youtrack_issue_id,
                     duration_str=spent_time,
-                    text="Техническое обслуживание оборудования",
+                    text=work_item_desc,
                     user=request.user
                 )
+                
+                # Сохраняем полученный ID списания для предотвращения дублей при синхронизации
+                if success_work and work_id_or_err:
+                    history_entry.youtrack_id = work_id_or_err
+                    history_entry.save(update_fields=['youtrack_id'])
         
         # Рендерим обновленный узел дерева
         node_html = render_to_string('data/tree/object_tree_node.html', {'node': obj}, request=request)
@@ -934,6 +945,7 @@ def create_object_view(request):
         ActionHistory.objects.create(
             user=request.user,
             data_object=new_obj,
+            action_type='create',
             action="Объект зарегистрирован в системе через форму быстрого добавления."
         )
         
@@ -1051,6 +1063,7 @@ def unlink_rule_view(request, pk):
     ActionHistory.objects.create(
         user=request.user,
         data_object=obj,
+        action_type='rule_change',
         action="Правило автоматического расчета ТО отвязано от объекта."
     )
     
@@ -1109,6 +1122,7 @@ def edit_inventory_view(request, pk):
         ActionHistory.objects.create(
             user=request.user,
             data_object=obj,
+            action_type='update',
             action=f"Изменен инвентарный номер объекта на: {new_inv or 'отсутствует'}."
         )
         return render(request, 'data/object/inline_inventory.html', {'obj': obj, 'editing': False})
@@ -1132,6 +1146,7 @@ def edit_youtrack_view(request, pk):
         ActionHistory.objects.create(
             user=request.user,
             data_object=obj,
+            action_type='update',
             action=f"Изменен ID задачи Youtrack на: {new_yt or 'отсутствует'}."
         )
         return render(request, 'data/object/inline_youtrack.html', {'obj': obj, 'editing': False})
@@ -1195,6 +1210,7 @@ def edit_parent_view(request, pk):
         ActionHistory.objects.create(
             user=request.user,
             data_object=obj,
+            action_type='link_change',
             action=f"Связь изменена: назначен новый родительский объект '{parent_name}'."
         )
         
@@ -1249,6 +1265,7 @@ def edit_name_view(request, pk):
             ActionHistory.objects.create(
                 user=request.user,
                 data_object=obj,
+                action_type='update',
                 action=f"Имя объекта изменено с '{old_name}' на '{new_name}'."
             )
             
@@ -1272,15 +1289,29 @@ def edit_description_view(request, pk):
         return render(request, 'data/object/inline_description.html', {'obj': obj, 'editing': False})
 
     if request.method == 'POST':
-        desc = request.POST.get('description', '').strip()
-        obj.description = desc if desc else None
-        obj.save()
+        old_desc = (obj.description or '').strip()
+        new_desc = request.POST.get('description', '').strip()
         
-        ActionHistory.objects.create(
-            user=request.user,
-            data_object=obj,
-            action="Обновлено краткое описание объекта."
-        )
+        # Записываем в историю и базу ТОЛЬКО если текст реально изменился
+        if old_desc != new_desc:
+            obj.description = new_desc if new_desc else None
+            obj.save(update_fields=['description'])
+            
+            ActionHistory.objects.create(
+                user=request.user,
+                data_object=obj,
+                action_type='update',
+                action="Обновлено описание объекта."
+            )
+
+            # Синхронизируем обновленное описание с задачей в YouTrack
+            if obj.youtrack_issue_id:
+                update_issue_description_in_youtrack(
+                    issue_id=obj.youtrack_issue_id,
+                    description=new_desc,
+                    user=request.user
+                )
+
         return render(request, 'data/object/inline_description.html', {'obj': obj, 'editing': False})
         
     return render(request, 'data/object/inline_description.html', {'obj': obj, 'editing': True})
@@ -1314,30 +1345,47 @@ def add_comment_view(request, pk):
             
         # Синхронизация с YouTrack при наличии привязанной задачи
         if obj.youtrack_issue_id:
-            # 1. Отправляем текст комментария
-            if text:
-                success_txt, msg_txt = send_comment_to_youtrack(
-                    issue_id=obj.youtrack_issue_id,
-                    text=text,
-                    user=request.user
-                )
-                if not success_txt:
-                    yt_errors.append(msg_txt)
-
-            # 2. Отправляем прикрепленный файл в YouTrack
+            
+            # 1. СНАЧАЛА загружаем файл в YouTrack (чтобы YouTrack зарегистрировал вложение)
             if attachment_obj and attachment_obj.path:
                 try:
                     with open(attachment_obj.path.path, 'rb') as f:
-                        success_file, msg_file = upload_attachment_to_youtrack(
+                        success_file, result_file = upload_attachment_to_youtrack(
                             issue_id=obj.youtrack_issue_id,
                             file_obj=f,
                             user=request.user
                         )
-                        if not success_file:
-                            yt_errors.append(msg_file)
+                        if success_file and result_file:
+                            attachment_obj.youtrack_id = result_file
+                            attachment_obj.save(update_fields=['youtrack_id'])
+                        elif not success_file:
+                            yt_errors.append(result_file)
                 except Exception as e:
                     yt_errors.append(f"Ошибка чтения файла для YouTrack: {e}")
-    
+
+            # 2. ФОРМИРУЕМ ТЕКСТ КОММЕНТАРИЯ ДЛЯ YOUTRACK
+            yt_text = text
+            
+            # Если прикреплена картинка — встраиваем её через Markdown ![](filename.ext)
+            if attachment_obj and attachment_obj.is_image:
+                image_md = f"\n\n![]({attachment_obj.filename})"
+                yt_text = (yt_text + image_md) if yt_text else f"![]({attachment_obj.filename})"
+            elif not yt_text and attachment_obj:
+                yt_text = f"Прикреплен файл: {attachment_obj.filename}"
+
+            # 3. ОТПРАВЛЯЕМ КОММЕНТАРИЙ В YOUTRACK
+            if yt_text:
+                success_txt, result_txt = send_comment_to_youtrack(
+                    issue_id=obj.youtrack_issue_id,
+                    text=yt_text,
+                    user=request.user
+                )
+                if success_txt and result_txt:
+                    comment.youtrack_id = result_txt
+                    comment.save(update_fields=['youtrack_id'])
+                elif not success_txt:
+                    yt_errors.append(result_txt)
+
     comments = obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
     return render(request, 'data/object/object_tab_comments.html', {
         'obj': obj, 
@@ -1369,13 +1417,35 @@ def delete_comments_bulk(request):
     obj = get_object_or_404(DataObject, pk=obj_pk)
     
     if comment_ids:
-        queryset = Comment.objects.filter(uuid__in=comment_ids, data_object=obj)
-        # Старший инженер, админ или суперпользователь могут удалять любые комментарии, младший — только свои
+        queryset = Comment.objects.filter(uuid__in=comment_ids, data_object=obj).prefetch_related('attachments')
+        
+        # Ограничение прав: младший инженер может удалять только свои комментарии
         if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
+            
+        # Синхронное удаление из YouTrack
+        if obj.youtrack_issue_id:
+            for comment in queryset:
+                # А) Удаляем прикрепленные к комментарию файлы в YouTrack (если были)
+                for att in comment.attachments.all():
+                    if att.youtrack_id:
+                        delete_attachment_from_youtrack(
+                            issue_id=obj.youtrack_issue_id,
+                            attachment_yt_id=att.youtrack_id,
+                            user=request.user
+                        )
+                # Б) Удаляем сам комментарий в YouTrack
+                if comment.youtrack_id:
+                    delete_comment_from_youtrack(
+                        issue_id=obj.youtrack_issue_id,
+                        comment_yt_id=comment.youtrack_id,
+                        user=request.user
+                    )
+        
+        # Удаляем из базы Django (файлы на диске удалятся через существующий signal receiver)
         queryset.delete()
         
-    comments = obj.comments.select_related('user').order_by('-created_at')
+    comments = obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
     return render(request, 'data/object/object_tab_comments.html', {'obj': obj, 'comments': comments})
 
 
@@ -1430,9 +1500,21 @@ def delete_attachments_bulk(request):
     
     if file_ids:
         queryset = Attachment.objects.filter(uuid__in=file_ids, data_object=obj)
-        # Старший инженер, админ или суперпользователь могут удалять любые файлы, младший — только свои
+        
         if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
+            
+        # Синхронное удаление файлов из YouTrack
+        if obj.youtrack_issue_id:
+            for att in queryset:
+                if att.youtrack_id:
+                    delete_attachment_from_youtrack(
+                        issue_id=obj.youtrack_issue_id,
+                        attachment_yt_id=att.youtrack_id,
+                        user=request.user
+                    )
+                    
+        # Удаляем из базы Django
         queryset.delete()
         
     files = obj.attachments.select_related('user').order_by('-created_at')
@@ -2041,6 +2123,7 @@ def edit_rule_view(request, pk):
         ActionHistory.objects.create(
             user=request.user,
             data_object=obj,
+            action_type='rule_change', 
             action=f"Изменено правило планирования ТО на: {rule_name}."
         )
         
@@ -2117,6 +2200,7 @@ def edit_object_model_view(request, pk):
                 ActionHistory.objects.create(
                     user=request.user,
                     data_object=obj,
+                    action_type='update',
                     action=f"Модель оборудования изменена с '{old_model.name}' на '{new_model.name}'."
                 )
                 

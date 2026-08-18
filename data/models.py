@@ -115,11 +115,22 @@ class Relation(models.Model):
     
 
 class ActionHistory(models.Model):
+    ACTION_TYPE_CHOICES = [
+        ('maintenance', 'Работа с оборудованием'),
+        ('create', 'Создание объекта'),
+        ('update', 'Редактирование данных'),
+        ('rule_change', 'Изменение правила ТО'),
+        ('link_change', 'Изменение связей'),
+        ('sync', 'Синхронизация с YouTrack'),
+        ('other', 'Прочее действие'),
+    ]
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name="Исполнитель")
     data_object = models.ForeignKey(DataObject, on_delete=models.CASCADE, related_name='actions', verbose_name = "Объект")
     action = models.TextField(verbose_name="Описание действия")
+    action_type = models.CharField(max_length=30, choices=ACTION_TYPE_CHOICES, default='other', db_index=True, verbose_name="Тип действия")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата создания")
+    youtrack_id = models.CharField(max_length=100, blank=True, null=True, db_index=True, verbose_name="ID записи в YouTrack")
 
     class Meta:
         db_table = 'action_history'
