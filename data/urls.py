@@ -53,6 +53,8 @@ urlpatterns = [
     path('dict/attachments/delete-bulk/', views.delete_attachments_bulk, name='delete_attachments_bulk'),
     path('dict/objects/<uuid:pk>/unlink-rule/', views.unlink_rule_view, name='unlink_rule'),
     path('dict/objects/<uuid:pk>/edit-youtrack/', views.edit_youtrack_view, name='edit_youtrack'),
+    path('dict/attachments/<uuid:pk>/set-preview/', views.set_preview_attachment_view, name='set_preview_attachment'),
+    path('dict/objects/<uuid:pk>/sync-youtrack/', views.sync_youtrack_view, name='sync_youtrack'),
     
     # Детализация моделей
     path('dict/models/<uuid:pk>/', views.model_detail_view, name='model_detail'),

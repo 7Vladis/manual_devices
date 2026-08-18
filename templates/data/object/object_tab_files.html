@@ -40,17 +40,15 @@
                         <input type="checkbox" name="file_ids" value="{{ file.uuid }}" class="form-check-input me-3 shadow-none" style="width: 18px; height: 18px; cursor: pointer;">
                         {% endif %}
                         
-                        <!-- БЛОК ИКОНКИ / ПРЕВЬЮ ФОТО -->
+                        <!-- Миниатюра / Иконка -->
                         {% if file.is_image %}
-                            <!-- Кликабельная миниатюра изображения -->
-                            <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3 overflow-hidden border shadow-sm" 
+                            <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3 overflow-hidden border shadow-sm position-relative" 
                                  style="width: 52px; height: 52px; min-width: 52px; cursor: pointer;"
                                  data-bs-toggle="modal" 
                                  data-bs-target="#imageFullscreenModal-{{ file.uuid }}">
                                 <img src="{{ file.path.url }}" style="width: 100%; height: 100%; object-fit: cover;" title="Нажмите, чтобы увеличить">
                             </div>
                         {% else %}
-                            <!-- Стандартная иконка для документов -->
                             <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3 border" 
                                  style="width: 52px; height: 52px; min-width: 52px;">
                                 <i class="bi bi-file-earmark-arrow-down-fill text-primary fs-4"></i>
@@ -58,18 +56,41 @@
                         {% endif %}
                         
                         <div class="text-truncate">
-                            <span class="fw-bold text-dark small d-block text-truncate">{{ file.path.name|cut:"attachments/" }}</span>
-                            <small class="text-muted d-block" style="font-size: 0.75rem;">Загрузил: {{ file.user.username|default:file.user.email }} • {{ file.created_at|date:"d.m.Y" }}</small>
+                            <span class="fw-bold text-dark small d-block text-truncate">{{ file.filename }}</span>
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">
+                                Загрузил: {{ file.user.username|default:file.user.email }} • {{ file.created_at|date:"d.m.Y" }}
+                                {% if file.comment %}
+                                    • <i class="bi bi-chat-left-text me-1"></i>Из комментария
+                                {% endif %}
+                            </small>
                         </div>
                     </div>
                     
-                    <a href="{{ file.path.url }}" download class="btn btn-light btn-sm text-secondary border shadow-sm px-3 ms-3">
-                        <i class="bi bi-download"></i> Скачать
-                    </a>
+                    <div class="d-flex align-items-center gap-2 ms-3">
+                        <!-- Кнопка назначения главным превью (только для картинок) -->
+                        {% if file.is_image and not request.user.is_junior %}
+                            <button type="button" 
+                                    class="btn btn-sm {% if file.is_preview %}btn-success text-white{% else %}btn-outline-secondary{% endif %} fw-semibold"
+                                    style="font-size: 0.75rem;"
+                                    hx-post="{% url 'set_preview_attachment' file.uuid %}"
+                                    hx-target="#tab-pane-files"
+                                    title="Назначить главным превью объекта">
+                                {% if file.is_preview %}
+                                    <i class="bi bi-star-fill me-1"></i> Превью объекта
+                                {% else %}
+                                    <i class="bi bi-star me-1"></i> Сделать превью
+                                {% endif %}
+                            </button>
+                        {% endif %}
+
+                        <a href="{{ file.path.url }}" download class="btn btn-light btn-sm text-secondary border shadow-sm px-3">
+                            <i class="bi bi-download"></i>
+                        </a>
+                    </div>
                 </div>
             </div>
 
-            <!-- МОДАЛЬНОЕ ОКНО ПРОСМОТРА КАРТИНКИ (Рендерится для каждого изображения отдельно) -->
+            <!-- Модалка полноэкранного просмотра -->
             {% if file.is_image %}
             <div class="modal fade" id="imageFullscreenModal-{{ file.uuid }}" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered modal-xl">

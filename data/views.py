@@ -9,7 +9,7 @@ from django.utils import timezone
 from datetime import timedelta, datetime
 from dateutil.relativedelta import relativedelta
 from users.decorators import role_required
-from .youtrack_services import send_comment_to_youtrack, add_work_item_to_youtrack
+from .youtrack_services import send_comment_to_youtrack, add_work_item_to_youtrack, upload_attachment_to_youtrack, sync_issue_from_youtrack
 from .models import DateUpdateRule, DataObject, ActionHistory, ObjectModel, ObjectType, Relation, DependencyType, Attachment, Comment
 
 @login_required
@@ -1292,28 +1292,57 @@ def edit_description_view(request, pk):
 def add_comment_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
     text = request.POST.get('text', '').strip()
-    yt_error = None
+    file = request.FILES.get('file')
+    yt_errors = []
     
-    if text:
-        Comment.objects.create(
+    if text or file:
+        comment = Comment.objects.create(
             user=request.user,
             data_object=obj,
-            text=text
+            text=text or "Вложение к объекту"
         )
-        if obj.youtrack_issue_id:
-            success, msg = send_comment_to_youtrack(
-                issue_id=obj.youtrack_issue_id,
-                text=text,
-                user=request.user
+        
+        attachment_obj = None
+        if file:
+            attachment_obj = Attachment.objects.create(
+                user=request.user,
+                data_object=obj,
+                comment=comment,
+                path=file,
+                is_preview=False
             )
-            if not success:
-                yt_error = msg
+            
+        # Синхронизация с YouTrack при наличии привязанной задачи
+        if obj.youtrack_issue_id:
+            # 1. Отправляем текст комментария
+            if text:
+                success_txt, msg_txt = send_comment_to_youtrack(
+                    issue_id=obj.youtrack_issue_id,
+                    text=text,
+                    user=request.user
+                )
+                if not success_txt:
+                    yt_errors.append(msg_txt)
+
+            # 2. Отправляем прикрепленный файл в YouTrack
+            if attachment_obj and attachment_obj.path:
+                try:
+                    with open(attachment_obj.path.path, 'rb') as f:
+                        success_file, msg_file = upload_attachment_to_youtrack(
+                            issue_id=obj.youtrack_issue_id,
+                            file_obj=f,
+                            user=request.user
+                        )
+                        if not success_file:
+                            yt_errors.append(msg_file)
+                except Exception as e:
+                    yt_errors.append(f"Ошибка чтения файла для YouTrack: {e}")
     
-    comments = obj.comments.select_related('user').order_by('-created_at')
+    comments = obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
     return render(request, 'data/object/object_tab_comments.html', {
         'obj': obj, 
         'comments': comments,
-        'yt_error': yt_error
+        'yt_error': " | ".join(yt_errors) if yt_errors else None
     })
 
 @login_required
@@ -2134,3 +2163,38 @@ def edit_model_name_view(request, pk):
         return HttpResponse(model_name_html + "\n" + sidebar_model_node_html)
         
     return render(request, 'data/model/inline_model_name.html', {'model_obj': model_obj, 'editing': True})
+
+
+@login_required
+@role_required(['senior', 'admin', 'superuser'])
+def set_preview_attachment_view(request, pk):
+    """Назначение/снятие файла в качестве превью объекта"""
+    attachment = get_object_or_404(Attachment.objects.select_related('data_object'), pk=pk)
+    obj = attachment.data_object
+    
+    if not attachment.is_image:
+        return HttpResponse("Только изображение может быть превью", status=400)
+    
+    if attachment.is_preview:
+        attachment.is_preview = False
+        attachment.save()
+    else:
+        Attachment.objects.filter(data_object=obj, is_preview=True).update(is_preview=False)
+        attachment.is_preview = True
+        attachment.save()
+
+    files = obj.attachments.select_related('user', 'comment').order_by('-created_at')
+    return render(request, 'data/object/object_tab_files.html', {'obj': obj, 'files': files})
+
+
+@login_required
+def sync_youtrack_view(request, pk):
+    """Запуск синхронизации с YouTrack и возврат обновленной карточки объекта"""
+    obj = get_object_or_404(DataObject, pk=pk)
+    
+    if request.method == 'POST':
+        success, message = sync_issue_from_youtrack(obj, request.user)
+        # После синхронизации возвращаем полностью актуализированную правую панель объекта
+        return object_detail_view(request, pk)
+
+    return HttpResponse("Метод не разрешен", status=405)

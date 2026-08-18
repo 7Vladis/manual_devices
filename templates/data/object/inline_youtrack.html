@@ -1,12 +1,11 @@
 <!-- templates/data/object/inline_youtrack.html -->
-<span id="youtrack-display-container" class="animate-fade">
+<span id="youtrack-display-container" class="animate-fade d-inline-flex align-items-center">
 {% if editing %}
     <form hx-post="{% url 'edit_youtrack' obj.uuid %}" 
           hx-target="#youtrack-display-container" 
           hx-swap="outerHTML" 
           class="d-inline-flex gap-1 align-items-center">
         {% csrf_token %}
-        
         <input type="text" 
                name="youtrack_issue_id" 
                value="{{ obj.youtrack_issue_id|default:'' }}" 
@@ -15,38 +14,49 @@
                placeholder="PROJECT-123"
                autocomplete="off">
                
-        <!-- Кнопки управления -->
-        <button type="submit" class="btn btn-success btn-sm py-1 px-2" title="Сохранить">
-            <i class="bi bi-check-lg"></i>
-        </button>
+        <button type="submit" class="btn btn-success btn-sm py-1 px-2" title="Сохранить"><i class="bi bi-check-lg"></i></button>
         <button type="button" class="btn btn-light btn-sm py-1 px-2 border" 
                 hx-get="{% url 'edit_youtrack' obj.uuid %}?cancel=1" 
                 hx-target="#youtrack-display-container" 
                 hx-swap="outerHTML"
-                title="Отмена">
-            <i class="bi bi-x-lg"></i>
-        </button>
+                title="Отмена"><i class="bi bi-x-lg"></i></button>
     </form>
 {% else %}    
-    <span hx-get="{% url 'edit_youtrack' obj.uuid %}" 
-          hx-target="#youtrack-display-container" 
-          hx-swap="outerHTML" 
-          style="cursor: pointer;" 
-          class="editable-trigger">
-        <span class="text-muted me-1">Youtrack:</span>
+    <span class="d-inline-flex align-items-center">
+        <span hx-get="{% url 'edit_youtrack' obj.uuid %}" 
+              hx-target="#youtrack-display-container" 
+              hx-swap="outerHTML" 
+              style="cursor: pointer;" 
+              class="editable-trigger">
+            <span class="text-muted me-1">Youtrack:</span>
+            {% if obj.youtrack_issue_id %}
+                <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" 
+                   target="_blank" 
+                   class="text-primary fw-bold" 
+                   onclick="event.stopPropagation();"
+                   title="Перейти в YouTrack">
+                    {{ obj.youtrack_issue_id }}
+                </a>
+            {% else %}
+                <span class="text-muted italic small">добавить</span>
+            {% endif %}
+            {% if not request.user.is_junior %}
+            <i class="bi bi-pencil-square edit-icon"></i>
+            {% endif %}
+        </span>
+
+        <!-- КНОПКА СИНХРОНИЗАЦИИ (Отображается ТОЛЬКО если есть ID задачи YouTrack) -->
         {% if obj.youtrack_issue_id %}
-            <!-- Текст ID теперь сам является ссылкой, event.stopPropagation() защищает от открытия редактора -->
-            <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" 
-               target="_blank" 
-               class="text-primary fw-bold" 
-               onclick="event.stopPropagation();"
-               title="Перейти в Youtrack">
-                {{ obj.youtrack_issue_id }}
-            </a>
-        {% else %}
-            <span class="text-muted italic small">добавить</span>
+        <button type="button" 
+                class="btn btn-sm btn-link text-primary p-0 ms-2 shadow-none border-0 d-inline-flex align-items-center"
+                hx-post="{% url 'sync_youtrack' obj.uuid %}"
+                hx-target="#detail-container"
+                hx-indicator="#sync-spinner-{{ obj.uuid }}"
+                title="Синхронизировать данные и файлы из YouTrack">
+            <i class="bi bi-arrow-repeat fs-6" id="sync-icon-{{ obj.uuid }}"></i>
+            <span class="spinner-border spinner-border-sm ms-1 htmx-indicator" id="sync-spinner-{{ obj.uuid }}" role="status"></span>
+        </button>
         {% endif %}
-        <i class="bi bi-pencil-square edit-icon"></i>
     </span>
 {% endif %}
 </span>

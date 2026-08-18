@@ -1,10 +1,28 @@
 import uuid
 import os
+import re
 from django.db import models
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 from django.utils import timezone
 from django.conf import settings
+
+
+def get_attachment_upload_path(instance, filename):
+    """
+    Формирует структурированный путь для сохранения вложений:
+    attachments/<имя_объекта>_<uuid_объекта>/<исходное_имя_файла>
+    """
+    obj = instance.data_object
+    raw_name = obj.name or (obj.model.name if obj.model else "object")
+    
+    # Очищаем имя объекта от недопустимых символов для файловой системы
+    safe_name = re.sub(r'[^\w\-\. ]', '_', raw_name).strip()
+    safe_name = safe_name[:50] or "object"  # Ограничиваем длину имени папки
+    
+    folder_name = f"{safe_name}_{obj.uuid}"
+    return os.path.join('attachments', folder_name, filename)
+
 
 class ObjectType(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4,  editable=False)
@@ -115,6 +133,7 @@ class Comment(models.Model):
     data_object = models.ForeignKey(DataObject, on_delete=models.CASCADE, related_name='comments', verbose_name="Объект")
     text = models.TextField(verbose_name="Текст комментария")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата создания")
+    youtrack_id = models.CharField(max_length=100, blank=True, null=True, db_index=True, verbose_name="ID комментария в YouTrack")
 
     class Meta:
         db_table = 'comment'
@@ -126,14 +145,25 @@ class Attachment(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name="Загрузил")
     data_object = models.ForeignKey(DataObject, on_delete=models.CASCADE, related_name='attachments', verbose_name="Объект")
-    path = models.FileField(upload_to='attachments/', verbose_name="Файл")
+    comment = models.ForeignKey(Comment, on_delete=models.CASCADE, null=True, blank=True, related_name='attachments', verbose_name="Комментарий")
+    path = models.FileField(upload_to=get_attachment_upload_path, verbose_name="Файл")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата загрузки")
     is_preview = models.BooleanField(default=False, verbose_name="Превью (фото)")
+    youtrack_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID вложения в YouTrack")
 
     class Meta:
         db_table = 'attachment'
         verbose_name = 'Вложение'
         verbose_name_plural = 'Вложения'
+
+
+    @property
+    def filename(self):
+        """Возвращает чистое имя файла без пути"""
+        if self.path:
+            return os.path.basename(self.path.name)
+        return ""
+    
 
     @property
     def is_image(self):

@@ -1,8 +1,9 @@
 <!-- templates/data/object/object_tab_short_info.html -->
-<!-- Добавлен класс align-items-start, чтобы карточки выравнивались по верхнему краю и не растягивались по высоте -->
+{% load markdown_extras %}
+
 <div class="row g-4 align-items-start animate-fade">
     
-    <!-- Изображение Preview (Слева, фиксированная высота) -->
+    <!-- Изображение Preview (Слева) -->
     <div class="col-md-4 col-lg-3">
         <div class="card border-0 shadow-sm overflow-hidden text-center bg-white p-3 d-flex flex-column align-items-center justify-content-center" 
              style="min-height: 220px; border-radius: 12px;">
@@ -34,7 +35,7 @@
         </div>
     </div>
 
-    <!-- Текстовое описание (Справа, растягивается по высоте контента) -->
+    <!-- Текстовое описание (Справа) -->
     <div class="col-md-8 col-lg-9">
         <div class="card border-0 shadow-sm p-4 bg-white d-flex flex-column" style="border-radius: 12px;">
             <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
@@ -42,17 +43,7 @@
             </div>
             
             <div class="flex-grow-1" id="description-container">
-                {% if obj.description %}
-                    <div hx-get="{% url 'edit_description' obj.uuid %}" hx-target="#description-container" hx-swap="outerHTML" style="cursor: pointer;">
-                        <p class="text-muted small" style="white-space: pre-line; font-size: 0.9rem; line-height: 1.6;">{{ obj.description }}</p>
-                        <button class="btn btn-sm btn-light border text-muted mt-2"><i class="bi bi-pencil me-1"></i> Редактировать</button>
-                    </div>
-                {% else %}
-                    <div hx-get="{% url 'edit_description' obj.uuid %}" hx-target="#description-container" hx-swap="outerHTML" style="cursor: pointer;" class="text-center py-5 text-muted small">
-                        <i class="bi bi-pencil-square d-block fs-3 mb-1 opacity-50"></i>
-                        Кликните, чтобы добавить описание...
-                    </div>
-                {% endif %}
+                {% include 'data/object/inline_description.html' with obj=obj %}
             </div>
         </div>
     </div>
