@@ -1,13 +1,12 @@
 <!-- templates/data/includes/maintenance_table.html -->
 <div class="maintenance-list">
     {% for obj in objects %}
-    <!-- Клик открывает справочник сразу с данным объектом в НОВОЙ вкладке браузера -->
-    <div class="card p-3 mb-3 clickable-card {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}overdue-card{% endif %}"
-         onclick="window.open('{% url 'dict' %}?object={{ obj.uuid }}', '_blank')"
-         style="cursor: pointer;">
+    <!-- Чистая ссылка: ЛКМ откроет здесь же, колесико мыши — в новой вкладке -->
+    <a href="{% url 'dict' %}?object={{ obj.uuid }}" 
+       class="card p-3 mb-3 clickable-card text-decoration-none d-block {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}overdue-card{% endif %}">
         <div class="maintenance-item-container">
             <div class="d-flex align-items-center overflow-hidden">
-                <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
+                <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px; min-width: 48px;">
                     {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}
                         <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
                     {% else %}
@@ -25,7 +24,7 @@
                 </div>
             </div>
             
-            <div class="ms-3">
+            <div class="ms-3 flex-shrink-0">
                 {% if obj.next_maintenance_date %}
                     {% if obj.next_maintenance_date < today %}
                         <span class="badge rounded-pill bg-danger px-3 py-2">Просрочено</span>
@@ -35,7 +34,7 @@
                 {% endif %}
             </div>
         </div>
-    </div>
+    </a>
     {% empty %}
     <div class="card p-5 text-center text-muted">
         <i class="bi bi-check2-circle fs-1 d-block mb-2 text-success"></i>

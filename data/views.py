@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
-from django.urls import reverse
+from django.db.models.functions import Cast
+from django.db.models import TextField
 from django.shortcuts import render, get_object_or_404
 from django.template.loader import render_to_string
 from django.http import HttpResponse, HttpResponseForbidden
@@ -16,7 +17,8 @@ from .youtrack_services import (
     sync_issue_from_youtrack,
     update_issue_description_in_youtrack,
     delete_comment_from_youtrack,
-    delete_attachment_from_youtrack
+    delete_attachment_from_youtrack,
+    update_comment_in_youtrack
 )
 from .models import DateUpdateRule, DataObject, ActionHistory, ObjectModel, ObjectType, Attachment, Comment
 
@@ -63,9 +65,19 @@ def settings_page(request):
 
     # 2. ВКЛАДКА: Типы объектов
     elif active_tab == 'object_types':
-        context['object_types'] = ObjectType.objects.annotate(
-            models_count=Count('models')
+        object_types_qs = ObjectType.objects.prefetch_related(
+            Prefetch(
+                'models',
+                queryset=ObjectModel.objects.prefetch_related(
+                    Prefetch('data_objects', queryset=DataObject.objects.all().order_by('name'))
+                ).order_by('name')
+            )
+        ).annotate(
+            models_count=Count('models', distinct=True),
+            objects_count=Count('models__data_objects', distinct=True)
         ).order_by('type')
+        
+        context['object_types'] = object_types_qs
 
     # 3. ВКЛАДКА: Уведомления Mattermost (Только для Админов и Суперпользователей)
     elif active_tab == 'notifications' and request.user.is_admin_or_higher:
@@ -471,32 +483,41 @@ def search_view(request):
     if not query or len(query) < 2:
         return HttpResponse('')
 
-    base_filters = (
+    words = [w for w in query.split() if w]
+
+    # 1. Поиск по точному совпадению всей фразы (в любом поле)
+    exact_q = (
         Q(name__icontains=query) |
         Q(inventory_number__icontains=query) |
         Q(description__icontains=query) |
         Q(model__name__icontains=query) |
-        Q(model__specifications__icontains=query) |
         Q(comments__text__icontains=query) |
         Q(actions__action__icontains=query)
     )
-    
-    results = DataObject.objects.filter(base_filters).distinct()
-    
-    if results.count() < 3:
-        words = query.split()
-        if len(words) > 1:
-            word_filters = Q()
-            for word in words:
-                word_filters |= (
-                    Q(name__icontains=word) | 
-                    Q(description__icontains=word) | 
-                    Q(model__name__icontains=word) |
-                    Q(model__specifications__icontains=word)
-                )
-            results = (results | DataObject.objects.filter(word_filters)).distinct()
 
-    return render(request, 'data/includes/search_results_list.html', {'results': results[:10]})
+    # 2. Если введено несколько слов (например, "4 стол" или "стол 4"),
+    # ищем объекты, где встречаются ВСЕ эти слова одновременно
+    if len(words) > 1:
+        words_q = Q()
+        for word in words:
+            words_q &= (
+                Q(name__icontains=word) |
+                Q(inventory_number__icontains=word) |
+                Q(description__icontains=word) |
+                Q(model__name__icontains=word) |
+                Q(comments__text__icontains=word) |
+                Q(actions__action__icontains=word)
+            )
+        # Объединяем фильтры: точная фраза ИЛИ совпадение всех слов
+        search_filter = exact_q | words_q
+    else:
+        search_filter = exact_q
+
+    results = DataObject.objects.filter(
+        search_filter
+    ).select_related('model', 'model__object_type').distinct()[:10]
+
+    return render(request, 'data/includes/search_results_list.html', {'results': results})
 
 
 # --- СПРАВОЧНИК И ПРОВОДНИК ---
@@ -688,41 +709,57 @@ def model_tree_view(request):
 
 @login_required
 def service_object_view(request, pk):
-    """Выполнение ТО объекта"""
+    """Выполнение ТО объекта (плановое или внеплановое)"""
     obj = get_object_or_404(DataObject, pk=pk)
+    effective_yt_id, target_yt_obj = obj.get_effective_youtrack_issue()
     
     if request.method == 'POST':
+        is_unplanned = request.POST.get('is_unplanned') == 'on'
         date_str = request.POST.get('maintenance_date')
         spent_time = request.POST.get('spent_time', '').strip()
         custom_comment = request.POST.get('comment', '').strip()
         
-        if date_str:
+        # 1. Если ТО ПЛАНОВОЕ — обновляем дату следующего обслуживания
+        if not is_unplanned and date_str:
             maintenance_date = datetime.strptime(date_str, '%Y-%m-%d').date()
             obj.next_maintenance_date = maintenance_date
             obj.save(update_fields=['next_maintenance_date'])
-            
-            action_text = custom_comment if custom_comment else "Плановое техническое обслуживание выполнено"
-            
-            history_entry = ActionHistory.objects.create(
-                user=request.user,
-                data_object=obj,
-                action_type='maintenance',
-                action=action_text
-            )
+        
+        # 2. Формируем текст записи для истории и YouTrack
+        if is_unplanned:
+            prefix_type = "Внеплановое ТО"
+            date_info = f"(след. ТО по графику: {obj.next_maintenance_date.strftime('%d.%m.%Y')})" if obj.next_maintenance_date else ""
+            default_desc = f"Внеплановое техническое обслуживание {date_info}".strip()
+        else:
+            prefix_type = "Плановое ТО"
+            date_info = f"(след. ТО: {obj.next_maintenance_date.strftime('%d.%m.%Y')})" if obj.next_maintenance_date else ""
+            default_desc = f"Плановое техническое обслуживание выполнено {date_info}".strip()
 
-            if obj.youtrack_issue_id and spent_time:
-                work_item_desc = custom_comment if custom_comment else f"Техническое обслуживание (след. ТО: {maintenance_date.strftime('%d.%m.%Y')})"
-                
-                success_work, work_id_or_err = add_work_item_to_youtrack(
-                    issue_id=obj.youtrack_issue_id,
-                    duration_str=spent_time,
-                    text=work_item_desc,
-                    user=request.user
-                )
-                
-                if success_work and work_id_or_err:
-                    history_entry.youtrack_id = work_id_or_err
-                    history_entry.save(update_fields=['youtrack_id'])
+        action_text = f"[{prefix_type}] {custom_comment}" if custom_comment else default_desc
+
+        # 3. Фиксируем запись в истории объекта
+        history_entry = ActionHistory.objects.create(
+            user=request.user,
+            data_object=obj,
+            action_type='maintenance',
+            action=action_text
+        )
+
+        # 4. Списываем время в YouTrack (свою задачу или родительскую)
+        if effective_yt_id and spent_time:
+            comp_prefix = f"[{obj.name or obj.model.name}] " if obj != target_yt_obj else ""
+            work_item_desc = f"{comp_prefix}{action_text}"
+            
+            success_work, work_id_or_err = add_work_item_to_youtrack(
+                issue_id=effective_yt_id,
+                duration_str=spent_time,
+                text=work_item_desc,
+                user=request.user
+            )
+            
+            if success_work and work_id_or_err:
+                history_entry.youtrack_id = work_id_or_err
+                history_entry.save(update_fields=['youtrack_id'])
         
         node_html = render_to_string('data/tree/object_tree_node.html', {'node': obj}, request=request)
         date_display_str = obj.next_maintenance_date.strftime('%d.%m.%Y') if obj.next_maintenance_date else "Не запланировано"
@@ -736,9 +773,10 @@ def service_object_view(request, pk):
     
     return render(request, 'data/tree/service_modal_body.html', {
         'obj': obj,
-        'proposed_date': proposed_date
+        'proposed_date': proposed_date,
+        'effective_yt_id': effective_yt_id,
+        'target_yt_obj': target_yt_obj
     })
-
 
 # --- УДАЛЕНИЕ ---
 
@@ -877,10 +915,22 @@ def object_detail_view(request, pk):
     prev_active_id = request.session.get('active_object_id')
     request.session['active_object_id'] = str(pk)
     
+    # Автоматическая синхронизация при открытии карточки объекта
+    sync_status = None
+    sync_message = ""
+    if obj.youtrack_issue_id:
+        sync_success, sync_message = sync_issue_from_youtrack(obj, request.user)
+        sync_status = 'success' if sync_success else 'error'
+        if sync_success:
+            # Обновляем объект, если из YouTrack подтянулось новое описание
+            obj.refresh_from_db()
+
     context = {
         'obj': obj,
         'parent': obj.parent,
         'active_tab': 'short_info',
+        'sync_status': sync_status,
+        'sync_message': sync_message,
     }
     
     response_content = render_to_string('data/object/object_details.html', context, request=request)
@@ -1018,7 +1068,19 @@ def edit_youtrack_view(request, pk):
             action_type='update',
             action=f"Изменен ID задачи Youtrack на: {new_yt or 'отсутствует'}."
         )
-        return render(request, 'data/object/inline_youtrack.html', {'obj': obj, 'editing': False})
+
+        sync_status = None
+        sync_message = ""
+        if obj.youtrack_issue_id:
+            sync_success, sync_message = sync_issue_from_youtrack(obj, request.user)
+            sync_status = 'success' if sync_success else 'error'
+
+        return render(request, 'data/object/inline_youtrack.html', {
+            'obj': obj,
+            'editing': False,
+            'sync_status': sync_status,
+            'sync_message': sync_message
+        })
         
     if request.GET.get('cancel') == '1':
         return render(request, 'data/object/inline_youtrack.html', {'obj': obj, 'editing': False})
@@ -1170,6 +1232,9 @@ def add_comment_view(request, pk):
     file = request.FILES.get('file')
     yt_errors = []
     
+    # Ищем эффективную задачу YouTrack (свою или первого родителя)
+    effective_yt_id, target_yt_obj = obj.get_effective_youtrack_issue()
+
     if text or file:
         comment = Comment.objects.create(
             user=request.user,
@@ -1187,12 +1252,13 @@ def add_comment_view(request, pk):
                 is_preview=False
             )
             
-        if obj.youtrack_issue_id:
+        if effective_yt_id:
+            # Загружаем файл в YouTrack карточку
             if attachment_obj and attachment_obj.path:
                 try:
                     with open(attachment_obj.path.path, 'rb') as f:
                         success_file, result_file = upload_attachment_to_youtrack(
-                            issue_id=obj.youtrack_issue_id,
+                            issue_id=effective_yt_id,
                             file_obj=f,
                             user=request.user
                         )
@@ -1204,6 +1270,9 @@ def add_comment_view(request, pk):
                 except Exception as e:
                     yt_errors.append(f"Ошибка чтения файла для YouTrack: {e}")
 
+            # Формируем текст комментария с указанием компонента (если пишем в родителя)
+            component_prefix = f"**[{obj.name or obj.model.name}]** " if obj != target_yt_obj else ""
+            
             yt_text = text
             if attachment_obj and attachment_obj.is_image:
                 image_md = f"\n\n![]({attachment_obj.filename})"
@@ -1211,10 +1280,12 @@ def add_comment_view(request, pk):
             elif not yt_text and attachment_obj:
                 yt_text = f"Прикреплен файл: {attachment_obj.filename}"
 
-            if yt_text:
+            full_yt_text = f"{component_prefix}{yt_text}" if yt_text else ""
+
+            if full_yt_text:
                 success_txt, result_txt = send_comment_to_youtrack(
-                    issue_id=obj.youtrack_issue_id,
-                    text=yt_text,
+                    issue_id=effective_yt_id,
+                    text=full_yt_text,
                     user=request.user
                 )
                 if success_txt and result_txt:
@@ -1233,7 +1304,8 @@ def add_comment_view(request, pk):
 
 @login_required
 def edit_comment_view(request, pk):
-    comment = get_object_or_404(Comment, pk=pk)
+    comment = get_object_or_404(Comment.objects.select_related('data_object', 'user'), pk=pk)
+    obj = comment.data_object
     
     if comment.user != request.user and not request.user.is_admin_or_higher:
         return HttpResponseForbidden("Вы не можете редактировать чужие комментарии.")
@@ -1243,7 +1315,22 @@ def edit_comment_view(request, pk):
         if text:
             comment.text = text
             comment.save(update_fields=['text'])
-        return render(request, 'data/object/comment_item.html', {'comment': comment})
+            
+            # Синхронизируем обновленный текст в YouTrack
+            effective_yt_id, target_yt_obj = obj.get_effective_youtrack_issue()
+            if effective_yt_id and comment.youtrack_id:
+                component_prefix = f"**[{obj.name or obj.model.name}]**\n" if obj != target_yt_obj else ""
+                full_yt_text = f"{component_prefix}{text}"
+                
+                update_comment_in_youtrack(
+                    issue_id=effective_yt_id,
+                    comment_yt_id=comment.youtrack_id,
+                    text=full_yt_text,
+                    user=request.user
+                )
+
+        comments = obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
+        return render(request, 'data/object/object_tab_comments.html', {'obj': obj, 'comments': comments})
         
     return render(request, 'data/object/comment_item_edit.html', {'comment': comment})
 
@@ -1254,24 +1341,26 @@ def delete_comments_bulk(request):
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
     
+    effective_yt_id, _ = obj.get_effective_youtrack_issue()
+    
     if comment_ids:
         queryset = Comment.objects.filter(uuid__in=comment_ids, data_object=obj).prefetch_related('attachments')
         
         if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
             
-        if obj.youtrack_issue_id:
+        if effective_yt_id:
             for comment in queryset:
                 for att in comment.attachments.all():
                     if att.youtrack_id:
                         delete_attachment_from_youtrack(
-                            issue_id=obj.youtrack_issue_id,
+                            issue_id=effective_yt_id,
                             attachment_yt_id=att.youtrack_id,
                             user=request.user
                         )
                 if comment.youtrack_id:
                     delete_comment_from_youtrack(
-                        issue_id=obj.youtrack_issue_id,
+                        issue_id=effective_yt_id,
                         comment_yt_id=comment.youtrack_id,
                         user=request.user
                     )
@@ -1305,14 +1394,50 @@ def add_attachment_view(request, pk):
                     status=400
                 )
             
+            # Снимаем отметку со старого превью
             Attachment.objects.filter(data_object=obj, is_preview=True).update(is_preview=False)
             
-        Attachment.objects.create(
+        attachment_obj = Attachment.objects.create(
             user=request.user,
             data_object=obj,
             path=file,
             is_preview=is_preview_upload
         )
+        
+        # Отправляем файл в YouTrack (карточку объекта или первого родителя)
+        effective_yt_id, target_yt_obj = obj.get_effective_youtrack_issue()
+        if effective_yt_id and attachment_obj.path:
+            try:
+                with open(attachment_obj.path.path, 'rb') as f:
+                    success_file, result_file = upload_attachment_to_youtrack(
+                        issue_id=effective_yt_id,
+                        file_obj=f,
+                        user=request.user
+                    )
+                    if success_file and result_file:
+                        attachment_obj.youtrack_id = result_file
+                        attachment_obj.save(update_fields=['youtrack_id'])
+                        
+                        comp_name = obj.name or obj.model.name
+                        
+                        # 1. Если загружено фото превью — прикрепляем файл и создаем пост с картинкой в YouTrack
+                        if is_preview_upload:
+                            msg_prefix = f"**[{comp_name}]** " if obj != target_yt_obj else ""
+                            comment_text = f"{msg_prefix}Прикреплено фото (превью): {attachment_obj.filename}\n\n![]({attachment_obj.filename})"
+                            send_comment_to_youtrack(
+                                issue_id=effective_yt_id,
+                                text=comment_text,
+                                user=request.user
+                            )
+                        # 2. Если это документ дочернего компонента — оставляем понятную заметку в YouTrack
+                        elif obj != target_yt_obj:
+                            send_comment_to_youtrack(
+                                issue_id=effective_yt_id,
+                                text=f"**[{comp_name}]** Прикреплен новый документ: {attachment_obj.filename}",
+                                user=request.user
+                            )
+            except Exception as e:
+                pass
         
     if is_preview_upload:
         preview = Attachment.objects.filter(data_object=obj, is_preview=True).first()
@@ -1328,17 +1453,19 @@ def delete_attachments_bulk(request):
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
     
+    effective_yt_id, _ = obj.get_effective_youtrack_issue()
+    
     if file_ids:
         queryset = Attachment.objects.filter(uuid__in=file_ids, data_object=obj)
         
         if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
             
-        if obj.youtrack_issue_id:
+        if effective_yt_id:
             for att in queryset:
                 if att.youtrack_id:
                     delete_attachment_from_youtrack(
-                        issue_id=obj.youtrack_issue_id,
+                        issue_id=effective_yt_id,
                         attachment_yt_id=att.youtrack_id,
                         user=request.user
                     )

@@ -1,49 +1,126 @@
 <!-- templates/data/settings/tab_object_types.html -->
-<div class="card border-0 shadow-sm p-4 bg-white animate-fade" style="border-radius: 12px;">
-    
+<div class="animate-fade">
+    <!-- Шапка вкладки -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h5 class="fw-bold text-dark m-0"><i class="bi bi-tags text-primary me-2"></i>Типы объектов</h5>
-        <button type="button" class="btn btn-primary btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addObjectTypeModal">
+        <h5 class="fw-bold text-dark m-0">
+            <i class="bi bi-tags text-primary me-2"></i>Типы оборудования
+        </h5>
+        {% if not request.user.is_junior %}
+        <button type="button" class="btn btn-primary btn-sm px-3 fw-bold d-flex align-items-center" 
+                data-bs-toggle="modal" data-bs-target="#addObjectTypeModal">
             <i class="bi bi-plus-lg me-1"></i> Добавить тип
         </button>
+        {% endif %}
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
-            <thead>
-                <tr class="text-muted border-bottom" style="font-size: 0.75rem;">
-                    <th class="py-2 text-uppercase">Название типа оборудования</th>
-                    <th class="py-2 text-uppercase text-center">Используется в моделях</th>
-                    <th class="py-2 text-uppercase text-end">Действие</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in object_types %}
-                <tr>
-                    <td class="fw-bold text-dark py-3">{{ item.type }}</td>
-                    <td class="text-center py-3">
-                        <span class="badge bg-light text-primary border rounded-pill px-3 py-1">{{ item.models_count }} мод.</span>
-                    </td>
-                    <td class="text-end py-3">
-                        <div id="error-container-type-{{ item.uuid }}" class="d-inline-block text-start me-2"></div>
+    <!-- Карточки типов объектов -->
+    {% for item in object_types %}
+    <div class="card border-0 shadow-sm mb-3 p-3 bg-white" style="border-radius: 10px;">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            
+            <!-- Левая колонка: Название типа и сводка -->
+            <div class="flex-grow-1">
+                <h6 class="fw-bold m-0 text-dark d-inline-block">
+                    <i class="bi bi-tag-fill text-muted me-1 small"></i> {{ item.type }}
+                </h6>
+                <div class="mt-1">
+                    <small class="text-muted" style="font-size: 0.8rem;">
+                        Моделей: <strong class="text-dark">{{ item.models_count }}</strong> | 
+                        Всего объектов: <strong class="text-dark">{{ item.objects_count }}</strong> шт.
+                    </small>
+                </div>
+            </div>
+            
+            <!-- Правая колонка: Кнопка раскрытия и кнопка удаления -->
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-light btn-sm fw-bold border text-primary" 
+                        type="button" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#collapse-type-{{ item.uuid }}" 
+                        aria-expanded="false" 
+                        style="font-size: 0.8rem;">
+                    Подключено: {{ item.models_count }} мод. ({{ item.objects_count }} об.) <i class="bi bi-chevron-down ms-1"></i>
+                </button>
+                
+                <div id="error-container-type-{{ item.uuid }}" class="d-inline-block small text-danger me-2"></div>
+                
+                {% if item.models_count == 0 %}
+                <button type="button" class="btn btn-outline-danger btn-sm border-0"
+                        hx-post="{% url 'delete_object_type' item.uuid %}"
+                        hx-target-error="#error-container-type-{{ item.uuid }}"
+                        hx-confirm="Вы уверены, что хотите удалить тип оборудования '{{ item.type }}'?"
+                        title="Удалить">
+                    <i class="bi bi-trash3"></i>
+                </button>
+                {% else %}
+                <span class="text-muted small px-2" title="Нельзя удалить: привязаны существующие модели"><i class="bi bi-lock-fill"></i></span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Раскрывающийся блок с моделями и объектами -->
+        <div class="collapse" id="collapse-type-{{ item.uuid }}">
+            <div class="mt-3 pt-3 border-top">
+                
+                <!-- 1. Список моделей этого типа -->
+                <div class="mb-3">
+                    <h6 class="fw-bold text-muted small text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">
+                        <i class="bi bi-layers me-1 text-purple"></i> Модели оборудования ({{ item.models.all|length }}):
+                    </h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for model in item.models.all %}
+                        <a href="{% url 'dict' %}?model={{ model.uuid }}" 
+                           class="badge bg-light text-dark border py-2 px-3 text-decoration-none rounded-3 d-inline-flex align-items-center hover-bg-light transition-all"
+                           style="font-size: 0.8rem;">
+                            <i class="bi bi-layers text-purple me-1.5"></i>
+                            <strong>{{ model.name }}</strong>
+                            <small class="text-muted ms-1.5">({{ model.data_objects.all|length }} об.)</small>
+                            <i class="bi bi-arrow-right-short text-muted ms-1" style="font-size: 0.9rem;"></i>
+                        </a>
+                        {% empty %}
+                        <small class="text-muted py-1">Модели этого типа еще не созданы.</small>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- 2. Список конкретных объектов оборудования -->
+                <div>
+                    <h6 class="fw-bold text-muted small text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">
+                        <i class="bi bi-box-seam me-1 text-primary"></i> Объекты оборудования ({{ item.objects_count }}):
+                    </h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for model in item.models.all %}
+                            {% for obj in model.data_objects.all %}
+                            <a href="{% url 'dict' %}?object={{ obj.uuid }}" 
+                               class="badge bg-light text-dark border py-2 px-3 text-decoration-none rounded-3 d-inline-flex align-items-center hover-bg-light transition-all"
+                               style="font-size: 0.8rem;">
+                                <i class="bi bi-box-seam text-secondary me-2"></i>
+                                {{ obj.name|default:obj.model.name }}
+                                {% if obj.inventory_number %}
+                                    <small class="text-muted ms-1">| {{ obj.inventory_number }}</small>
+                                {% endif %}
+                                <i class="bi bi-arrow-right-short text-muted ms-1" style="font-size: 0.9rem;"></i>
+                            </a>
+                            {% endfor %}
+                        {% empty %}
+                            <small class="text-muted py-1">Нет зарегистрированных объектов в системе.</small>
+                        {% endfor %}
                         
-                        <button type="button" class="btn btn-outline-danger btn-sm border-0"
-                                hx-post="{% url 'delete_object_type' item.uuid %}"
-                                hx-target-error="#error-container-type-{{ item.uuid }}"
-                                hx-confirm="Вы уверены, что хотите удалить тип оборудования '{{ item.type }}'?"
-                                title="Удалить">
-                            <i class="bi bi-trash3"></i>
-                        </button>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="3" class="text-center py-4 text-muted">Список пуст.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        {% if item.models_count > 0 and item.objects_count == 0 %}
+                            <small class="text-muted py-1">Нет зарегистрированных объектов для этих моделей.</small>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>
+        </div>
     </div>
+    {% empty %}
+    <div class="card p-5 border-0 shadow-sm bg-white text-center text-muted" style="border-radius: 12px;">
+        <i class="bi bi-tags fs-1 mb-2"></i>
+        Типы оборудования не найдены
+    </div>
+    {% endfor %}
 </div>
 
 <!-- Модальное окно создания типа объекта -->
@@ -59,8 +136,9 @@
                   hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('addObjectTypeModal')).hide(); }">
                 {% csrf_token %}
                 <div class="modal-body py-4">
-                    <label class="form-label small fw-bold text-muted">НАЗВАНИЕ ТИПА ОБОРУДОВАНИЯ</label>
-                    <input type="text" name="type" class="form-control bg-light border-0 py-2 shadow-none" placeholder="Котлы, Насосы, Кабели..." required autocomplete="off">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Название типа оборудования *</label>
+                    <input type="text" name="type" class="form-control bg-light border-0 py-2 shadow-none" 
+                           placeholder="Котлы, Насосы, Серверы..." required autocomplete="off" style="font-size: 0.9rem;">
                 </div>
                 <div class="modal-footer border-0 pt-0">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>

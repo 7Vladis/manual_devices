@@ -23,39 +23,57 @@
     </form>
 {% else %}    
     <span class="d-inline-flex align-items-center">
-        <span hx-get="{% url 'edit_youtrack' obj.uuid %}" 
-              hx-target="#youtrack-display-container" 
-              hx-swap="outerHTML" 
-              style="cursor: pointer;" 
-              class="editable-trigger">
-            <span class="text-muted me-1">Youtrack:</span>
-            {% if obj.youtrack_issue_id %}
-                <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" 
-                   target="_blank" 
-                   class="text-primary fw-bold" 
-                   onclick="event.stopPropagation();"
-                   title="Перейти в YouTrack">
-                    {{ obj.youtrack_issue_id }}
-                </a>
-            {% else %}
-                <strong class="text-muted fw-semibold">добавить</strong>
-            {% endif %}
-            {% if not request.user.is_junior %}
-            <i class="bi bi-pencil-square edit-icon"></i>
-            {% endif %}
-        </span>
+        {% if not request.user.is_junior %}
+            <span hx-get="{% url 'edit_youtrack' obj.uuid %}" 
+                  hx-target="#youtrack-display-container" 
+                  hx-swap="outerHTML" 
+                  style="cursor: pointer;" 
+                  class="editable-trigger">
+                <span class="text-muted me-1">Youtrack:</span>
+                {% if obj.youtrack_issue_id %}
+                    <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" 
+                       target="_blank" 
+                       class="text-primary fw-bold" 
+                       onclick="event.stopPropagation();"
+                       title="Перейти в YouTrack">
+                        {{ obj.youtrack_issue_id }}
+                    </a>
+                {% else %}
+                    <strong class="text-muted fw-semibold">добавить</strong>
+                {% endif %}
+                <i class="bi bi-pencil-square edit-icon"></i>
+            </span>
+        {% else %}
+            <span>
+                <span class="text-muted me-1">Youtrack:</span>
+                {% if obj.youtrack_issue_id %}
+                    <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" 
+                       target="_blank" 
+                       class="text-primary fw-bold"
+                       title="Перейти в YouTrack">
+                        {{ obj.youtrack_issue_id }}
+                    </a>
+                {% else %}
+                    <strong class="text-muted fw-semibold">отсутствует</strong>
+                {% endif %}
+            </span>
+        {% endif %}
 
-        <!-- КНОПКА СИНХРОНИЗАЦИИ (Отображается ТОЛЬКО если есть ID задачи YouTrack) -->
+        <!-- ИНДИКАТОР СИНХРОНИЗАЦИИ (Вместо старой кнопки) -->
         {% if obj.youtrack_issue_id %}
-        <button type="button" 
-                class="btn btn-sm btn-link text-primary p-0 ms-2 shadow-none border-0 d-inline-flex align-items-center"
-                hx-post="{% url 'sync_youtrack' obj.uuid %}"
-                hx-target="#detail-container"
-                hx-indicator="#sync-spinner-{{ obj.uuid }}"
-                title="Синхронизировать данные и файлы из YouTrack">
-            <i class="bi bi-arrow-repeat fs-6" id="sync-icon-{{ obj.uuid }}"></i>
-            <span class="spinner-border spinner-border-sm ms-1 htmx-indicator" id="sync-spinner-{{ obj.uuid }}" role="status"></span>
-        </button>
+            {% if sync_status == 'success' %}
+                <span class="ms-2 text-success d-inline-flex align-items-center" 
+                      style="cursor: help;"
+                      title="{{ sync_message|default:'Данные успешно синхронизированы с YouTrack' }}">
+                    <i class="bi bi-check-circle-fill fs-6"></i>
+                </span>
+            {% elif sync_status == 'error' %}
+                <span class="ms-2 text-danger d-inline-flex align-items-center animate-fade" 
+                      style="cursor: help;"
+                      title="Ошибка синхронизации: {{ sync_message }}">
+                    <i class="bi bi-exclamation-circle-fill fs-6"></i>
+                </span>
+            {% endif %}
         {% endif %}
     </span>
 {% endif %}

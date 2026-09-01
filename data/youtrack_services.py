@@ -225,24 +225,56 @@ def delete_attachment_from_youtrack(issue_id: str, attachment_yt_id: str, user) 
         return False, msg
 
 
-def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
-    """
-    Полная двусторонняя синхронизация:
-    1. Обновляет описание.
-    2. Добавляет новые комментарии, файлы и workItems из YouTrack.
-    3. УДАЛЯЕТ из Django те комментарии, файлы и workItems, которые были удалены в YouTrack.
-    """
+def update_comment_in_youtrack(issue_id: str, comment_yt_id: str, text: str, user) -> tuple[bool, str]:
+    """Обновляет текст комментария в YouTrack от имени пользователя"""
     token = get_auth_token(user)
-    if not token:
-        return False, "У вас не указан персональный токен YouTrack в профиле."
+    if not token or not issue_id or not comment_yt_id:
+        return False, "Недостаточно данных для обновления комментария в YouTrack"
 
     base_url = getattr(settings, 'YOUTRACK_BASE_URL', '').rstrip('/')
     if not base_url:
         return False, "Базовый URL YouTrack не настроен на сервере."
 
+    url = f"{base_url}/api/issues/{issue_id}/comments/{comment_yt_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    payload = {"text": text}
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code in [200, 201]:
+            logger.info(f"Комментарий YouTrack ({comment_yt_id}) успешно обновлен пользователем {user}")
+            return True, "Комментарий обновлен в YouTrack"
+        else:
+            msg = f"Ошибка обновления комментария в YouTrack ({response.status_code}): {response.text}"
+            logger.error(msg)
+            return False, msg
+
+    except requests.exceptions.RequestException as e:
+        msg = f"Не удалось подключиться к YouTrack для обновления комментария: {e}"
+        logger.error(msg)
+        return False, msg
+
+
+def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
+    """
+    Автоматическая двусторонняя синхронизация с YouTrack:
+    Возвращает (True, "сообщение об успехе") или (False, "краткая причина ошибки").
+    """
+    token = get_auth_token(user)
+    if not token:
+        return False, "В вашем профиле не указан персональный токен YouTrack"
+
+    base_url = getattr(settings, 'YOUTRACK_BASE_URL', '').rstrip('/')
+    if not base_url:
+        return False, "Базовый URL YouTrack не настроен в конфигурации сервера"
+
     issue_id = data_object.youtrack_issue_id
     if not issue_id:
-        return False, "У объекта не задан ID задачи YouTrack."
+        return False, "У объекта не задан ID задачи YouTrack"
 
     url = f"{base_url}/api/issues/{issue_id}"
     fields_query = (
@@ -257,21 +289,25 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
     }
 
     try:
-        response = requests.get(url, headers=headers, params={"fields": fields_query}, timeout=15)
-        if response.status_code != 200:
-            return False, f"Ошибка YouTrack ({response.status_code}): {response.text}"
+        response = requests.get(url, headers=headers, params={"fields": fields_query}, timeout=5)
+        
+        if response.status_code in [401, 403]:
+            return False, "Неверный токен YouTrack или недостаточно прав доступа"
+        elif response.status_code == 404:
+            return False, f"Задача {issue_id} не найдена в YouTrack"
+        elif response.status_code != 200:
+            return False, f"Ошибка YouTrack ({response.status_code})"
 
         data = response.json()
         User = get_user_model()
         from .models import Comment, Attachment, ActionHistory
 
-        # 1. Синхронизируем описание объекта (Markdown)
+        # 1. Синхронизируем описание объекта
         yt_description = data.get('description', '')
         if yt_description and yt_description != data_object.description:
             data_object.description = yt_description
             data_object.save(update_fields=['description'])
 
-        # Наборы актуальных ID из YouTrack для очистки удаленных
         active_yt_comment_ids = set()
         active_yt_attachment_ids = set()
         active_yt_work_item_ids = set()
@@ -280,7 +316,7 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
         new_files_count = 0
         new_work_items_count = 0
 
-        # 2. Синхронизируем комментарии и вложения к ним
+        # 2. Синхронизируем комментарии и их вложения
         yt_comments = data.get('comments', [])
         for c_data in yt_comments:
             c_id = c_data.get('id')
@@ -309,7 +345,6 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                 )
                 new_comments_count += 1
 
-            # Вложения этого комментария
             for att_data in c_data.get('attachments', []):
                 att_id = att_data.get('id')
                 if not att_id:
@@ -320,7 +355,7 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                     att_name = att_data.get('name')
                     att_url = att_data.get('url')
                     full_att_url = f"{base_url}{att_url}" if att_url.startswith('/') else att_url
-                    file_res = requests.get(full_att_url, headers=headers, timeout=20)
+                    file_res = requests.get(full_att_url, headers=headers, timeout=10)
                     
                     if file_res.status_code == 200:
                         file_content = ContentFile(file_res.content, name=att_name)
@@ -334,7 +369,7 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                         )
                         new_files_count += 1
 
-        # 3. Синхронизируем общие вложения карточки задачи
+        # 3. Синхронизируем общие файлы карточки
         yt_issue_attachments = data.get('attachments', [])
         for att_data in yt_issue_attachments:
             att_id = att_data.get('id')
@@ -342,8 +377,19 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                 continue
             active_yt_attachment_ids.add(att_id)
 
-            if not Attachment.objects.filter(data_object=data_object, youtrack_id=att_id).exists():
-                att_name = att_data.get('name')
+            att_name = att_data.get('name') or ''
+            
+            # Проверяем, существует ли уже это вложение
+            att_obj = Attachment.objects.filter(data_object=data_object, youtrack_id=att_id).first()
+
+            # Ищем, не принадлежит ли файл какому-либо комментарию (по имени файла в тексте Markdown)
+            matched_comment = None
+            for c in data_object.comments.all():
+                if att_name and att_name in c.text:
+                    matched_comment = c
+                    break
+
+            if not att_obj:
                 att_url = att_data.get('url')
                 full_att_url = f"{base_url}{att_url}" if att_url.startswith('/') else att_url
                 file_res = requests.get(full_att_url, headers=headers, timeout=20)
@@ -361,21 +407,26 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                     Attachment.objects.create(
                         user=author_user or user,
                         data_object=data_object,
-                        comment=None,
+                        comment=matched_comment,  # Привязываем к комментарию, если имя совпало
                         path=file_content,
                         is_preview=False,
                         youtrack_id=att_id,
                         created_at=created_dt
                     )
                     new_files_count += 1
+            else:
+                # Если файл уже скачан, но ранее не был привязан к комментарию — привязываем его
+                if matched_comment and not att_obj.comment:
+                    att_obj.comment = matched_comment
+                    att_obj.save(update_fields=['comment'])
 
-        # 4. Синхронизируем WorkItems (списания времени / работы)
+        # 4. Синхронизируем списания времени (WorkItems)
         work_items_url = f"{base_url}/api/issues/{issue_id}/timeTracking/workItems"
         work_items_res = requests.get(
             work_items_url,
             headers=headers,
             params={"fields": "id,text,created,date,author(id,name,email)"},
-            timeout=15
+            timeout=10
         )
 
         if work_items_res.status_code == 200:
@@ -409,20 +460,17 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                     )
                     new_work_items_count += 1
 
-        # 5. ОЧИСТКА: Удаляем из Django то, что было удалено в YouTrack
-        # Удаляем удаленные в YouTrack комментарии
+        # 5. Удаляем локальные записи, удаленные в YouTrack
         deleted_comments_count, _ = Comment.objects.filter(
             data_object=data_object, 
             youtrack_id__isnull=False
         ).exclude(youtrack_id__in=active_yt_comment_ids).delete()
 
-        # Удаляем удаленные в YouTrack файлы
         deleted_files_count, _ = Attachment.objects.filter(
             data_object=data_object, 
             youtrack_id__isnull=False
         ).exclude(youtrack_id__in=active_yt_attachment_ids).delete()
 
-        # Удаляем удаленные в YouTrack записи истории (workItems)
         deleted_works_count, _ = ActionHistory.objects.filter(
             data_object=data_object, 
             youtrack_id__isnull=False
@@ -439,9 +487,11 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                 action=f"Синхронизация с YouTrack: добавлено ({total_added}), удалено ({total_deleted})."
             )
 
-        return True, f"Синхронизировано: добавлено +{total_added}, удалено -{total_deleted}."
+        return True, "Данные успешно синхронизированы с YouTrack"
 
+    except requests.exceptions.ConnectionError:
+        return False, "Не удалось подключиться к серверу YouTrack (сервер недоступен)"
+    except requests.exceptions.Timeout:
+        return False, "Превышено время ожидания ответа от YouTrack"
     except requests.exceptions.RequestException as e:
-        msg = f"Ошибка сети при синхронизации с YouTrack: {e}"
-        logger.error(msg)
-        return False, msg
+        return False, f"Сетевая ошибка при обращении к YouTrack: {e}"

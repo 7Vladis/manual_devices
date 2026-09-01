@@ -85,6 +85,27 @@ class DataObject(models.Model):
     def __str__(self):
         return self.name or f"{self.model.name} ({self.inventory_number})"
 
+    def get_effective_youtrack_issue(self):
+        """
+        Возвращает кортеж (youtrack_issue_id, target_object):
+        1. Если у объекта есть свой youtrack_issue_id -> возвращает (youtrack_issue_id, self)
+        2. Иначе поднимается по цепочке parent и берет ID у первого встреченного родителя.
+        3. Если ни у кого в ветке нет задачи -> (None, None)
+        """
+        curr = self
+        visited = set()
+        while curr and curr.uuid not in visited:
+            if curr.youtrack_issue_id:
+                return curr.youtrack_issue_id, curr
+            visited.add(curr.uuid)
+            curr = curr.parent
+        return None, None
+
+    @property
+    def effective_youtrack_issue_id(self):
+        issue_id, _ = self.get_effective_youtrack_issue()
+        return issue_id
+
 
 class ActionHistory(models.Model):
     ACTION_TYPE_CHOICES = [

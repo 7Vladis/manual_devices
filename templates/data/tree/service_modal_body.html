@@ -1,8 +1,9 @@
-<!-- START OF FILE manual_devices-develop/templates/data/tree/service_modal_body.html -->
+<!-- templates/data/tree/service_modal_body.html -->
 <div class="modal-header border-0 pb-0">
-    <h5 class="modal-title fw-bold">Техническое обслуживание</h5>
+    <h5 class="modal-title fw-bold text-dark">Техническое обслуживание</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
+
 <form hx-post="{% url 'service_object' obj.uuid %}" 
       hx-target="#node-{{ obj.uuid }}" 
       hx-swap="outerHTML"
@@ -10,38 +11,77 @@
     {% csrf_token %}
     <div class="modal-body py-3 text-center">
         <i class="bi bi-tools text-primary fs-1 mb-2 d-block"></i>
-        <p class="text-muted small">Подтвердите выполнение работ для объекта:<br>
-            <strong class="text-dark">{{ obj.name|default:obj.model.name }}</strong>
+        <p class="text-muted small mb-3">Фиксация выполненных работ для объекта:<br>
+            <strong class="text-dark fs-6">{{ obj.name|default:obj.model.name }}</strong>
         </p>
 
-        {% if obj.youtrack_issue_id and not request.user.youtrack_token %}
+        <!-- Предупреждение YouTrack -->
+        {% if effective_yt_id and not request.user.youtrack_token %}
         <div class="alert alert-warning py-2 px-3 text-start small mb-3 rounded-3 animate-fade">
             <div class="d-flex align-items-center">
                 <i class="bi bi-exclamation-triangle-fill me-2 text-warning fs-5"></i>
                 <div>
-                    <strong>Внимание:</strong> У вас не настроен персональный токен YouTrack. Запись о ТО и списание времени <strong>не попадут</strong> в задачу {{ obj.youtrack_issue_id }}.
+                    <strong>Внимание:</strong> У вас не настроен персональный токен YouTrack. Запись о ТО и списание времени <strong>не попадут</strong> в задачу <strong>{{ effective_yt_id }}</strong>.
                 </div>
             </div>
         </div>
         {% endif %}
 
-        <!-- Поле описания выполненных работ -->
+        <!-- ПЕРЕКЛЮЧАТЕЛЬ: Внеплановое обслуживание -->
+        <div class="p-3 bg-light rounded-3 border mb-3 text-start">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <label class="form-check-label fw-bold small text-dark d-block" for="isUnplannedCheck" style="cursor: pointer;">
+                        Внеплановое обслуживание / Ремонт
+                    </label>
+                    <small class="text-muted d-block" style="font-size: 0.73rem; line-height: 1.2;">
+                        Сохранить текущую плановую дату ТО без изменений
+                    </small>
+                </div>
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input shadow-none" type="checkbox" name="is_unplanned" id="isUnplannedCheck"
+                           style="cursor: pointer; transform: scale(1.15);"
+                           onchange="
+                                const dateGroup = document.getElementById('next-date-group');
+                                const dateInput = document.getElementById('maintenance-date-input');
+                                const unplannedNotice = document.getElementById('unplanned-notice');
+                                if (this.checked) {
+                                    dateGroup.classList.add('d-none');
+                                    dateInput.removeAttribute('required');
+                                    unplannedNotice.classList.remove('d-none');
+                                } else {
+                                    dateGroup.classList.remove('d-none');
+                                    dateInput.setAttribute('required', 'required');
+                                    unplannedNotice.classList.add('d-none');
+                                }
+                           ">
+                </div>
+            </div>
+
+            <!-- Подсказка, если включен внеплановый режим -->
+            <div id="unplanned-notice" class="d-none text-primary small mt-2 pt-2 border-top animate-fade" style="font-size: 0.75rem;">
+                <i class="bi bi-info-circle-fill me-1"></i> Дата планового ТО останется: 
+                <strong>{{ obj.next_maintenance_date|date:'d.m.Y'|default:'Не назначена' }}</strong>
+            </div>
+        </div>
+
+        <!-- 1. Описание выполненных работ -->
         <div class="mb-3 text-start">
             <label class="form-label small fw-bold text-muted text-uppercase d-block">Описание выполненных работ</label>
             <textarea name="comment" rows="3" class="form-control bg-light border-0 py-2 small shadow-none" 
-                      placeholder="Опишите, что было сделано"></textarea>
+                      placeholder="Опишите, что было сделано (например: заменен кулер, продувка от пыли)..."></textarea>
         </div>
         
-        <!-- Дата следующего ТО -->
-        <div class="mb-3 text-start">
+        <!-- 2. Дата следующего ТО (Скрывается при внеплановом обслуживании) -->
+        <div class="mb-3 text-start animate-fade" id="next-date-group">
             <label class="form-label small fw-bold text-muted text-uppercase d-block">Дата следующего ТО</label>
-            <input type="date" name="maintenance_date" class="form-control bg-light border-0 py-2" required 
+            <input type="date" name="maintenance_date" id="maintenance-date-input" class="form-control bg-light border-0 py-2 shadow-none" required 
                    value="{% if proposed_date %}{{ proposed_date|date:'Y-m-d' }}{% elif obj.next_maintenance_date %}{{ obj.next_maintenance_date|date:'Y-m-d' }}{% endif %}">
             
             {% if proposed_date %}
             <div class="form-text text-success d-flex align-items-center mt-2" style="font-size: 0.75rem;">
                 <i class="bi bi-info-circle-fill me-1"></i> 
-                Дата рассчитана автоматически на основе правила: 
+                Дата рассчитана по правилу: 
                 <strong class="ms-1">{{ obj.date_update_rule.name }}</strong>.
             </div>
             {% else %}
@@ -51,12 +91,19 @@
             {% endif %}
         </div>
 
-        {% if obj.youtrack_issue_id %}
-        <div class="mb-3 text-start">
+        <!-- 3. Списание времени в YouTrack -->
+        {% if effective_yt_id %}
+        <div class="mb-3 text-start animate-fade">
             <label class="form-label small fw-bold text-muted text-uppercase d-block">Потраченное время (для YouTrack)</label>
-            <input type="text" name="spent_time" class="form-control bg-light border-0 py-2" placeholder="Например: 1h 30m или 45m">
-            <div class="form-text text-muted" style="font-size: 0.73rem; line-height: 1.3;">
-                Время спишется в карточку задачи <strong class="text-primary">{{ obj.youtrack_issue_id }}</strong>. Допустимый формат: <code>1h</code>, <code>45m</code>, <code>1h 15m</code>.
+            <input type="text" name="spent_time" class="form-control bg-light border-0 py-2 shadow-none" placeholder="Например: 1h 30m или 45m">
+            
+            <div class="form-text text-muted mt-1" style="font-size: 0.73rem; line-height: 1.35;">
+                <i class="bi bi-clock-history me-1 text-primary"></i>
+                Время спишется в задачу 
+                <strong class="text-primary">{{ effective_yt_id }}</strong>
+                {% if obj != target_yt_obj %}
+                    (родитель: <em>{{ target_yt_obj.name|default:target_yt_obj.model.name }}</em>)
+                {% endif %}.
             </div>
         </div>
         {% endif %}

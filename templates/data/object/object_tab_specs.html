@@ -4,7 +4,6 @@
         <!-- Клик по кнопке загружает модель справа и переключает сайдбар на вкладку "Модели" слева (скрыто для младшего инженера) -->
         {% if not request.user.is_junior %}
         <a href="{% url 'dict' %}?model={{ obj.model.uuid }}" 
-           target="_blank" 
            class="btn btn-outline-primary btn-sm fw-bold text-decoration-none">
             <i class="bi bi-pencil-square me-1"></i> Изменить в модели
         </a>

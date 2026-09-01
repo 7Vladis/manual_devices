@@ -71,12 +71,11 @@
                 <div class="d-flex flex-wrap gap-2">
                     {% for obj in item.data_objects.all %}
                     <a href="{% url 'dict' %}?object={{ obj.uuid }}" 
-                       target="_blank" 
                        class="badge bg-light text-dark border py-2 px-3 text-decoration-none rounded-3 d-inline-flex align-items-center hover-bg-light transition-all"
                        style="font-size: 0.8rem;">
                         <i class="bi bi-box-seam text-secondary me-2"></i>
                         {{ obj.name|default:obj.model.name }}
-                        <i class="bi bi-box-arrow-up-right text-muted ms-2" style="font-size: 0.65rem;"></i>
+                        <i class="bi bi-arrow-right-short text-muted ms-1" style="font-size: 0.9rem;"></i>
                     </a>
                     {% empty %}
                     <small class="text-muted py-2">Нет подключенных объектов в системе.</small>

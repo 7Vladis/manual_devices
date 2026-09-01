@@ -1,18 +1,28 @@
-<div class="list-group list-group-flush rounded-3">
+<!-- templates/data/includes/search_results_list.html -->
+<div class="list-group list-group-flush rounded-3 shadow-lg" style="max-height: 380px; overflow-y: auto;">
     {% for obj in results %}
-        <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="list-group-item list-group-item-action p-3">
+    <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="list-group-item list-group-item-action p-3 border-bottom">
         <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <span class="fw-bold d-block text-primary">{{ obj.name|default:obj.model.name }}</span>
-                <small class="text-muted">{{ obj.model.name }} | {{ obj.inventory_number }}</small>
+            <div class="text-truncate me-2">
+                <span class="fw-bold d-block text-primary text-truncate">
+                    {{ obj.name|default:obj.model.name }}
+                </span>
+                <small class="text-muted text-truncate d-block" style="font-size: 0.8rem;">
+                    {{ obj.model.name }}{% if obj.inventory_number %} | {{ obj.inventory_number }}{% endif %}
+                </small>
             </div>
-            <div class="text-end">
-                <small class="d-block text-muted">След. ТО</small>
-                <span class="badge bg-light text-dark border">{{ obj.next_maintenance_date|date:"d.m.Y" }}</span>
+            
+            <div class="text-end flex-shrink-0">
+                <small class="d-block text-muted" style="font-size: 0.7rem;">След. ТО</small>
+                <span class="badge bg-light text-dark border" style="font-size: 0.75rem;">
+                    {{ obj.next_maintenance_date|date:"d.m.Y"|default:"—" }}
+                </span>
             </div>
         </div>
     </a>
     {% empty %}
-    <div class="p-4 text-center text-muted">Ничего не найдено</div>
+    <div class="p-4 text-center text-muted small">
+        Ничего не найдено
+    </div>
     {% endfor %}
 </div>
