@@ -12,7 +12,6 @@
     </div>
     
     <ul class="list-unstyled mb-0">
-        <!-- Системный элемент выхода наверх (..) -->
         {% if explorer_parent %}
         <li class="p-2 rounded-2 hover-bg-light transition-all mb-1 d-flex align-items-center" 
             style="cursor: pointer;"
@@ -25,17 +24,15 @@
         </li>
         {% endif %}
 
-        <!-- Список элементов -->
         {% for obj in objects %}
         <li class="tree-item d-flex align-items-center justify-content-between p-2 rounded-2 hover-bg-light transition-all mb-1 {% if active_object and active_object.uuid == obj.uuid %}bg-light-primary border border-primary-subtle active-tree-node{% endif %}" id="node-{{ obj.uuid }}">
             
-            <!-- Клик по названию открывает детали объекта в правом окне -->
             <div class="d-flex align-items-center text-truncate flex-grow-1 py-1 px-1 rounded-2" 
                  hx-get="{% url 'object_detail' obj.uuid %}" 
                  hx-target="#detail-container"
                  style="cursor: pointer; user-select: none;">
                 
-                {% if obj.subject_relations.all %}
+                {% if obj.children.all %}
                     <i class="bi bi-folder text-warning me-2 fs-5"></i>
                 {% else %}
                     <i class="bi bi-file-text text-secondary me-2 fs-5"></i>
@@ -46,10 +43,8 @@
                 </span>
             </div>
 
-            <!-- Действия -->
             <div class="tree-actions d-flex align-items-center gap-1 opacity-100 ms-2">                
-                <!-- Если у папки/объекта есть внутренности, показываем иконку стрелки для "проваливания" внутрь -->
-                {% if obj.subject_relations.all %}
+                {% if obj.children.all %}
                 <button type="button" class="btn btn-link text-primary p-1 m-0 d-flex align-items-center" 
                         hx-get="{% url 'explorer_navigate' obj.uuid %}"
                         hx-swap="none"
@@ -58,17 +53,15 @@
                 </button>
                 {% endif %}
 
-                <!-- Кнопка обслуживания -->
                 <button type="button" class="btn btn-link text-secondary p-1 m-0 d-flex align-items-center" 
-                        data-bs-toggle="modal" 
-                        data-bs-target="#serviceModal"
-                        hx-get="{% url 'service_object' obj.uuid %}"
-                        hx-target="#service-modal-content"
-                        title="Обслужить">
+                    data-bs-toggle="modal" 
+                    data-bs-target="#serviceModal"
+                    hx-get="{% url 'service_object' obj.uuid %}"
+                    hx-target="#service-modal-content"
+                    title="Обслужить">
                     <i class="bi bi-wrench-adjustable small"></i>
                 </button>
                 
-                <!-- Кнопка удаления (только не для junior) -->
                 {% if not request.user.is_junior %}
                     <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center" 
                             hx-post="{% url 'delete_object' obj.uuid %}"

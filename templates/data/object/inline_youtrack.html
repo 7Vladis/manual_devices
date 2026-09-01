@@ -38,7 +38,7 @@
                     {{ obj.youtrack_issue_id }}
                 </a>
             {% else %}
-                <span class="text-muted italic small">добавить</span>
+                <strong class="text-muted fw-semibold">добавить</strong>
             {% endif %}
             {% if not request.user.is_junior %}
             <i class="bi bi-pencil-square edit-icon"></i>

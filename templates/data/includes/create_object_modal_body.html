@@ -15,7 +15,7 @@
             <div class="col-md-6 border-end">
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase">Название объекта</label>
-                    <input type="text" name="name" class="form-control bg-light border-0" 
+                    <input type="text" name="name" class="form-control bg-light border-0 py-2" 
                            placeholder="Котельная установка КУ-5" required
                            hx-get="{% url 'check_object_name' %}"
                            hx-trigger="keyup changed delay:500ms"
@@ -26,53 +26,40 @@
                 
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase">Инвентарный номер</label>
-                    <input type="text" name="inventory_number" class="form-control bg-light border-0" placeholder="ИНВ-003429">
+                    <input type="text" name="inventory_number" class="form-control bg-light border-0 py-2" placeholder="ИНВ-003429">
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase">ID задачи в Youtrack</label>
-                    <input type="text" name="youtrack_issue_id" class="form-control bg-light border-0" placeholder="Например: MNT-412">
+                    <input type="text" name="youtrack_issue_id" class="form-control bg-light border-0 py-2" placeholder="Например: MNT-412">
                 </div>
                 
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Модель оборудования</label>
-                    <div id="search-wrapper-model" class="position-relative">
-                        <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2" 
+                    <label class="form-label small fw-bold text-muted text-uppercase">Модель оборудования *</label>
+                    <div id="search-wrapper-model" class="w-100 position-relative">
+                        <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2 w-100" 
                                placeholder="Введите название модели для поиска..."
                                hx-get="{% url 'suggest' %}?field=model"
                                hx-trigger="keyup changed delay:300ms"
                                hx-target="#results-model"
-                               autocomplete="off">
+                               autocomplete="off"
+                               required>
                         <div id="results-model"></div>
                     </div>
                 </div>
             </div>
             
-            <!-- Правая колонка: Настройка планирования и Иерархия -->
+            <!-- Правая колонка: Настройка планирования и Родитель -->
             <div class="col-md-6">
-                <!-- Режим планирования ТО -->
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Режим планирования ТО</label>
-                    <select name="maintenance_scheduling_mode" 
-                            class="form-select form-select-sm"
-                            hx-get="{% url 'toggle_scheduling_mode' %}"
-                            hx-target="#scheduling-mode-container"
-                            hx-swap="outerHTML"
-                            hx-trigger="change">
-                        <option value="manual" selected>Ручной выбор даты следующего ТО</option>
-                        <option value="auto">Автоматический расчет по правилу</option>
-                    </select>
-                </div>
-
-                <!-- Контейнер переключаемых полей (по умолчанию ручной режим) -->
+                <!-- Кастомный красивый переключатель режима ТО + поля -->
                 {% include 'data/includes/scheduling_mode_fields.html' with mode='manual' %}
 
                 <hr class="my-3 opacity-25">
 
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Родительский объект</label>
-                    <div id="search-wrapper-parent" class="position-relative">
-                        <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2" 
+                    <label class="form-label small fw-bold text-muted text-uppercase">Родительский объект (в состав чего входит)</label>
+                    <div id="search-wrapper-parent" class="w-100 position-relative">
+                        <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2 w-100" 
                                placeholder="Поиск родительского объекта..."
                                hx-get="{% url 'suggest' %}?field=parent"
                                hx-trigger="keyup changed delay:300ms"
@@ -80,19 +67,7 @@
                                autocomplete="off">
                         <div id="results-parent"></div>
                     </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Тип зависимости</label>
-                    <div id="search-wrapper-dependency_type" class="position-relative">
-                        <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2" 
-                               placeholder="Введите тип связи (например, Состоит из)..."
-                               hx-get="{% url 'suggest' %}?field=dependency_type"
-                               hx-trigger="keyup changed delay:300ms"
-                               hx-target="#results-dependency_type"
-                               autocomplete="off">
-                        <div id="results-dependency_type"></div>
-                    </div>
+                    <div class="form-text text-muted" style="font-size: 0.75rem;">Оставьте пустым, если это корневой агрегат.</div>
                 </div>
             </div>
 

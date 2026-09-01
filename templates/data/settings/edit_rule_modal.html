@@ -1,6 +1,8 @@
 <!-- templates/data/settings/edit_rule_modal.html -->
 <div class="modal-header border-0 pb-0">
-    <h5 class="modal-title fw-bold text-dark">Настройка правила</h5>
+    <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
+        <i class="bi bi-sliders text-primary me-2"></i> Настройка правила ТО
+    </h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 
@@ -9,79 +11,74 @@
     {% csrf_token %}
     <div class="modal-body py-3">
         
-        <!-- Название -->
+        <!-- 1. Название -->
         <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase">Название правила</label>
+            <label class="form-label small fw-bold text-muted text-uppercase">Название правила *</label>
             <input type="text" name="name" value="{{ rule_obj.name }}" class="form-control bg-light border-0 py-2 shadow-none" required autocomplete="off" style="font-size: 0.9rem;">
         </div>
 
-        <!-- Стратегия -->
+        <!-- 2. Выбор типа расчета -->
         <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Тип расчета даты</label>
-            <select name="new_rule_strategy" 
-                    class="form-select form-select-sm"
-                    hx-get="{% url 'rule_constructor' %}"
-                    hx-target="#constructor-fields-container"
-                    hx-swap="outerHTML"
-                    hx-trigger="change">
-                <option value="relative" {% if strategy == 'relative' %}selected{% endif %}>Относительный интервал (через промежуток времени)</option>
-                <option value="fixed" {% if strategy == 'fixed' %}selected{% endif %}>Фиксированные календарные даты (одна или несколько)</option>
-            </select>
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Тип расчета даты</label>
+            <input type="hidden" name="new_rule_strategy" id="strategy_input_edit" value="{{ strategy }}">
+            
+            <div class="dropdown">
+                <button class="btn bg-light border-0 py-2 px-3 w-100 d-flex align-items-center justify-content-between text-start shadow-none rounded-2" 
+                        type="button" 
+                        data-bs-toggle="dropdown" 
+                        aria-expanded="false"
+                        style="font-size: 0.88rem; min-height: 42px;">
+                    <span class="d-flex align-items-center text-dark fw-semibold" id="strategy_display_label_edit">
+                        {% if strategy == 'fixed' %}
+                            <i class="bi bi-calendar-event text-info me-2 fs-5"></i> Фиксированные сезонные даты
+                        {% else %}
+                            <i class="bi bi-arrow-repeat text-primary me-2 fs-5"></i> Относительный интервал (период времени)
+                        {% endif %}
+                    </span>
+                    <i class="bi bi-chevron-down text-muted small ms-2"></i>
+                </button>
+                
+                <ul class="dropdown-menu w-100 border-0 shadow-lg rounded-3 p-2 mt-1" style="z-index: 1100;">
+                    <li>
+                        <button type="button" 
+                                class="dropdown-item py-2 px-2.5 rounded-2 d-flex align-items-center"
+                                hx-get="{% url 'rule_constructor' %}?new_rule_strategy=relative"
+                                hx-target="#constructor-fields-container"
+                                hx-swap="innerHTML"
+                                onclick="document.getElementById('strategy_input_edit').value='relative'; document.getElementById('strategy_display_label_edit').innerHTML='<i class=\'bi bi-arrow-repeat text-primary me-2 fs-5\'></i> Относительный интервал (период времени)';">
+                            <div class="rounded-2 p-2 me-3 bg-light-primary text-primary d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; min-width: 36px;">
+                                <i class="bi bi-arrow-repeat fs-6"></i>
+                            </div>
+                            <div>
+                                <span class="d-block fw-bold text-dark small">Относительный интервал</span>
+                                <small class="text-muted d-block" style="font-size: 0.75rem;">ТО наступает через заданный промежуток</small>
+                            </div>
+                        </button>
+                    </li>
+                    <li><hr class="dropdown-divider my-1.5 opacity-50"></li>
+                    <li>
+                        <button type="button" 
+                                class="dropdown-item py-2 px-2.5 rounded-2 d-flex align-items-center"
+                                hx-get="{% url 'rule_constructor' %}?new_rule_strategy=fixed"
+                                hx-target="#constructor-fields-container"
+                                hx-swap="innerHTML"
+                                onclick="document.getElementById('strategy_input_edit').value='fixed'; document.getElementById('strategy_display_label_edit').innerHTML='<i class=\'bi bi-calendar-event text-info me-2 fs-5\'></i> Фиксированные сезонные даты';">
+                            <div class="rounded-2 p-2 me-3 bg-light-info text-info d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; min-width: 36px;">
+                                <i class="bi bi-calendar-event fs-6"></i>
+                            </div>
+                            <div>
+                                <span class="d-block fw-bold text-dark small">Фиксированные сезонные даты</span>
+                                <small class="text-muted d-block" style="font-size: 0.75rem;">ТО назначается на конкретные числа года</small>
+                            </div>
+                        </button>
+                    </li>
+                </ul>
+            </div>
         </div>
 
-        <!-- Конструктор полей с подсказками -->
+        <!-- 3. Постоянный контейнер динамических полей -->
         <div id="constructor-fields-container" class="animate-fade">
-            {% if strategy == 'relative' %}
-                
-                <!-- Подсказка для Точки отсчета -->
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Точка отсчета</label>
-                    <select name="new_rule_anchor" class="form-select form-select-sm">
-                        <option value="actual" {% if anchor == 'actual' %}selected{% endif %}>От даты фактического обслуживания (Рекомендуется)</option>
-                        <option value="scheduled" {% if anchor == 'scheduled' %}selected{% endif %}>От предыдущей плановой даты (Жесткий график)</option>
-                    </select>
-                    <div class="form-text text-muted mt-2" style="font-size: 0.75rem; line-height: 1.35;">
-                        <span class="text-primary">●</span> <strong>От факта:</strong> Расписание сдвигается вперед от реального дня выполнения работ.<br>
-                        <span class="text-warning">●</span> <strong>От плана:</strong> Срок считается строго от старой плановой даты, сохраняя исходный темп.
-                    </div>
-                </div>
-                
-                <!-- Подсказка для Интервала -->
-                <div class="mb-2">
-                    <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Интервал планирования</label>
-                    <div class="row g-2">
-                        <div class="col-4">
-                            <div class="input-group input-group-sm">
-                                <input type="number" name="new_rule_years" class="form-control text-center" value="{{ years }}" min="0">
-                                <span class="input-group-text px-1 text-muted" style="font-size: 0.7rem;">лет</span>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="input-group input-group-sm">
-                                <input type="number" name="new_rule_months" class="form-control text-center" value="{{ months }}" min="0">
-                                <span class="input-group-text px-1 text-muted" style="font-size: 0.7rem;">мес.</span>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="input-group input-group-sm">
-                                <input type="number" name="new_rule_days" class="form-control text-center" value="{{ days }}" min="0">
-                                <span class="input-group-text px-1 text-muted" style="font-size: 0.7rem;">дн.</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-text text-muted mt-2" style="font-size: 0.75rem;">
-                        Укажите временной период, по истечении которого будет автоматически назначено следующее техническое обслуживание.
-                    </div>
-                </div>
-                
-            {% elif strategy == 'fixed' %}
-                <div class="mb-2">
-                    {% include 'data/includes/rules_dates_builder.html' with dates=fixed_dates %}
-                    <div class="form-text text-muted mt-2" style="font-size: 0.75rem; line-height: 1.35;">
-                        Добавьте ежегодные календарные даты (например, для сезонных работ). Система автоматически выберет ближайшую будущую дату из этого списка.
-                    </div>
-                </div>
-            {% endif %}
+            {% include 'data/includes/rule_constructor_fields.html' with strategy=strategy anchor=anchor years=years months=months days=days fixed_dates=fixed_dates %}
         </div>
 
     </div>

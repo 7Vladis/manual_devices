@@ -1,0 +1,99 @@
+<!-- templates/data/includes/clone_object_modal_body.html -->
+<div class="modal-header border-0 pb-0 animate-fade">
+    <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
+        <i class="bi bi-copy text-primary me-2"></i> Копирование объекта
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<form hx-post="{% url 'clone_object' %}" 
+      hx-target="#sidebar-container" 
+      hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('cloneObjectModal')).hide(); }">
+    {% csrf_token %}
+    <div class="modal-body py-3">
+        
+        <!-- 1. Исходный объект для копирования -->
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase">Исходный объект *</label>
+            
+            {% if preselected_object %}
+                <div id="search-wrapper-source_object" class="w-100 animate-fade">
+                    <div class="d-flex align-items-center justify-content-between bg-light border border-primary-subtle px-3 py-2 rounded-2 w-100">
+                        <span class="small fw-semibold text-dark text-truncate me-2" title="{{ preselected_object.name|default:preselected_object.model.name }}">
+                            <i class="bi bi-check-circle-fill text-success me-1"></i> {{ preselected_object.name|default:preselected_object.model.name }}
+                        </span>
+                        <input type="hidden" name="source_object" value="{{ preselected_object.uuid }}">
+                        <button type="button" 
+                                class="btn btn-sm btn-link text-secondary p-0 shadow-none border-0 fw-bold flex-shrink-0"
+                                style="font-size: 0.75rem;"
+                                hx-get="{% url 'reset_suggestion' %}?field=source_object"
+                                hx-target="#search-wrapper-source_object"
+                                hx-swap="outerHTML">
+                            Изменить
+                        </button>
+                    </div>
+                </div>
+            {% else %}
+                <div id="search-wrapper-source_object" class="w-100 position-relative">
+                    <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2 w-100" 
+                           placeholder="Поиск объекта для копирования..."
+                           hx-get="{% url 'suggest' %}?field=source_object"
+                           hx-trigger="keyup changed delay:300ms"
+                           hx-target="#results-source_object"
+                           autocomplete="off"
+                           required>
+                    <div id="results-source_object"></div>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- 2. Название нового объекта -->
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-muted text-uppercase">Название нового объекта *</label>
+            <input type="text" 
+                   name="new_name" 
+                   class="form-control bg-light border-0 py-2 shadow-none" 
+                   placeholder="{% if preselected_object %}{{ preselected_object.name|default:preselected_object.model.name }} (копия){% else %}Например: ПК-102{% endif %}"
+                   value="{% if preselected_object %}{{ preselected_object.name|default:preselected_object.model.name }} (копия){% endif %}"
+                   required 
+                   autocomplete="off"
+                   style="font-size: 0.9rem;">
+        </div>
+
+        <!-- 3. Опции копирования -->
+        <div class="p-3 bg-light rounded-3 border mb-2">
+            
+            <!-- Флаг 1: Копирование с дочерними элементами -->
+            <div class="form-check form-switch d-flex align-items-center mb-2">
+                <input class="form-check-input me-2 shadow-none" type="checkbox" name="clone_children" id="cloneChildrenCheck" checked style="cursor: pointer; transform: scale(1.1);">
+                <label class="form-check-label small fw-bold text-dark" for="cloneChildrenCheck" style="cursor: pointer;">
+                    Копировать с дочерними элементами
+                </label>
+            </div>
+            <div class="text-muted small mb-3" style="font-size: 0.73rem; margin-left: 2.2rem; line-height: 1.3;">
+                Продублировать всю вложенную структуру компонентов с автозаменой суффикса.
+            </div>
+
+            <hr class="opacity-25 my-2">
+
+            <!-- Флаг 2: Сохранить родителя -->
+            <div class="form-check form-switch d-flex align-items-center mb-1">
+                <input class="form-check-input me-2 shadow-none" type="checkbox" name="keep_parent" id="keepParentCheck" checked style="cursor: pointer; transform: scale(1.1);">
+                <label class="form-check-label small fw-bold text-dark" for="keepParentCheck" style="cursor: pointer;">
+                    Сохранить родительский объект
+                </label>
+            </div>
+            <div class="text-muted small" style="font-size: 0.73rem; margin-left: 2.2rem; line-height: 1.3;">
+                Если исходный объект находится внутри другого агрегата, копия останется в том же родителе. Если выключить — копия станет самостоятельным корневым объектом.
+            </div>
+
+        </div>
+
+    </div>
+    <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary px-4 fw-bold">
+            <i class="bi bi-copy me-1"></i> Создать копию
+        </button>
+    </div>
+</form>

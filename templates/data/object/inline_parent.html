@@ -1,21 +1,21 @@
 <!-- templates/data/object/inline_parent.html -->
-<div id="parent-display-container" class="animate-fade d-inline-block">
+<span id="parent-display-container" class="animate-fade d-inline-block">
+{% if editing %}
     <form hx-post="{% url 'edit_parent' obj.uuid %}" 
           hx-target="#parent-display-container" 
           hx-swap="outerHTML" 
-          class="d-inline-flex gap-2 align-items-center flex-wrap">
+          class="d-inline-flex gap-1 align-items-center flex-nowrap">
         {% csrf_token %}
         
-        <!-- Контейнер умного поиска родительского объекта -->
-        <div id="search-wrapper-parent" class="position-relative" style="min-width: 250px;">
+        <div id="search-wrapper-parent" class="position-relative" style="min-width: 180px; max-width: 250px;">
             {% if current_parent %}
-                <div class="d-flex align-items-center justify-content-between bg-light border border-primary-subtle px-2 py-1 rounded-2">
-                    <span class="small fw-semibold text-dark text-truncate" style="max-width: 170px;">
+                <div class="d-flex align-items-center justify-content-between bg-light border border-primary-subtle px-2 py-1 rounded-2" style="height: 31px;">
+                    <span class="small fw-semibold text-dark text-truncate me-2" style="max-width: 160px;" title="{{ current_parent.name|default:current_parent.model.name }}">
                         <i class="bi bi-check-circle-fill text-success me-1"></i>{{ current_parent.name|default:current_parent.model.name }}
                     </span>
                     <input type="hidden" name="parent" value="{{ current_parent.uuid }}">
                     <button type="button" 
-                            class="btn btn-sm btn-link text-secondary p-0 ms-2 shadow-none border-0 fw-bold"
+                            class="btn btn-sm btn-link text-secondary p-0 shadow-none border-0 fw-bold flex-shrink-0"
                             style="font-size: 0.75rem;"
                             hx-get="{% url 'reset_suggestion' %}?field=parent"
                             hx-target="#search-wrapper-parent"
@@ -25,21 +25,21 @@
                 </div>
             {% else %}
                 <input type="text" name="q" class="form-control form-control-sm bg-light py-1 shadow-none" 
-                       placeholder="Начните вводить имя родителя..."
+                       placeholder="Поиск родителя..."
                        hx-get="{% url 'suggest' %}?field=parent"
                        hx-trigger="keyup changed delay:300ms"
                        hx-target="#results-parent"
                        autocomplete="off"
-                       style="font-size: 0.8rem;">
+                       autofocus
+                       style="font-size: 0.8rem; height: 31px;">
                 <div id="results-parent"></div>
             {% endif %}
         </div>
 
-        <!-- Кнопки управления -->
-        <button type="submit" class="btn btn-success btn-sm py-1 px-2" title="Сохранить">
+        <button type="submit" class="btn btn-success btn-sm py-1 px-2 flex-shrink-0 d-flex align-items-center justify-content-center" style="height: 31px; width: 31px;" title="Сохранить">
             <i class="bi bi-check-lg"></i>
         </button>
-        <button type="button" class="btn btn-light btn-sm py-1 px-2 border" 
+        <button type="button" class="btn btn-light btn-sm py-1 px-2 border flex-shrink-0 d-flex align-items-center justify-content-center" style="height: 31px; width: 31px;" 
                 hx-get="{% url 'edit_parent' obj.uuid %}?cancel=1" 
                 hx-target="#parent-display-container"
                 hx-swap="outerHTML"
@@ -47,4 +47,19 @@
             <i class="bi bi-x-lg"></i>
         </button>
     </form>
-</div>
+{% else %}
+    <span hx-get="{% url 'edit_parent' obj.uuid %}" 
+          hx-target="#parent-display-container" 
+          hx-swap="outerHTML" 
+          style="cursor: pointer;" 
+          class="editable-trigger">
+        <span class="text-muted me-1">Родитель:</span>
+        {% if current_parent %}
+            <strong class="text-primary fw-semibold">{{ current_parent.name|default:current_parent.model.name }}</strong>
+        {% else %}
+            <strong class="text-muted fw-semibold">отсутствует</strong>
+        {% endif %}
+        <i class="bi bi-pencil-square edit-icon"></i>
+    </span>
+{% endif %}
+</span>

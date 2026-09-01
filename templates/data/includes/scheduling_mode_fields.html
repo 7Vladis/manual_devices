@@ -1,28 +1,87 @@
 <!-- templates/data/includes/scheduling_mode_fields.html -->
 <div id="scheduling-mode-container" class="animate-fade">
-    {% if mode == 'manual' %}
-        <!-- РУЧНОЙ РЕЖИМ: Только выбор конкретной даты -->
-        <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase">Дата следующего ТО</label>
-            <input type="date" name="next_maintenance_date" class="form-control bg-light border-0 py-2">
-            <div class="form-text text-muted" style="font-size: 0.75rem;">Задайте фиксированную дату проведения следующего обслуживания вручную.</div>
+    
+    <input type="hidden" name="maintenance_scheduling_mode" value="{{ mode|default:'manual' }}">
+    
+    <div class="mb-3">
+        <label class="form-label small fw-bold text-muted text-uppercase mb-1">Режим планирования ТО</label>
+        
+        <div class="dropdown">
+            <button class="btn bg-light border-0 py-2 px-3 w-100 d-flex align-items-center justify-content-between text-start shadow-none rounded-2" 
+                    type="button" 
+                    data-bs-toggle="dropdown" 
+                    aria-expanded="false"
+                    style="font-size: 0.88rem; min-height: 42px;">
+                <span class="d-flex align-items-center text-dark fw-semibold text-truncate">
+                    {% if mode == 'auto' %}
+                        <i class="bi bi-arrow-repeat text-success me-2 fs-5"></i> Автоматический расчет по правилу
+                    {% else %}
+                        <i class="bi bi-calendar-event text-primary me-2 fs-5"></i> Ручной выбор даты следующего ТО
+                    {% endif %}
+                </span>
+                <i class="bi bi-chevron-down text-muted small ms-2"></i>
+            </button>
+            
+            <ul class="dropdown-menu w-100 border-0 shadow-lg rounded-3 p-2 mt-1" style="z-index: 1100;">
+                <li>
+                    <button type="button" 
+                            class="dropdown-item py-2 px-2.5 rounded-2 d-flex align-items-center {% if mode != 'auto' %}bg-light{% endif %}"
+                            hx-get="{% url 'toggle_scheduling_mode' %}?maintenance_scheduling_mode=manual"
+                            hx-target="#scheduling-mode-container"
+                            hx-swap="outerHTML">
+                        <div class="rounded-2 p-2 me-3 bg-light-primary text-primary d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; min-width: 36px;">
+                            <i class="bi bi-calendar-event fs-6"></i>
+                        </div>
+                        <div>
+                            <span class="d-block fw-bold text-dark small">Ручной ввод даты</span>
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">Указать конкретную дату в календаре</small>
+                        </div>
+                    </button>
+                </li>
+                <li><hr class="dropdown-divider my-1.5 opacity-50"></li>
+                <li>
+                    <button type="button" 
+                            class="dropdown-item py-2 px-2.5 rounded-2 d-flex align-items-center {% if mode == 'auto' %}bg-light{% endif %}"
+                            hx-get="{% url 'toggle_scheduling_mode' %}?maintenance_scheduling_mode=auto"
+                            hx-target="#scheduling-mode-container"
+                            hx-swap="outerHTML">
+                        <div class="rounded-2 p-2 me-3 bg-light-success text-success d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; min-width: 36px;">
+                            <i class="bi bi-arrow-repeat fs-6"></i>
+                        </div>
+                        <div>
+                            <span class="d-block fw-bold text-dark small">Автоматический расчет</span>
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">Рассчитывать срок по заданному правилу</small>
+                        </div>
+                    </button>
+                </li>
+            </ul>
         </div>
-    {% else %}
-        <!-- АВТОМАТИЧЕСКИЙ РЕЖИМ: Только выбор и настройка правила -->
-        <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase">Правило расчета даты ТО</label>
-            <div id="search-wrapper-date_update_rule" class="position-relative">
-                <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2" 
-                       placeholder="Поиск или ввод нового правила (например, Раз в год)..."
+    </div>
+
+    {% if mode == 'auto' %}
+        <div class="mb-3 animate-fade">
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Правило расчета даты ТО *</label>
+            
+            <div id="search-wrapper-date_update_rule" class="w-100 position-relative">
+                <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2 w-100" 
+                       placeholder="Поиск правила (например, Раз в полгода)..."
                        hx-get="{% url 'suggest' %}?field=date_update_rule"
                        hx-trigger="keyup changed delay:300ms"
                        hx-target="#results-date_update_rule"
-                       autocomplete="off">
+                       autocomplete="off"
+                       required>
                 <div id="results-date_update_rule"></div>
             </div>
             <div class="form-text text-success" style="font-size: 0.75rem;">
-                <i class="bi bi-info-circle-fill me-1"></i> Первая дата следующего ТО рассчитается автоматически от сегодняшнего дня.
+                <i class="bi bi-info-circle-fill me-1"></i> Первая дата рассчитается автоматически от сегодняшнего дня.
             </div>
         </div>
+    {% else %}
+        <div class="mb-3 animate-fade">
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Дата следующего ТО</label>
+            <input type="date" name="next_maintenance_date" class="form-control bg-light border-0 py-2 shadow-none">
+            <div class="form-text text-muted" style="font-size: 0.75rem;">Задайте фиксированную дату проведения следующего обслуживания вручную.</div>
+        </div>
     {% endif %}
+
 </div>

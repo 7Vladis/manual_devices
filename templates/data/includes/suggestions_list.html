@@ -1,17 +1,17 @@
 <!-- templates/data/includes/suggestions_list.html -->
-<div class="list-group list-group-flush border shadow-sm rounded-3 mt-1" 
-     style="max-height: 160px; overflow-y: auto; z-index: 1100; position: absolute; width: 100%;">
+<div class="list-group list-group-flush border shadow-lg rounded-3 mt-1" 
+     style="max-height: 180px; overflow-y: auto; z-index: 1150; position: absolute; top: 100%; left: 0; width: 100%; background: #ffffff;">
     
     {% for item in results %}
     <button type="button" 
-            class="list-group-item list-group-item-action py-2 text-start small border-0"
+            class="list-group-item list-group-item-action py-2 px-3 text-start small border-0 hover-bg-light"
             hx-get="{% url 'select_suggestion' %}?field={{ field }}&uuid={{ item.uuid }}"
             hx-target="#search-wrapper-{{ field }}"
             hx-swap="outerHTML">
         {% if field == 'model' %}
             <i class="bi bi-layers text-secondary me-2"></i><strong>{{ item.name }}</strong> <span class="text-muted">({{ item.object_type.type }})</span>
-        {% elif field == 'parent' %}
-            <i class="bi bi-folder text-warning me-2"></i><strong>{{ item.name|default:item.model.name }}</strong> <small class="text-muted">| {{ item.inventory_number|default:"Без инв. №" }}</small>
+        {% elif field in 'parent,source_object' %}
+            <i class="bi bi-box text-primary me-2"></i><strong>{{ item.name|default:item.model.name }}</strong> <small class="text-muted">| {{ item.inventory_number|default:"Без инв. №" }}</small>
         {% elif field == 'date_update_rule' %}
             <i class="bi bi-calendar-range text-info me-2"></i><strong>{{ item.name }}</strong>
         {% else %}
@@ -21,12 +21,21 @@
     {% endfor %}
 
     {% if show_create_option %}
-    <button type="button" 
-            class="list-group-item list-group-item-action py-2 text-primary text-start small border-0 bg-light fw-bold"
-            hx-get="{% url 'select_suggestion' %}?field={{ field }}&name={{ q|urlencode }}"
-            hx-target="#search-wrapper-{{ field }}"
-            hx-swap="outerHTML">
-        <i class="bi bi-plus-circle-fill me-2"></i>Создать новый: "{{ q }}"
-    </button>
+        {% if field == 'date_update_rule' %}
+            <a href="{% url 'settings_page' %}?tab=rules" 
+               target="_blank" 
+               class="list-group-item list-group-item-action py-2 px-3 text-primary text-start small border-0 bg-light fw-bold text-decoration-none d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-plus-circle-fill me-2"></i>Создать правило в настройках</span>
+                <i class="bi bi-box-arrow-up-right small text-muted"></i>
+            </a>
+        {% elif field == 'object_type' %}
+            <button type="button" 
+                    class="list-group-item list-group-item-action py-2 px-3 text-primary text-start small border-0 bg-light fw-bold"
+                    hx-get="{% url 'select_suggestion' %}?field={{ field }}&name={{ q|urlencode }}"
+                    hx-target="#search-wrapper-{{ field }}"
+                    hx-swap="outerHTML">
+                <i class="bi bi-plus-circle-fill me-2"></i>Создать новый: "{{ q }}"
+            </button>
+        {% endif %}
     {% endif %}
 </div>

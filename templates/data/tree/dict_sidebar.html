@@ -1,3 +1,4 @@
+<!-- templates/data/tree/dict_sidebar.html -->
 <div class="d-flex flex-column h-100 pe-1">
     
     <!-- Переключатель вкладок (Объекты / Модели) -->
@@ -14,7 +15,7 @@
         </button>
     </div>
 
-    <!-- Кнопка Создать (Отображается для всех, КРОМЕ Младшего инженера) -->
+    <!-- Кнопка Создать -->
     {% if not request.user.is_junior %}
     <div class="dropdown mb-2">
         <button class="btn w-100 py-2 text-white fw-bold d-flex align-items-center justify-content-between px-3" 
@@ -61,11 +62,29 @@
                     </div>
                 </button>
             </li>
+            <li><hr class="dropdown-divider my-2 opacity-50"></li>
+            <li>
+                <!-- КНОПКА КЛОНИРОВАНИЯ ОБЪЕКТА -->
+                <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
+                        type="button" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#cloneObjectModal"
+                        hx-get="{% url 'clone_object_modal' %}"
+                        hx-target="#cloneObjectModal .modal-content">
+                    <div class="bg-light-success rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
+                        <i class="bi bi-files text-success fs-5"></i>
+                    </div>
+                    <div>
+                        <span class="d-block fw-bold text-dark small">Сделать копию</span>
+                        <small class="text-muted" style="font-size: 0.75rem;">Тиражирование структуры объекта</small>
+                    </div>
+                </button>
+            </li>
         </ul>
     </div>
     {% endif %}
 
-    <!-- Контейнер дерева/списка моделей -->
+    <!-- Контейнер дерева -->
     <div id="tree-container" class="flex-grow-1 overflow-auto pb-3">
         {% if active_tab == 'models' %}
             {% include 'data/tree/model_tree_list.html' with object_types=object_types_list %}

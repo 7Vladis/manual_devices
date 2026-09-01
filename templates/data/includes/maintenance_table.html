@@ -1,12 +1,14 @@
+<!-- templates/data/includes/maintenance_table.html -->
 <div class="maintenance-list">
     {% for obj in objects %}
-    <!-- Клик по карточке ведет в справочник -->
-    <div class="card p-3 mb-3 clickable-card {% if obj.next_maintenance_date and obj.next_maintenance_date < now %}overdue-card{% endif %}"
-         onclick="window.location.href='{% url 'dict' %}?object={{ obj.uuid }}'">
+    <!-- Клик открывает справочник сразу с данным объектом в НОВОЙ вкладке браузера -->
+    <div class="card p-3 mb-3 clickable-card {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}overdue-card{% endif %}"
+         onclick="window.open('{% url 'dict' %}?object={{ obj.uuid }}', '_blank')"
+         style="cursor: pointer;">
         <div class="maintenance-item-container">
             <div class="d-flex align-items-center overflow-hidden">
                 <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
-                    {% if obj.next_maintenance_date and obj.next_maintenance_date < now %}
+                    {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}
                         <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
                     {% else %}
                         <i class="bi bi-wrench text-muted fs-5"></i>
@@ -16,7 +18,6 @@
                     <h6 class="mb-1 fw-bold text-dark text-truncate">{{ obj.name|default:obj.model.name }}</h6>
                     <div class="text-muted small">
                         {{ obj.model.object_type.type }} • {{ obj.inventory_number|default:"Без инв. №" }}
-                        <!-- Выводим календарь и дату только если они заданы -->
                         {% if obj.next_maintenance_date %}
                             • <i class="bi bi-calendar3 ms-1"></i> {{ obj.next_maintenance_date|date:"d.m.Y" }}
                         {% endif %}
@@ -25,9 +26,8 @@
             </div>
             
             <div class="ms-3">
-                <!-- Показываем срок выполнения, только если установлена дата ТО -->
                 {% if obj.next_maintenance_date %}
-                    {% if obj.next_maintenance_date < now %}
+                    {% if obj.next_maintenance_date < today %}
                         <span class="badge rounded-pill bg-danger px-3 py-2">Просрочено</span>
                     {% else %}
                         <span class="text-muted small fw-medium">Через {{ obj.next_maintenance_date|timeuntil }}</span>

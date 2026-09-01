@@ -8,19 +8,16 @@ urlpatterns = [
     path('search/', views.search_view, name='search'),
     path('dict/', views.dict_view, name='dict'),
 
-    # Натсройки
+    # Настройки
     path('settings/', views.settings_page, name='settings_page'),
     path('settings/object-types/create/', views.create_object_type_view, name='create_object_type'),
     path('settings/object-types/<uuid:pk>/delete/', views.delete_object_type_view, name='delete_object_type'),
-    path('settings/dependency-types/create/', views.create_dependency_type_view, name='create_dependency_type'),
-    path('settings/dependency-types/<uuid:pk>/delete/', views.delete_dependency_type_view, name='delete_dependency_type'),
     path('settings/rules/create/', views.create_rule_settings_view, name='create_rule_settings'),
     path('settings/rules/<uuid:pk>/delete/', views.delete_rule_view, name='delete_rule'),
     path('settings/rules/<uuid:pk>/edit/', views.edit_rule_settings_view, name='edit_rule_settings'),
-    path('settings/rules/<uuid:pk>/edit/', views.edit_rule_settings_view, name='edit_rule_settings'),
     path('settings/users/<uuid:pk>/toggle/', users.views.toggle_user_status_view, name='toggle_user_status'),
     
-    # Дерево объектов
+    # Дерево и проводник объектов
     path('dict/objects/', views.object_tree_view, name='object_tree'),
     path('dict/objects/<uuid:parent_uuid>/children/', views.object_children_view, name='object_children'),
     path('dict/objects/<uuid:pk>/service/', views.service_object_view, name='service_object'),
@@ -36,6 +33,10 @@ urlpatterns = [
     # Создание моделей и объектов
     path('dict/objects/create/', views.create_object_view, name='create_object'),
     path('dict/models/create/', views.create_model_view, name='create_model'),
+
+    # Клонирование объектов
+    path('dict/objects/clone/modal/', views.clone_object_modal_view, name='clone_object_modal'),
+    path('dict/objects/clone/', views.clone_object_view, name='clone_object'),
 
     # Детализация объектов
     path('dict/objects/<uuid:pk>/', views.object_detail_view, name='object_detail'),
@@ -64,7 +65,7 @@ urlpatterns = [
     path('dict/models/<uuid:pk>/specs/edit/', views.model_spec_edit_view, name='model_spec_edit'),
     path('dict/models/<uuid:pk>/specs/delete/', views.model_spec_delete_view, name='model_spec_delete'),
 
-    # Маршруты для умных подсказок и интерактивных форм
+    # Подсказки и формы
     path('dict/suggest/', views.suggest_view, name='suggest'),
     path('dict/suggest/select/', views.select_suggestion_view, name='select_suggestion'),
     path('dict/suggest/reset/', views.reset_suggestion_view, name='reset_suggestion'),

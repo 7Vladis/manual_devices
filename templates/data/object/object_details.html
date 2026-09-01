@@ -1,3 +1,4 @@
+<!-- templates/data/object/object_details.html -->
 <div class="card d-flex flex-column h-100 bg-white border-0" style="border-radius: 0;">
     
     <!-- МИНИ-ШАПКА ОБЪЕКТА -->
@@ -47,7 +48,7 @@
         <div class="row g-3 mt-2 border-top border-light align-items-center" style="font-size: 0.85rem;">
             
             <!-- 1. Инвентарный номер -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 {% if not request.user.is_junior %}
                 <span id="inventory-display-container" 
                       hx-get="{% url 'edit_inventory' obj.uuid %}" 
@@ -55,7 +56,7 @@
                       hx-swap="outerHTML" 
                       style="cursor: pointer;" 
                       class="editable-trigger">
-                    <span class="text-muted me-1">Инвентарный №:</span>
+                    <span class="text-muted me-1">Инв. №:</span>
                     {% if obj.inventory_number %}
                         <strong class="text-dark fw-semibold">{{ obj.inventory_number }}</strong>
                     {% else %}
@@ -65,37 +66,22 @@
                 </span>
                 {% else %}
                 <span>
-                    <span class="text-muted me-1">Инвентарный №:</span>
-                    <strong class="text-dark fw-semibold">{% if obj.inventory_number %}{{ obj.inventory_number }}{% else %}отсутствует{% endif %}</strong>
+                    <span class="text-muted me-1">Инв. №:</span>
+                    <strong class="text-dark fw-semibold">{{ obj.inventory_number|default:"отсутствует" }}</strong>
                 </span>
                 {% endif %}
             </div>
             
-            <!-- 2. Иерархическая связь -->
-            <div class="col-md-4">
+            <!-- 2. Родительский объект -->
+            <div class="col-md-3">
                 {% if not request.user.is_junior %}
-                <span id="parent-display-container" 
-                      hx-get="{% url 'edit_parent' obj.uuid %}" 
-                      hx-target="#parent-display-container" 
-                      hx-swap="outerHTML" 
-                      style="cursor: pointer;" 
-                      class="editable-trigger">
-                    {% if parent %}
-                        <span class="text-muted me-1">{{ dependency_type_name|default:"Входит в состав" }}:</span>
-                        <strong class="text-primary fw-semibold">{{ parent.name|default:parent.model.name }}</strong>
-                    {% else %}
-                        <span class="text-muted me-1">Родитель:</span>
-                        <strong class="text-muted fw-semibold">отсутствует</strong>
-                    {% endif %}
-                    <i class="bi bi-pencil-square edit-icon"></i>
-                </span>
+                    {% include 'data/object/inline_parent.html' with obj=obj current_parent=parent editing=False %}
                 {% else %}
                 <span>
+                    <span class="text-muted me-1">Родитель:</span>
                     {% if parent %}
-                        <span class="text-muted me-1">{{ dependency_type_name|default:"Входит в состав" }}:</span>
                         <strong class="text-primary fw-semibold">{{ parent.name|default:parent.model.name }}</strong>
                     {% else %}
-                        <span class="text-muted me-1">Родитель:</span>
                         <strong class="text-muted fw-semibold">отсутствует</strong>
                     {% endif %}
                 </span>
@@ -103,7 +89,7 @@
             </div>
 
             <!-- 3. Правило планирования ТО -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 {% if not request.user.is_junior %}
                 <span id="rule-display-container" 
                       data-bs-toggle="modal" 
@@ -130,12 +116,11 @@
                 {% endif %}
             </div>
 
+            <!-- 4. YouTrack -->
             <div class="col-md-3">
                 {% if not request.user.is_junior %}
-                    <!-- Блок для инженеров с возможностью редактирования -->
                     {% include 'data/object/inline_youtrack.html' %}
                 {% else %}
-                    <!-- Блок для младших инженеров (только чтение) -->
                     <span>
                         <span class="text-muted me-1">Youtrack:</span>
                         {% if obj.youtrack_issue_id %}
@@ -146,7 +131,7 @@
                                 {{ obj.youtrack_issue_id }}
                             </a>
                         {% else %}
-                            <span class="text-muted small">отсутствует</span>
+                            <strong class="text-muted fw-semibold">отсутствует</strong>
                         {% endif %}
                     </span>
                 {% endif %}
@@ -155,7 +140,7 @@
         </div>
     </div>
 
-    <!-- НАВИГАЦИЯ ПО ВКЛАДКАМ (HTMX загружает контент в панели по клику на кнопки) -->
+    <!-- НАВИГАЦИЯ ПО ВКЛАДКАМ -->
     <div class="bg-light px-3 py-1 border-bottom">
         <ul class="nav nav-tabs border-0" id="objectTabs" role="tablist" style="font-size: 0.85rem;">
             <li class="nav-item" role="presentation">
@@ -226,10 +211,8 @@
         </ul>
     </div>
 
-    <!-- ТАБ-ПАНЕЛИ (Простые контейнеры для размещения ответа) -->
+    <!-- ТАБ-ПАНЕЛИ -->
     <div class="tab-content flex-grow-1 overflow-auto p-4 bg-light" id="object-tab-panes">
-        
-        <!-- Краткая информация загружается сама при монтировании DOM с помощью hx-trigger="load" -->
         <div class="tab-pane fade show active" 
              id="tab-pane-short-info" 
              role="tabpanel" 
@@ -240,34 +223,21 @@
             <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
         </div>
 
-        <div class="tab-pane fade" 
-             id="tab-pane-specs" 
-             role="tabpanel" 
-             aria-labelledby="specs-tab">
+        <div class="tab-pane fade" id="tab-pane-specs" role="tabpanel" aria-labelledby="specs-tab">
             <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
         </div>
 
-        <div class="tab-pane fade" 
-             id="tab-pane-comments" 
-             role="tabpanel" 
-             aria-labelledby="comments-tab">
+        <div class="tab-pane fade" id="tab-pane-comments" role="tabpanel" aria-labelledby="comments-tab">
             <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
         </div>
 
-        <div class="tab-pane fade" 
-             id="tab-pane-files" 
-             role="tabpanel" 
-             aria-labelledby="files-tab">
+        <div class="tab-pane fade" id="tab-pane-files" role="tabpanel" aria-labelledby="files-tab">
             <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
         </div>
 
-        <div class="tab-pane fade" 
-             id="tab-pane-history" 
-             role="tabpanel" 
-             aria-labelledby="history-tab">
+        <div class="tab-pane fade" id="tab-pane-history" role="tabpanel" aria-labelledby="history-tab">
             <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
         </div>
-
     </div>
     
 </div>

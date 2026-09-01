@@ -4,27 +4,32 @@
     <form hx-post="{% url 'edit_object_model' obj.uuid %}" 
           hx-target="#model-display-container" 
           hx-swap="outerHTML" 
-          class="d-inline-flex gap-2 align-items-center flex-wrap">
+          class="d-inline-flex gap-1 align-items-center flex-nowrap">
         {% csrf_token %}
         
-        <div id="search-wrapper-model" class="position-relative" style="min-width: 250px;">
+        <div id="search-wrapper-model" class="position-relative" style="min-width: 180px; max-width: 250px;">
             <input type="text" name="q" class="form-control form-control-sm bg-light py-1 shadow-none" 
-                   placeholder="Начните вводить название модели..."
+                   placeholder="Название модели..."
                    hx-get="{% url 'suggest' %}?field=model"
                    hx-trigger="keyup changed delay:300ms"
                    hx-target="#results-model"
                    autocomplete="off"
-                   style="font-size: 0.8rem;"
+                   autofocus
+                   style="font-size: 0.8rem; height: 31px;"
                    required>
             <div id="results-model"></div>
         </div>
 
-        <button type="submit" class="btn btn-success btn-sm py-1 px-2" title="Сохранить"><i class="bi bi-check-lg"></i></button>
-        <button type="button" class="btn btn-light btn-sm py-1 px-2 border" 
+        <button type="submit" class="btn btn-success btn-sm py-1 px-2 flex-shrink-0 d-flex align-items-center justify-content-center" style="height: 31px; width: 31px;" title="Сохранить">
+            <i class="bi bi-check-lg"></i>
+        </button>
+        <button type="button" class="btn btn-light btn-sm py-1 px-2 border flex-shrink-0 d-flex align-items-center justify-content-center" style="height: 31px; width: 31px;" 
                 hx-get="{% url 'edit_object_model' obj.uuid %}?cancel=1" 
                 hx-target="#model-display-container" 
                 hx-swap="outerHTML"
-                title="Отмена"><i class="bi bi-x-lg"></i></button>
+                title="Отмена">
+            <i class="bi bi-x-lg"></i>
+        </button>
     </form>
 {% else %}
     <strong class="text-dark editable-trigger" 

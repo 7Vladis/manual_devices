@@ -1,8 +1,8 @@
+<!-- templates/data/tree/object_tree_node.html -->
 <li class="tree-item position-relative mb-1" id="node-{{ node.uuid }}">
     <div class="d-flex align-items-center justify-content-between p-1 rounded-2 hover-bg-light transition-all">
         
-        {% if node.subject_relations.all %}
-            <!-- 1. Родительский объект -->
+        {% if node.children.all %}
             <span class="tree-arrow me-1 text-muted d-inline-flex align-items-center justify-content-center" 
                   style="width: 28px; height: 28px; font-size: 0.8rem; cursor: pointer; user-select: none;"
                   data-bs-toggle="collapse" 
@@ -11,16 +11,12 @@
                 <i class="bi bi-chevron-right arrow-icon"></i>
             </span>
         {% else %}
-            <!-- 2. Конечный объект -->
             <span class="me-1 d-inline-flex" style="width: 28px; height: 28px;"></span>
         {% endif %}
         
-        <!-- Рендерим лейбл через подключаемый микро-шаблон -->
         {% include 'data/tree/object_tree_node_label.html' with node=node %}
         
-        <!-- 3. Кнопки управления -->
         <div class="tree-actions d-flex align-items-center gap-1 opacity-100 ms-2">
-            <!-- Кнопка «Обслуживание» (видят ВСЕ пользователи системы) -->
             <button type="button" class="btn btn-link text-secondary p-1 m-0 d-flex align-items-center" 
                     data-bs-toggle="modal" 
                     data-bs-target="#serviceModal"
@@ -30,7 +26,6 @@
                 <i class="bi bi-wrench-adjustable small"></i>
             </button>
             
-            <!-- Кнопку «Удаление» показываем всем, КРОМЕ младшего инженера (Junior) -->
             {% if not request.user.is_junior %}
                 <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center" 
                         hx-post="{% url 'delete_object' node.uuid %}"
@@ -41,11 +36,10 @@
                     <i class="bi bi-trash3 small"></i>
                 </button>
             {% endif %}
-            
         </div>
     </div>
     
-    {% if node.subject_relations.all %}
+    {% if node.children.all %}
     <div class="collapse {% if node.uuid|stringformat:'s' in parent_uuids %}show{% endif %}" 
          id="children-{{ node.uuid }}" 
          hx-get="{% url 'object_children' node.uuid %}{% if active_object %}?active_object={{ active_object.uuid }}{% endif %}" 

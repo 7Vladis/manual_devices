@@ -1,55 +1,90 @@
 <!-- templates/data/includes/rule_constructor_fields.html -->
-<div id="constructor-fields-container" class="animate-fade">
+<div class="animate-fade">
     {% if strategy == 'relative' %}
-        <!-- Поля для Относительного интервала -->
+        <!-- 1. Точка отсчета -->
         <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Точка отсчета</label>
-            <select name="new_rule_anchor" class="form-select form-select-sm">
-                <option value="actual" selected>От даты фактического обслуживания (Рекомендуется)</option>
-                <option value="scheduled">От предыдущей плановой даты (Сохранять жесткий график)</option>
-            </select>
-            <div class="form-text text-muted mt-1" style="font-size: 0.75rem; line-height: 1.3;">
-                <span class="text-primary">●</span> <strong>От факта:</strong> Новый срок рассчитывается от дня проведения работ.<br>
-                <span class="text-warning">●</span> <strong>От плана:</strong> Срок рассчитывается от старого плана. График сохраняется жестким.
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.72rem;">Точка отсчета</label>
+            <input type="hidden" name="new_rule_anchor" id="anchor_input_field" value="{{ anchor|default:'actual' }}">
+            
+            <div class="dropdown">
+                <button class="btn bg-light border-0 py-2 px-3 w-100 d-flex align-items-center justify-content-between text-start shadow-none rounded-2" 
+                        type="button" 
+                        data-bs-toggle="dropdown" 
+                        aria-expanded="false"
+                        style="font-size: 0.88rem;">
+                    <span class="d-flex align-items-center text-dark fw-semibold" id="anchor_display_label">
+                        {% if anchor == 'scheduled' %}
+                            <i class="bi bi-calendar-range text-warning me-2 fs-6"></i> От планового срока (Жесткий график)
+                        {% else %}
+                            <i class="bi bi-check-circle-fill text-success me-2 fs-6"></i> От даты фактического обслуживания (Рекомендуется)
+                        {% endif %}
+                    </span>
+                    <i class="bi bi-chevron-down text-muted small ms-2"></i>
+                </button>
+                
+                <ul class="dropdown-menu w-100 border-0 shadow-lg rounded-3 p-2 mt-1" style="z-index: 1100;">
+                    <li>
+                        <button type="button" 
+                                class="dropdown-item py-2 px-2.5 rounded-2 d-flex align-items-center"
+                                onclick="document.getElementById('anchor_input_field').value='actual'; document.getElementById('anchor_display_label').innerHTML='<i class=\'bi bi-check-circle-fill text-success me-2 fs-6\'></i> От даты фактического обслуживания (Рекомендуется)';">
+                            <div class="rounded-2 p-2 me-3 bg-light-success text-success d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; min-width: 32px;">
+                                <i class="bi bi-check-lg"></i>
+                            </div>
+                            <div>
+                                <span class="d-block fw-bold text-dark small">От факта (Рекомендуется)</span>
+                                <small class="text-muted d-block" style="font-size: 0.75rem;">Новый срок считается от реального дня выполнения работ</small>
+                            </div>
+                        </button>
+                    </li>
+                    <li><hr class="dropdown-divider my-1 opacity-50"></li>
+                    <li>
+                        <button type="button" 
+                                class="dropdown-item py-2 px-2.5 rounded-2 d-flex align-items-center"
+                                onclick="document.getElementById('anchor_input_field').value='scheduled'; document.getElementById('anchor_display_label').innerHTML='<i class=\'bi bi-calendar-range text-warning me-2 fs-6\'></i> От планового срока (Жесткий график)';">
+                            <div class="rounded-2 p-2 me-3 bg-light-warning text-warning d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; min-width: 32px;">
+                                <i class="bi bi-calendar-range"></i>
+                            </div>
+                            <div>
+                                <span class="d-block fw-bold text-dark small">От плана (Жесткий график)</span>
+                                <small class="text-muted d-block" style="font-size: 0.75rem;">Срок считается строго от старой даты, сохраняя темп</small>
+                            </div>
+                        </button>
+                    </li>
+                </ul>
             </div>
         </div>
         
+        <!-- 2. Интервал времени -->
         <div class="mb-2">
-            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.75rem;">Интервал времени</label>
+            <label class="form-label small fw-bold text-muted text-uppercase mb-1" style="font-size: 0.72rem;">Интервал планирования</label>
             <div class="row g-2">
                 <div class="col-4">
-                    <div class="input-group input-group-sm">
-                        <input type="number" name="new_rule_years" class="form-control" value="0" min="0">
-                        <span class="input-group-text small text-muted px-1" style="font-size: 0.75rem;">лет</span>
+                    <div class="input-group">
+                        <input type="number" name="new_rule_years" class="form-control bg-light border-0 text-center py-2 shadow-none fw-bold" value="{{ years|default:0 }}" min="0">
+                        <span class="input-group-text bg-light border-0 text-muted px-2" style="font-size: 0.8rem;">лет</span>
                     </div>
                 </div>
                 <div class="col-4">
-                    <div class="input-group input-group-sm">
-                        <input type="number" name="new_rule_months" class="form-control" value="6" min="0">
-                        <span class="input-group-text small text-muted px-1" style="font-size: 0.75rem;">мес.</span>
+                    <div class="input-group">
+                        <input type="number" name="new_rule_months" class="form-control bg-light border-0 text-center py-2 shadow-none fw-bold" value="{{ months|default:6 }}" min="0">
+                        <span class="input-group-text bg-light border-0 text-muted px-2" style="font-size: 0.8rem;">мес.</span>
                     </div>
                 </div>
                 <div class="col-4">
-                    <div class="input-group input-group-sm">
-                        <input type="number" name="new_rule_days" class="form-control" value="0" min="0">
-                        <span class="input-group-text small text-muted px-1" style="font-size: 0.75rem;">дн.</span>
+                    <div class="input-group">
+                        <input type="number" name="new_rule_days" class="form-control bg-light border-0 text-center py-2 shadow-none fw-bold" value="{{ days|default:0 }}" min="0">
+                        <span class="input-group-text bg-light border-0 text-muted px-2" style="font-size: 0.8rem;">дн.</span>
                     </div>
                 </div>
             </div>
             <div class="form-text text-muted mt-2" style="font-size: 0.75rem;">
-                Укажите период, через который должно наступить следующее обслуживание.
+                Период, через который будет автоматически назначено следующее обслуживание.
             </div>
         </div>
         
     {% elif strategy == 'fixed' %}
-        <!-- ПРАВИЛО: Фиксированные календарные даты (Универсальный список) -->
         <div class="mb-2">
-            <!-- Внедряем шаблон билдера напрямую. Никаких фоновых hx-запросов! -->
-            {% include 'data/includes/rules_dates_builder.html' %}
-            
-            <div class="form-text text-muted mt-2" style="font-size: 0.75rem; line-height: 1.3;">
-                Добавьте одну или несколько ежегодных календарных дат (например, для сезонных работ). Система автоматически выберет ближайшую будущую дату из этого списка.
-            </div>
+            {% include 'data/includes/rules_dates_builder.html' with dates=fixed_dates %}
         </div>
     {% endif %}
 </div>

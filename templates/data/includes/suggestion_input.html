@@ -1,12 +1,14 @@
 <!-- templates/data/includes/suggestion_input.html -->
-<div id="search-wrapper-{{ field }}" class="position-relative">
+<div id="search-wrapper-{{ field }}" class="w-100 position-relative">
     <input type="text" 
            name="q" 
-           class="form-control bg-light border-0 shadow-none py-2" 
+           class="form-control bg-light border-0 shadow-none py-2 w-100" 
            placeholder="{{ placeholder }}"
            hx-get="{% url 'suggest' %}?field={{ field }}"
            hx-trigger="keyup changed delay:300ms"
            hx-target="#results-{{ field }}"
-           autocomplete="off">
+           autocomplete="off"
+           autofocus
+           style="font-size: 0.85rem;">
     <div id="results-{{ field }}"></div>
 </div>
