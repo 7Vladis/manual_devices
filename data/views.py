@@ -606,30 +606,20 @@ def toggle_explorer_mode_view(request):
         request.session['explorer_mode'] = new_mode
         request.session['explorer_parent_uuid'] = None
         
-        mode_display = "Проводник" if new_mode == 'flat' else "Дерево"
-        checked_attr = "checked" if new_mode == 'flat' else ""
+        icon_class = "bi-folder2-open text-warning" if new_mode == 'flat' else "bi-diagram-3-fill text-info"
+        title_text = "Проводник (кликните для перехода в Дерево)" if new_mode == 'flat' else "Дерево (кликните для перехода в Проводник)"
         
         html = f"""
-        <div id="explorer-toggle-wrapper" class="d-flex align-items-center justify-content-between w-100" style="min-height: 40px;">
-            <div class="d-flex flex-column text-start" style="user-select: none;">
-                <small class="text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px; line-height: 1.2;">
-                    Режим справочника
-                </small>
-                <span class="text-primary fw-bold" id="explorer-mode-text" style="font-size: 0.85rem; line-height: 1.2; margin-top: 2px;">
-                    {mode_display}
-                </span>
-            </div>
-            <div class="form-check form-switch m-0 d-flex align-items-center">
-                <input class="form-check-input" 
-                       type="checkbox" 
-                       id="explorerModeToggle"
-                       hx-post="/dict/toggle-explorer-mode/"
-                       hx-target="#explorer-toggle-wrapper"
-                       hx-swap="outerHTML"
-                       style="cursor: pointer; transform: scale(1.1); margin: 0;"
-                       {checked_attr}>
-            </div>
-        </div>
+        <button type="button"
+                id="explorer-toggle-btn"
+                class="header-nav-btn"
+                hx-post="/dict/toggle-explorer-mode/"
+                hx-target="#explorer-toggle-btn"
+                hx-swap="outerHTML"
+                style="width: 34px; height: 34px; border-radius: 8px; background-color: rgba(255, 255, 255, 0.06);"
+                title="Режим справочника: {title_text}">
+            <i class="bi {icon_class} fs-6" style="line-height: 1;"></i>
+        </button>
         """
         
         response = HttpResponse(html)

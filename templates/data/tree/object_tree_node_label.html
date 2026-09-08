@@ -1,18 +1,17 @@
-<!-- templates/data/tree/object_tree_node_label.html -->
 <div id="node-label-{{ node.uuid }}" 
-     class="d-flex align-items-center text-truncate flex-grow-1 py-1 px-2 rounded-2 {% if is_active or active_object and active_object.uuid == node.uuid %}bg-light-primary border border-primary-subtle fw-bold text-primary active-tree-node{% endif %}" 
+     class="d-flex align-items-center text-truncate flex-grow-1 py-0.5" 
      hx-get="{% url 'object_detail' node.uuid %}" 
      hx-target="#detail-container"
      style="cursor: pointer; user-select: none;"
      {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
     
     {% if node.children.all %}
-        <i class="bi bi-folder text-warning me-2 fs-5"></i>
+        <i class="bi bi-folder2-open text-warning me-2 fs-6 flex-shrink-0"></i>
     {% else %}
-        <i class="bi bi-file-text text-secondary me-2 fs-5"></i>
+        <i class="bi bi-hdd-fill {% if is_active or active_object and active_object.uuid == node.uuid %}text-primary{% else %}text-secondary{% endif %} me-2 fs-6 flex-shrink-0"></i>
     {% endif %}
     
-    <span class="text-dark fw-medium text-truncate small" title="{{ node.name|default:node.model.name }}">
+    <span class="text-truncate small {% if is_active or active_object and active_object.uuid == node.uuid %}fw-bold text-primary{% else %}text-dark{% endif %}" title="{{ node.name|default:node.model.name }}">
         {{ node.name|default:node.model.name }}
     </span>
 </div>

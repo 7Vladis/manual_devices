@@ -1,46 +1,74 @@
-<!-- templates/data/includes/maintenance_table.html -->
-<div class="maintenance-list">
+<div class="d-flex flex-column gap-2 animate-fade">
     {% for obj in objects %}
-    <!-- Чистая ссылка: ЛКМ откроет здесь же, колесико мыши — в новой вкладке -->
     <a href="{% url 'dict' %}?object={{ obj.uuid }}" 
-       class="card p-3 mb-3 clickable-card text-decoration-none d-block {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}overdue-card{% endif %}">
-        <div class="maintenance-item-container">
-            <div class="d-flex align-items-center overflow-hidden">
-                <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px; min-width: 48px;">
+       class="card p-3 shadow-sm clickable-card text-decoration-none {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}overdue-card{% else %}border-0 bg-white{% endif %}">
+        <div class="d-flex align-items-center justify-content-between">
+            
+            <!-- Левая часть: Иконка + Инфо -->
+            <div class="d-flex align-items-center min-w-0 me-3">
+                
+                <!-- Статусная иконка -->
+                <div class="rounded-3 d-flex align-items-center justify-content-center me-3 flex-shrink-0 {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}bg-light-danger text-danger{% else %}bg-light-primary text-primary{% endif %}" 
+                     style="width: 42px; height: 42px;">
                     {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}
-                        <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                        <i class="bi bi-exclamation-octagon-fill fs-5"></i>
                     {% else %}
-                        <i class="bi bi-wrench text-muted fs-5"></i>
+                        <i class="bi bi-wrench-adjustable fs-5"></i>
                     {% endif %}
                 </div>
+
+                <!-- Текстовый блок -->
                 <div class="text-truncate">
-                    <h6 class="mb-1 fw-bold text-dark text-truncate">{{ obj.name|default:obj.model.name }}</h6>
-                    <div class="text-muted small">
-                        {{ obj.model.object_type.type }} • {{ obj.inventory_number|default:"Без инв. №" }}
+                    <div class="fw-bold text-dark text-truncate" style="font-size: 0.95rem;">
+                        {{ obj.name|default:obj.model.name }}
+                    </div>
+                    
+                    <div class="d-flex flex-wrap align-items-center gap-2 text-muted small mt-0.5" style="font-size: 0.8rem;">
+                        <span class="badge bg-light text-secondary border fw-medium px-2 py-0.5 rounded">
+                            {{ obj.model.object_type.type }}
+                        </span>
+                        
+                        <span>
+                            <i class="bi bi-upc-scan me-1"></i>{{ obj.inventory_number|default:"Без инв. №" }}
+                        </span>
+
                         {% if obj.next_maintenance_date %}
-                            • <i class="bi bi-calendar3 ms-1"></i> {{ obj.next_maintenance_date|date:"d.m.Y" }}
+                        <span>
+                            • <i class="bi bi-calendar3 ms-1 me-1"></i>{{ obj.next_maintenance_date|date:"d.m.Y" }}
+                        </span>
                         {% endif %}
                     </div>
                 </div>
+
             </div>
-            
-            <div class="ms-3 flex-shrink-0">
+
+            <!-- Правая часть: Статусный бейдж + Стрелка перехода -->
+            <div class="d-flex align-items-center gap-2 flex-shrink-0">
                 {% if obj.next_maintenance_date %}
                     {% if obj.next_maintenance_date < today %}
-                        <span class="badge rounded-pill bg-danger px-3 py-2">Просрочено</span>
+                        <span class="badge bg-danger text-white px-2.5 py-1.5 rounded-pill fw-semibold" style="font-size: 0.75rem;">
+                            <i class="bi bi-clock-history me-1"></i> Просрочено
+                        </span>
                     {% else %}
-                        <span class="text-muted small fw-medium">Через {{ obj.next_maintenance_date|timeuntil }}</span>
+                        <span class="badge bg-light text-primary border border-primary-subtle px-2.5 py-1.5 rounded-pill fw-semibold" style="font-size: 0.75rem;">
+                            <i class="bi bi-hourglass-split me-1"></i> Через {{ obj.next_maintenance_date|timeuntil }}
+                        </span>
                     {% endif %}
                 {% endif %}
+
+                <i class="bi bi-chevron-right text-muted fs-6 ms-1"></i>
             </div>
+
         </div>
     </a>
     {% empty %}
-    <div class="card p-5 text-center text-muted">
-        <i class="bi bi-check2-circle fs-1 d-block mb-2 text-success"></i>
-        Работ не найдено
+    <div class="card p-5 border-0 shadow-sm text-center text-muted bg-white">
+        <i class="bi bi-check2-circle fs-1 text-success mb-2"></i>
+        <div class="fw-bold text-dark">Все работы выполнены</div>
+        <small class="text-muted mt-1">По выбранному периоду нет запланированных технических обслуживаний.</small>
     </div>
     {% endfor %}
 </div>
 
+<!-- OOB-обновление заголовка фильтра -->
 <span id="period-label" hx-swap-oob="innerHTML">{{ period_label }}</span>

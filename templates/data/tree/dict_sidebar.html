@@ -1,82 +1,96 @@
-<!-- templates/data/tree/dict_sidebar.html -->
-<div class="d-flex flex-column h-100 pe-1">
+<div class="d-flex flex-column h-100 p-2">
     
-    <!-- Переключатель вкладок (Объекты / Модели) -->
-    <div class="d-flex bg-light p-1 rounded-3 my-2" style="font-size: 0.85rem;">
-        <button class="btn {% if active_tab == 'objects' %}btn-white shadow-sm text-dark{% else %}btn-light text-muted{% endif %} flex-fill fw-bold py-2 border-0 rounded-2" 
+    <!-- Переключатель вкладок: Объекты / Модели -->
+    <div class="d-flex align-items-center bg-light rounded-2 mb-2 border p-1" style="height: 35px;">
+        <button class="btn btn-sm {% if active_tab == 'objects' %}text-primary{% else %}text-muted{% endif %} fw-semibold border-0 bg-transparent w-50 py-1 px-2 d-flex align-items-center justify-content-center gap-1.5 shadow-none" 
+                style="font-size: 0.82rem; flex: 1 1 50%;"
                 hx-get="{% url 'dict' %}?tab=objects&sidebar=1" 
                 hx-target="#sidebar-container">
-            <i class="bi bi-box-seam me-1"></i>Объекты
+            <i class="bi bi-box-seam" style="font-size: 0.9rem;"></i>
+            <span>Объекты</span>
         </button>
-        <button class="btn {% if active_tab == 'models' %}btn-white shadow-sm text-dark{% else %}btn-light text-muted{% endif %} flex-fill fw-bold py-2 border-0 rounded-2" 
+
+        <div class="vr bg-secondary opacity-25 flex-shrink-0" style="height: 25px;"></div>
+
+        <button class="btn btn-sm {% if active_tab == 'models' %}text-primary{% else %}text-muted{% endif %} fw-semibold border-0 bg-transparent w-50 py-1 px-2 d-flex align-items-center justify-content-center gap-1.5 shadow-none" 
+                style="font-size: 0.82rem; flex: 1 1 50%;"
                 hx-get="{% url 'dict' %}?tab=models&sidebar=1" 
                 hx-target="#sidebar-container">
-            <i class="bi bi-layers me-1"></i>Модели
+            <i class="bi bi-layers" style="font-size: 0.9rem;"></i>
+            <span>Модели</span>
         </button>
     </div>
 
-    <!-- Кнопка Создать -->
+    <!-- Кнопка «Создать» (скрыта для Junior) -->
     {% if not request.user.is_junior %}
-    <div class="dropdown mb-2">
-        <button class="btn w-100 py-2 text-white fw-bold d-flex align-items-center justify-content-between px-3" 
+    <div class="dropdown mb-3">
+        <button class="btn btn-primary w-100 py-2 px-3 d-flex align-items-center justify-content-between shadow-sm fw-semibold" 
                 type="button" 
                 data-bs-toggle="dropdown" 
                 aria-expanded="false"
-                style="background-color: #1e293b; border-radius: 6px; font-size: 0.9rem;">
-            <span><i class="bi bi-plus-lg me-2"></i>Создать</span>
-            <i class="bi bi-chevron-down small"></i>
+                style="height: 38px;">
+            <span class="d-flex align-items-center gap-2">
+                <i class="bi bi-plus-lg fs-6" style="line-height: 1;"></i>
+                <span>Создать</span>
+            </span>
+            <i class="bi bi-chevron-down small opacity-75" style="line-height: 1;"></i>
         </button>
-        <ul class="dropdown-menu w-100 border-0 shadow-lg mt-1 p-2">
+
+        <!-- Выпадающее меню создания с выверенными отступами -->
+        <ul class="dropdown-menu w-100 border-0 shadow-lg rounded-3 p-2 mt-1" style="min-width: 250px;">
+            
+            <!-- 1. Создать Объект -->
             <li>
-                <!-- КНОПКА СОЗДАНИЯ МОДЕЛИ -->
-                <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
-                        type="button" 
-                        data-bs-toggle="modal" 
-                        data-bs-target="#createModelModal"
-                        hx-get="{% url 'create_model' %}"
-                        hx-target="#createModelModal .modal-content">
-                    <div class="bg-light rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
-                        <i class="bi bi-layers text-purple fs-5"></i>
-                    </div>
-                    <div>
-                        <span class="d-block fw-bold text-dark small">Модель</span>
-                        <small class="text-muted" style="font-size: 0.75rem;">Тип/шаблон оборудования</small>
-                    </div>
-                </button>
-            </li>
-            <li><hr class="dropdown-divider my-2 opacity-50"></li>
-            <li>
-                <!-- КНОПКА СОЗДАНИЯ ОБЪЕКТА -->
-                <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
+                <button class="dropdown-item p-2 rounded-2 d-flex align-items-center gap-3" 
                         type="button" 
                         data-bs-toggle="modal" 
                         data-bs-target="#createObjectModal"
                         hx-get="{% url 'create_object' %}"
                         hx-target="#createObjectModal .modal-content">
-                    <div class="bg-light rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
-                        <i class="bi bi-box text-primary fs-5"></i>
+                    <div class="bg-light-primary text-primary rounded-2 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 36px; height: 36px;">
+                        <i class="bi bi-box-seam fs-5"></i>
                     </div>
-                    <div>
-                        <span class="d-block fw-bold text-dark small">Объект</span>
-                        <small class="text-muted" style="font-size: 0.75rem;">Конкретный экземпляр оборудования</small>
+                    <div class="min-w-0">
+                        <span class="d-block fw-bold text-dark small lh-sm">Объект</span>
+                        <small class="text-muted d-block lh-sm mt-1" style="font-size: 0.75rem;">Экземпляр оборудования</small>
                     </div>
                 </button>
             </li>
-            <li><hr class="dropdown-divider my-2 opacity-50"></li>
+
+            <!-- 2. Создать Модель -->
             <li>
-                <!-- КНОПКА КЛОНИРОВАНИЯ ОБЪЕКТА -->
-                <button class="dropdown-item py-2 rounded-2 d-flex align-items-center" 
+                <button class="dropdown-item p-2 rounded-2 d-flex align-items-center gap-3" 
+                        type="button" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#createModelModal"
+                        hx-get="{% url 'create_model' %}"
+                        hx-target="#createModelModal .modal-content">
+                    <div class="bg-light-purple text-purple rounded-2 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 36px; height: 36px;">
+                        <i class="bi bi-layers fs-5"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <span class="d-block fw-bold text-dark small lh-sm">Модель</span>
+                        <small class="text-muted d-block lh-sm mt-1" style="font-size: 0.75rem;">Шаблон характеристик</small>
+                    </div>
+                </button>
+            </li>
+
+            <li><hr class="dropdown-divider my-1 opacity-50"></li>
+
+            <!-- 3. Копировать Объект -->
+            <li>
+                <button class="dropdown-item p-2 rounded-2 d-flex align-items-center gap-3" 
                         type="button" 
                         data-bs-toggle="modal" 
                         data-bs-target="#cloneObjectModal"
                         hx-get="{% url 'clone_object_modal' %}"
                         hx-target="#cloneObjectModal .modal-content">
-                    <div class="bg-light-success rounded-2 p-2 me-3 d-flex align-items-center justify-content-center" style="width:36px; height:36px;">
-                        <i class="bi bi-files text-success fs-5"></i>
+                    <div class="bg-light-success text-success rounded-2 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 36px; height: 36px;">
+                        <i class="bi bi-copy fs-5"></i>
                     </div>
-                    <div>
-                        <span class="d-block fw-bold text-dark small">Сделать копию</span>
-                        <small class="text-muted" style="font-size: 0.75rem;">Тиражирование структуры объекта</small>
+                    <div class="min-w-0">
+                        <span class="d-block fw-bold text-dark small lh-sm">Копировать объект</span>
+                        <small class="text-muted d-block lh-sm mt-1" style="font-size: 0.75rem;">Дублировать с потомками</small>
                     </div>
                 </button>
             </li>
@@ -84,8 +98,8 @@
     </div>
     {% endif %}
 
-    <!-- Контейнер дерева -->
-    <div id="tree-container" class="flex-grow-1 overflow-auto pb-3">
+    <!-- Контейнер со списком элементов дерева -->
+    <div id="tree-container" class="flex-grow-1 overflow-auto pe-1">
         {% if active_tab == 'models' %}
             {% include 'data/tree/model_tree_list.html' with object_types=object_types_list %}
         {% else %}

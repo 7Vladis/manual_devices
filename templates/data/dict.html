@@ -1,105 +1,86 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<!-- Переопределяем отступы базового шаблона только для страницы Справочника -->
-<style>
-    main.container-fluid {
-        padding: 0 !important;
-        margin: 0 !important;
-        max-width: 100vw !important;
-    }
-    #main-content {
-        width: 100%;
-    }
-    .dict-layout {
-        height: calc(100vh - 70px); /* 70px — примерная высота шапки */
-        overflow: hidden;
-    }
-</style>
-
-<div class="container-fluid px-0 dict-layout">
-    <!-- row g-0 убирает зазоры между левым и правым окном -->
-    <div class="row g-0 h-100">
+<div class="container-fluid px-0 flex-grow-1 d-flex flex-column" style="height: calc(100vh - 56px); overflow: hidden;">
+    <div class="row g-0 h-100 flex-grow-1">
         
-        <!-- ЛЕВОЕ ОКНО: Проводник -->
-        <div class="col-12 col-md-4 col-lg-3 bg-white border-end px-3 pt-2 d-flex flex-column h-100" 
-             id="sidebar-container"
-             hx-get="{% url 'dict' %}?tab={{ active_tab }}&sidebar=1"
-             hx-trigger="explorerModeChanged from:body"
-             style="box-shadow: 2px 0 5px rgba(0,0,0,0.02);">
+        <!-- ЛЕВАЯ КОЛОНКА: Сайдбар (Дерево / Проводник) -->
+        <aside class="col-12 col-md-4 col-xl-3 bg-white border-end d-flex flex-column h-100" 
+               id="sidebar-container"
+               hx-get="{% url 'dict' %}?tab={{ active_tab }}&sidebar=1"
+               hx-trigger="explorerModeChanged from:body">
             {% include 'data/tree/dict_sidebar.html' %}
-        </div>
+        </aside>
 
-        <!-- ПРАВОЕ ОКНО: Детали (заглушка) -->
-        <div class="col-12 col-md-8 col-lg-9 d-flex flex-column h-100 bg-light" id="detail-container">
+        <!-- ПРАВАЯ КОЛОНКА: Детальная карточка -->
+        <main class="col-12 col-md-8 col-xl-9 d-flex flex-column h-100 bg-light" id="detail-container">
             {% if active_object %}
-                <!-- Если передан объект, HTMX мгновенно подгружает его карточку -->
                 <div hx-get="{% url 'object_detail' active_object.uuid %}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">
-                    <div class="text-center p-5">
+                    <div class="d-flex align-items-center justify-content-center h-100 p-5">
                         <div class="spinner-border text-primary" role="status"></div>
                     </div>
                 </div>
             {% elif active_model %}
-                <!-- Если передана модель, HTMX мгновенно подгружает её карточку -->
                 <div hx-get="{% url 'model_detail' active_model.uuid %}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">
-                    <div class="text-center p-5">
+                    <div class="d-flex align-items-center justify-content-center h-100 p-5">
                         <div class="spinner-border text-primary" role="status"></div>
                     </div>
                 </div>
             {% else %}
-                <!-- Заглушка по умолчанию, если ничего не выбрано -->
-                <div class="d-flex align-items-center justify-content-center text-muted p-5 text-center h-100">
-                    <div>
-                        <i class="bi bi-info-circle fs-1 mb-3 text-secondary"></i>
-                        <h5 class="fw-bold">Выберите объект или модель в левом окне</h5>
-                        <p class="small mb-0">Здесь отобразится подробная техническая информация, история обслуживания и прикрепленные файлы.</p>
+                <!-- Заглушка выбора объекта -->
+                <div class="d-flex align-items-center justify-content-center text-center h-100 p-4 animate-fade">
+                    <div style="max-width: 420px;">
+                        <div class="rounded-circle bg-light-primary text-primary mx-auto mb-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 64px; height: 64px;">
+                            <i class="bi bi-diagram-3-fill fs-3"></i>
+                        </div>
+                        <h6 class="fw-bold text-dark mb-1">Выберите объект или модель</h6>
+                        <p class="text-secondary small mb-0">
+                            Кликните на элемент в левом дереве для просмотра характеристик, истории ТО, прикрепленных файлов и комментариев.
+                        </p>
                     </div>
                 </div>
             {% endif %}
-        </div>
+        </main>
         
     </div>
 </div>
 
-<!-- ГЛОБАЛЬНЫЙ КОНТЕЙНЕР ДЛЯ МОДАЛЬНОГО ОКНА ОБСЛУЖИВАНИЯ -->
+<!-- Модальное окно: Обслуживание (ТО) -->
 <div class="modal fade" id="serviceModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
-        <div class="modal-content border-0 shadow-lg" id="service-modal-content">
-            <!-- Контент подгружается динамически по HTMX -->
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
+        <div class="modal-content border-0 shadow-lg rounded-3" id="service-modal-content">
         </div>
     </div>
 </div>
 
-<!-- МОДАЛЬНОЕ ОКНО: Создание Объекта -->
+<!-- Модальное окно: Создание Объекта -->
 <div class="modal fade" id="createObjectModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-3">
         </div>
     </div>
 </div>
 
-<!-- МОДАЛЬНОЕ ОКНО: Создание Модели (Новая чистая обертка) -->
+<!-- Модальное окно: Создание Модели -->
 <div class="modal fade" id="createModelModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-3">
         </div>
     </div>
 </div>
 
-<!-- ГЛОБАЛЬНЫЙ КОНТЕЙНЕР ДЛЯ МОДАЛЬНОГО ОКНА РЕДАКТИРОВАНИЯ ПРАВИЛА -->
+<!-- Модальное окно: Редактирование Правила ТО -->
 <div class="modal fade" id="editRuleModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 540px;">
-        <div class="modal-content border-0 shadow-lg" id="edit-rule-modal-content" style="border-radius: 12px;">
-            <!-- Контент подгружается динамически по HTMX -->
+        <div class="modal-content border-0 shadow-lg rounded-3" id="edit-rule-modal-content">
         </div>
     </div>
 </div>
 
-<!-- МОДАЛЬНОЕ ОКНО: Клонирование Объекта -->
+<!-- Модальное окно: Клонирование Объекта -->
 <div class="modal fade" id="cloneObjectModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
-            <!-- Контент подгружается по HTMX -->
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 500px;">
+        <div class="modal-content border-0 shadow-lg rounded-3">
         </div>
     </div>
 </div>
