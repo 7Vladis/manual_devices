@@ -1,10 +1,11 @@
+<!-- templates/data/tree/object_tree_node.html -->
 <li class="tree-item position-relative mb-0.5" id="node-{{ node.uuid }}">
     <div class="d-flex align-items-center justify-content-between p-1 rounded-2 hover-bg-light transition-all">
         
-        <!-- Стрелка раскрытия -->
+        <!-- Стрелка раскрытия (поворачивается вниз при aria-expanded="true") -->
         {% if node.children.all %}
             <span class="tree-arrow text-secondary d-inline-flex align-items-center justify-content-center flex-shrink-0" 
-                  style="width: 24px; height: 24px; font-size: 0.75rem; cursor: pointer; user-select: none;"
+                  style="width: 24px; height: 24px; font-size: 0.75rem;"
                   data-bs-toggle="collapse" 
                   data-bs-target="#children-{{ node.uuid }}"
                   aria-expanded="{% if node.uuid|stringformat:'s' in parent_uuids %}true{% else %}false{% endif %}">

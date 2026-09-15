@@ -1,8 +1,9 @@
+<!-- templates/data/object/object_details.html -->
 <div class="d-flex flex-column h-100 bg-white animate-fade">
     
     <!-- 1. ШАПКА КАРТОЧКИ ОБЪЕКТА -->
-    <div class="px-4 py-3 border-bottom bg-white">
-        <div class="d-flex justify-content-between align-items-start mb-2">
+    <div class="px-4 py-4 border-bottom bg-white">
+        <div class="d-flex justify-content-between align-items-start mb-3">
             <div>
                 <!-- Название объекта -->
                 <div id="name-display-container" class="d-inline-block">
@@ -10,16 +11,17 @@
                         <h4 hx-get="{% url 'edit_name' obj.uuid %}" 
                             hx-target="#name-display-container" 
                             hx-swap="outerHTML" 
-                            class="fw-bold mb-0 text-dark d-inline-block editable-trigger">
-                            {{ obj.name|default:obj.model.name }} <i class="bi bi-pencil-square edit-icon"></i>
+                            class="fw-bold mb-0 text-dark d-inline-block editable-trigger"
+                            style="font-size: 1.35rem;">
+                            {{ obj.name|default:obj.model.name }} <i class="bi bi-pencil-square edit-icon ms-1" style="font-size: 0.85rem;"></i>
                         </h4>
                     {% else %}
-                        <h4 class="fw-bold mb-0 text-dark d-inline-block">{{ obj.name|default:obj.model.name }}</h4>
+                        <h4 class="fw-bold mb-0 text-dark d-inline-block" style="font-size: 1.35rem;">{{ obj.name|default:obj.model.name }}</h4>
                     {% endif %}
                 </div>
                 
                 <!-- Подстрока: Модель и Дата следующего ТО -->
-                <div class="text-muted small d-flex flex-wrap gap-3 mt-1 align-items-center">
+                <div class="text-muted small d-flex flex-wrap gap-3 mt-1.5 align-items-center">
                     <span id="model-display-container" class="d-inline-flex align-items-center">
                         {% if not request.user.is_junior %}
                             <span class="editable-trigger" 
@@ -27,18 +29,18 @@
                                   hx-target="#model-display-container" 
                                   hx-swap="outerHTML">
                                 <span class="text-muted me-1"><i class="bi bi-tag-fill me-1 text-secondary"></i>Модель:</span>
-                                <strong class="text-dark">{{ obj.model.name }}</strong>
-                                <i class="bi bi-pencil-square edit-icon"></i>
+                                <strong class="text-dark fw-semibold">{{ obj.model.name }}</strong>
+                                <i class="bi bi-pencil-square edit-icon ms-1" style="font-size: 0.75rem;"></i>
                             </span>
                         {% else %}
                             <span class="text-muted me-1"><i class="bi bi-tag-fill me-1 text-secondary"></i>Модель:</span>
-                            <strong class="text-dark">{{ obj.model.name }}</strong>
+                            <strong class="text-dark fw-semibold">{{ obj.model.name }}</strong>
                         {% endif %}
                     </span>
 
-                    <span>
-                        <i class="bi bi-calendar3 me-1 text-secondary"></i>След. ТО: 
-                        <strong id="maintenance-date-display" class="{% if obj.next_maintenance_date and obj.next_maintenance_date < today %}text-danger{% else %}text-primary{% endif %}">
+                    <span class="d-flex align-items-center">
+                        <i class="bi bi-calendar3 me-1.5 text-secondary"></i>След. ТО: 
+                        <strong id="maintenance-date-display" class="ms-1 {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}text-danger{% else %}text-primary{% endif %}">
                             {{ obj.next_maintenance_date|date:"d.m.Y"|default:"Не запланировано" }}
                         </strong>
                     </span>
@@ -47,13 +49,13 @@
         </div>
 
         <!-- Сетка мета-свойств (4 колонки) -->
-        <div class="row g-2 mt-2 pt-2 border-top">
+        <div class="row g-3 mt-1 pt-3 border-top" style="border-color: var(--border-subtle) !important;">
             
             <!-- Инвентарный номер -->
             <div class="col-12 col-sm-6 col-lg-3">
-                <div class="p-2 bg-light rounded-2 border">
-                    <small class="text-muted d-block fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Инв. №</small>
-                    <div class="mt-0.5">
+                <div class="p-2.5 bg-light rounded-3 border d-flex flex-column justify-content-between h-100" style="border-color: var(--border-subtle) !important;">
+                    <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Инв. №</small>
+                    <div class="mt-auto">
                         {% if not request.user.is_junior %}
                             {% include 'data/object/inline_inventory.html' with obj=obj editing=False %}
                         {% else %}
@@ -65,13 +67,13 @@
             
             <!-- Родительский агрегат -->
             <div class="col-12 col-sm-6 col-lg-3">
-                <div class="p-2 bg-light rounded-2 border">
-                    <small class="text-muted d-block fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">В составе (Родитель)</small>
-                    <div class="mt-0.5 text-truncate">
+                <div class="p-2.5 bg-light rounded-3 border d-flex flex-column justify-content-between h-100" style="border-color: var(--border-subtle) !important;">
+                    <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">В составе (Родитель)</small>
+                    <div class="mt-auto text-truncate" style="line-height: 1.2;">
                         {% if not request.user.is_junior %}
                             {% include 'data/object/inline_parent.html' with obj=obj current_parent=parent editing=False %}
                         {% else %}
-                            <strong class="text-primary small text-truncate d-block">{{ parent.name|default:parent.model.name|default:"—" }}</strong>
+                            <strong class="text-primary small text-truncate d-block" title="{{ parent.name|default:parent.model.name }}">{{ parent.name|default:parent.model.name|default:"—" }}</strong>
                         {% endif %}
                     </div>
                 </div>
@@ -79,9 +81,9 @@
 
             <!-- Правило планирования ТО -->
             <div class="col-12 col-sm-6 col-lg-3">
-                <div class="p-2 bg-light rounded-2 border">
-                    <small class="text-muted d-block fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Правило ТО</small>
-                    <div class="mt-0.5">
+                <div class="p-2.5 bg-light rounded-3 border d-flex flex-column justify-content-between h-100" style="border-color: var(--border-subtle) !important;">
+                    <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Правило ТО</small>
+                    <div class="mt-auto">
                         {% if not request.user.is_junior %}
                         <span id="rule-display-container" 
                               data-bs-toggle="modal" 
@@ -90,7 +92,7 @@
                               hx-target="#edit-rule-modal-content"
                               class="editable-trigger small">
                             <strong class="text-dark">{{ obj.date_update_rule.name|default:"ручной ввод" }}</strong>
-                            <i class="bi bi-pencil-square edit-icon"></i>
+                            <i class="bi bi-pencil-square edit-icon ms-1" style="font-size: 0.75rem;"></i>
                         </span>
                         {% else %}
                             <strong class="text-dark small">{{ obj.date_update_rule.name|default:"ручной ввод" }}</strong>
@@ -101,9 +103,9 @@
 
             <!-- YouTrack Задача -->
             <div class="col-12 col-sm-6 col-lg-3">
-                <div class="p-2 bg-light rounded-2 border">
-                    <small class="text-muted d-block fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">YouTrack</small>
-                    <div class="mt-0.5">
+                <div class="p-2.5 bg-light rounded-3 border d-flex flex-column justify-content-between h-100" style="border-color: var(--border-subtle) !important;">
+                    <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">YouTrack</small>
+                    <div class="mt-auto">
                         {% if not request.user.is_junior %}
                             {% include 'data/object/inline_youtrack.html' %}
                         {% else %}
@@ -122,8 +124,8 @@
         </div>
     </div>
 
-    <!-- 2. ВКЛАДКИ -->
-    <div class="bg-light px-4 py-1 border-bottom">
+    <!-- 2. ВКЛАДКИ НАВИГАЦИИ -->
+    <div class="bg-light px-4 py-2 border-bottom" style="border-color: var(--border-subtle) !important;">
         <ul class="nav nav-pills gap-1" id="objectTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active py-1.5 px-3 rounded-2 fw-semibold btn-sm" 

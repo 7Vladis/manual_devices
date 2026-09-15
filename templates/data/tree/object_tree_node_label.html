@@ -6,9 +6,9 @@
      {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
     
     {% if node.children.all %}
-        <i class="bi bi-folder2-open text-warning me-2 fs-6 flex-shrink-0"></i>
+        <i class="bi bi-folder-fill text-warning me-2 fs-5 flex-shrink-0"></i>
     {% else %}
-        <i class="bi bi-hdd-fill {% if is_active or active_object and active_object.uuid == node.uuid %}text-primary{% else %}text-secondary{% endif %} me-2 fs-6 flex-shrink-0"></i>
+        <i class="bi bi-hdd-fill {% if is_active or active_object and active_object.uuid == node.uuid %}text-primary{% else %}text-secondary{% endif %} me-2 fs-5 flex-shrink-0"></i>
     {% endif %}
     
     <span class="text-truncate small {% if is_active or active_object and active_object.uuid == node.uuid %}fw-bold text-primary{% else %}text-dark{% endif %}" title="{{ node.name|default:node.model.name }}">

@@ -23,7 +23,7 @@ urlpatterns = [
     path('dict/objects/<uuid:pk>/service/', views.service_object_view, name='service_object'),
     path('dict/objects/<uuid:pk>/delete/', views.delete_object_view, name='delete_object'),
     path('dict/toggle-explorer-mode/', views.toggle_explorer_mode_view, name='toggle_explorer_mode'),
-    path('dict/explorer/navigate/<uuid:pk>/', views.explorer_navigate_view, name='explorer_navigate'),
+    path('dict/explorer/navigate/<str:pk>/', views.explorer_navigate_view, name='explorer_navigate'),
     path('dict/explorer/up/', views.explorer_up_view, name='explorer_up'),
 
     # Дерево моделей

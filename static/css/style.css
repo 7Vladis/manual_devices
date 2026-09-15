@@ -374,3 +374,23 @@ a:hover {
     margin: 6px 0;
     font-style: italic;
 }
+
+/* ==========================================================================
+   9. ДЕРЕВО: АНИМАЦИЯ СТРЕЛОЧЕК РАСКРЫТИЯ
+   ========================================================================== */
+.tree-arrow {
+    cursor: pointer;
+    user-select: none;
+}
+
+.tree-arrow .arrow-icon {
+    display: inline-block;
+    transition: transform 0.2s ease-in-out;
+    transform-origin: center;
+}
+
+/* Когда ветка открыта — поворачиваем стрелочку строго вниз (на 90 градусов) */
+.tree-arrow[aria-expanded="true"] .arrow-icon {
+    transform: rotate(90deg);
+    color: var(--primary); /* Делаем стрелочку раскрытой папки синей для наглядности */
+}

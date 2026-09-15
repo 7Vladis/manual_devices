@@ -526,8 +526,8 @@ def search_view(request):
 def dict_view(request):
     active_tab = request.GET.get('tab', 'objects')
     
-    selected_object_id = request.GET.get('object')
-    selected_model_id = request.GET.get('model')
+    selected_object_id = request.GET.get('object') or request.session.get('active_object_id')
+    selected_model_id = request.GET.get('model') or request.session.get('active_model_id')
     
     active_object = None
     active_model = None
@@ -537,34 +537,41 @@ def dict_view(request):
     explorer_parent_uuid = request.session.get('explorer_parent_uuid')
     explorer_parent = None
     
-    if selected_object_id:
-        active_tab = 'objects'
-        active_object = get_object_or_404(DataObject.objects.select_related('parent'), pk=selected_object_id)
-        
-        current = active_object.parent
-        while current:
-            parent_uuids.append(str(current.pk))
-            current = current.parent
+    if selected_object_id and active_tab == 'objects':
+        try:
+            active_object = DataObject.objects.select_related('parent').prefetch_related('children').get(pk=selected_object_id)
+            request.session['active_object_id'] = str(active_object.pk)
+            
+            # Строим цепочку родителей для разворачивания дерева
+            current = active_object.parent
+            while current:
+                parent_uuids.append(str(current.pk))
+                current = current.parent
+        except DataObject.DoesNotExist:
+            request.session['active_object_id'] = None
                 
-        if explorer_mode == 'flat':
-            if active_object.parent:
-                explorer_parent_uuid = str(active_object.parent.pk)
-                request.session['explorer_parent_uuid'] = explorer_parent_uuid
-            else:
-                explorer_parent_uuid = None
-                request.session['explorer_parent_uuid'] = None
-                
-    elif selected_model_id:
-        active_tab = 'models'
-        active_model = get_object_or_404(ObjectModel, pk=selected_model_id)
+    elif selected_model_id and active_tab == 'models':
+        try:
+            active_model = ObjectModel.objects.get(pk=selected_model_id)
+            request.session['active_model_id'] = str(active_model.pk)
+        except ObjectModel.DoesNotExist:
+            request.session['active_model_id'] = None
         
+    # Ищем текущую папку проводника
     if explorer_mode == 'flat' and explorer_parent_uuid:
         try:
-            explorer_parent = DataObject.objects.get(pk=explorer_parent_uuid)
+            explorer_parent = DataObject.objects.select_related('parent').get(pk=explorer_parent_uuid)
+            curr_p = explorer_parent
+            while curr_p:
+                if str(curr_p.pk) not in parent_uuids:
+                    parent_uuids.append(str(curr_p.pk))
+                curr_p = curr_p.parent
         except DataObject.DoesNotExist:
             explorer_parent_uuid = None
             request.session['explorer_parent_uuid'] = None
     
+    request.session.modified = True
+
     models = ObjectModel.objects.all().order_by('name')
     object_types = ObjectType.objects.all().order_by('type')
     
@@ -596,15 +603,31 @@ def dict_view(request):
         
     return render(request, 'data/dict.html', context)
 
-
 @login_required
 def toggle_explorer_mode_view(request):
-    """Переключает режим отображения проводника"""
+    """Переключает режим отображения с умной синхронизацией позиции"""
     if request.method == 'POST':
         current_mode = request.session.get('explorer_mode', 'tree')
         new_mode = 'flat' if current_mode == 'tree' else 'tree'
         request.session['explorer_mode'] = new_mode
-        request.session['explorer_parent_uuid'] = None
+        
+        if new_mode == 'flat':
+            active_id = request.session.get('active_object_id')
+            if active_id:
+                try:
+                    obj = DataObject.objects.prefetch_related('children').select_related('parent').get(pk=active_id)
+                    if obj.children.exists():
+                        request.session['explorer_parent_uuid'] = str(obj.pk)
+                    elif obj.parent:
+                        request.session['explorer_parent_uuid'] = str(obj.parent.pk)
+                    else:
+                        request.session['explorer_parent_uuid'] = None
+                except DataObject.DoesNotExist:
+                    request.session['explorer_parent_uuid'] = None
+            else:
+                request.session['explorer_parent_uuid'] = None
+
+        request.session.modified = True
         
         icon_class = "bi-folder2-open text-warning" if new_mode == 'flat' else "bi-diagram-3-fill text-info"
         title_text = "Проводник (кликните для перехода в Дерево)" if new_mode == 'flat' else "Дерево (кликните для перехода в Проводник)"
@@ -631,8 +654,13 @@ def toggle_explorer_mode_view(request):
 
 @login_required
 def explorer_navigate_view(request, pk):
-    """Переход внутрь объекта в плоском режиме"""
-    request.session['explorer_parent_uuid'] = str(pk)
+    """Переход внутрь папки (или в корень, если pk='root')"""
+    if str(pk) == 'root':
+        request.session['explorer_parent_uuid'] = None
+    else:
+        request.session['explorer_parent_uuid'] = str(pk)
+        
+    request.session.modified = True
     response = HttpResponse()
     response['HX-Trigger'] = 'explorerModeChanged'
     return response
@@ -640,7 +668,7 @@ def explorer_navigate_view(request, pk):
 
 @login_required
 def explorer_up_view(request):
-    """Переход на один уровень вверх в плоском режиме"""
+    """Переход на один уровень вверх в плоском режиме (вплоть до корня)"""
     parent_uuid = request.session.get('explorer_parent_uuid')
     if parent_uuid:
         try:
@@ -648,7 +676,10 @@ def explorer_up_view(request):
             request.session['explorer_parent_uuid'] = str(current_parent.parent.pk) if current_parent.parent else None
         except DataObject.DoesNotExist:
             request.session['explorer_parent_uuid'] = None
+    else:
+        request.session['explorer_parent_uuid'] = None
             
+    request.session.modified = True
     response = HttpResponse()
     response['HX-Trigger'] = 'explorerModeChanged'
     return response
@@ -899,20 +930,19 @@ def create_model_view(request):
 @login_required
 def object_detail_view(request, pk):
     obj = get_object_or_404(
-        DataObject.objects.select_related('model', 'model__object_type', 'parent', 'parent__model'), 
+        DataObject.objects.select_related('model', 'model__object_type', 'parent', 'parent__model').prefetch_related('children'), 
         pk=pk
     )
     prev_active_id = request.session.get('active_object_id')
     request.session['active_object_id'] = str(pk)
+    request.session.modified = True
     
-    # Автоматическая синхронизация при открытии карточки объекта
     sync_status = None
     sync_message = ""
     if obj.youtrack_issue_id:
         sync_success, sync_message = sync_issue_from_youtrack(obj, request.user)
         sync_status = 'success' if sync_success else 'error'
         if sync_success:
-            # Обновляем объект, если из YouTrack подтянулось новое описание
             obj.refresh_from_db()
 
     context = {
