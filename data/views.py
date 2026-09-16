@@ -1747,52 +1747,77 @@ def check_object_name_view(request):
     return HttpResponse('<div class="text-success small mt-1"><i class="bi bi-check-circle-fill me-1"></i> Имя свободно</div>')
 
 
+# data/views.py
+
+# data/views.py
+
 @login_required
 def suggest_view(request):
-    field = request.GET.get('field')
+    field = request.GET.get('field', '').strip()
     q = request.GET.get('q', '').strip()
+    exclude_uuid = request.GET.get('exclude_uuid')
+    target_obj_uuid = request.GET.get('target_obj_uuid') or exclude_uuid
     
-    if not q or len(q) < 1:
-        return HttpResponse('')
-        
     results = []
-    words = q.split()
+    words = q.split() if q else []
     
-    if field == 'object_type':
-        exact = ObjectType.objects.filter(type__iexact=q)
-        word_filter = Q()
-        for w in words:
-            word_filter &= Q(type__icontains=w)
-        partial = ObjectType.objects.filter(word_filter).exclude(pk__in=exact)
-        results = list(exact) + list(partial)
+    # 1. Типы оборудования
+    if field in ['object_type']:
+        if q:
+            exact = ObjectType.objects.filter(type__iexact=q)
+            word_filter = Q()
+            for w in words:
+                word_filter &= Q(type__icontains=w)
+            partial = ObjectType.objects.filter(word_filter).exclude(pk__in=exact)
+            results = list(exact) + list(partial)
+        else:
+            results = list(ObjectType.objects.all().order_by('type')[:8])
         
-    elif field == 'model':
-        exact = ObjectModel.objects.filter(name__iexact=q)
-        word_filter = Q()
-        for w in words:
-            word_filter &= (Q(name__icontains=w) | Q(object_type__type__icontains=w))
-        partial = ObjectModel.objects.filter(word_filter).exclude(pk__in=exact)
-        results = list(exact) + list(partial)
+    # 2. Модели оборудования (включая model_inline)
+    elif field in ['model', 'model_inline']:
+        if q:
+            exact = ObjectModel.objects.filter(name__iexact=q)
+            word_filter = Q()
+            for w in words:
+                word_filter &= (Q(name__icontains=w) | Q(object_type__type__icontains=w))
+            partial = ObjectModel.objects.filter(word_filter).exclude(pk__in=exact)
+            results = list(exact) + list(partial)
+        else:
+            results = list(ObjectModel.objects.select_related('object_type').all().order_by('name')[:8])
         
-    # Поддерживаем и выбор родителя, и выбор исходного объекта для копирования
-    elif field in ['parent', 'source_object']:
-        exact = DataObject.objects.filter(Q(name__iexact=q) | Q(inventory_number__iexact=q))
-        word_filter = Q()
-        for w in words:
-            word_filter &= (Q(name__icontains=w) | Q(inventory_number__icontains=w) | Q(model__name__icontains=w))
-        partial = DataObject.objects.filter(word_filter).exclude(pk__in=exact)
-        results = list(exact) + list(partial)
+    # 3. Родительские объекты (включая parent_inline и source_object)
+    elif field in ['parent', 'parent_inline', 'source_object']:
+        qs = DataObject.objects.select_related('model', 'model__object_type').all()
+        
+        # Защита от зацикливания: исключаем сам объект из списка
+        if exclude_uuid:
+            qs = qs.exclude(pk=exclude_uuid)
+            
+        if q:
+            exact = qs.filter(Q(name__iexact=q) | Q(inventory_number__iexact=q))
+            word_filter = Q()
+            for w in words:
+                word_filter &= (Q(name__icontains=w) | Q(inventory_number__icontains=w) | Q(model__name__icontains=w))
+            partial = qs.filter(word_filter).exclude(pk__in=exact)
+            results = list(exact) + list(partial)
+        else:
+            # Если поле пустое, показываем первые объекты для быстрого выбора
+            results = list(qs.order_by('name')[:8])
 
-    elif field == 'date_update_rule':
-        exact = DateUpdateRule.objects.filter(name__iexact=q)
-        word_filter = Q()
-        for w in words:
-            word_filter &= Q(name__icontains=w)
-        partial = DateUpdateRule.objects.filter(word_filter).exclude(pk__in=exact)
-        results = list(exact) + list(partial)
+    # 4. Правила расчета ТО
+    elif field in ['date_update_rule']:
+        if q:
+            exact = DateUpdateRule.objects.filter(name__iexact=q)
+            word_filter = Q()
+            for w in words:
+                word_filter &= Q(name__icontains=w)
+            partial = DateUpdateRule.objects.filter(word_filter).exclude(pk__in=exact)
+            results = list(exact) + list(partial)
+        else:
+            results = list(DateUpdateRule.objects.all().order_by('name')[:8])
 
     show_create_option = False
-    if field in ['object_type', 'date_update_rule']:
+    if field in ['object_type', 'date_update_rule'] and q:
         has_exact_match = any(
             (getattr(item, 'type' if field == 'object_type' else 'name', '').lower() == q.lower()) for item in results
         )
@@ -1803,6 +1828,7 @@ def suggest_view(request):
         'results': results[:10],
         'field': field,
         'q': q,
+        'target_obj_uuid': target_obj_uuid,
         'show_create_option': show_create_option
     })
 

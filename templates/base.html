@@ -116,6 +116,25 @@
                 searchResults.innerHTML = '';
             }
         });
+
+        document.addEventListener('click', function(event) {
+            // Закрытие поиска шапки
+            const searchBox = document.querySelector('.header-search');
+            const searchResults = document.getElementById('search-results');
+            if (searchResults && searchBox && !searchBox.contains(event.target)) {
+                searchResults.innerHTML = '';
+            }
+
+            // Закрытие активных инлайн-форм при клике вне их контейнера
+            document.querySelectorAll('.inline-edit-wrapper').forEach(wrapper => {
+                if (!wrapper.contains(event.target)) {
+                    const cancelBtn = wrapper.querySelector('[title*="Отмена"]');
+                    if (cancelBtn) {
+                        cancelBtn.click();
+                    }
+                }
+            });
+        });
     </script>
 </body>
 </html>

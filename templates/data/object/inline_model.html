@@ -1,45 +1,42 @@
 <!-- templates/data/object/inline_model.html -->
-<span id="model-display-container" class="animate-fade d-inline-block">
+<span id="model-display-container" class="d-inline-block position-relative inline-edit-wrapper">
 {% if editing %}
-    <form hx-post="{% url 'edit_object_model' obj.uuid %}" 
-          hx-target="#model-display-container" 
-          hx-swap="outerHTML" 
-          class="d-inline-flex gap-1 align-items-center flex-nowrap">
-        {% csrf_token %}
-        
-        <div id="search-wrapper-model" class="position-relative" style="min-width: 180px; max-width: 250px;">
-            <input type="text" name="q" class="form-control form-control-sm bg-light py-1 shadow-none" 
-                   placeholder="Название модели..."
-                   hx-get="{% url 'suggest' %}?field=model"
-                   hx-trigger="keyup changed delay:300ms"
-                   hx-target="#results-model"
+    <div class="d-inline-flex align-items-center position-relative">
+        <div class="position-relative" style="min-width: 220px; max-width: 300px;">
+            <input type="text" 
+                   name="q" 
+                   class="form-control form-control-sm bg-white border py-1 px-2.5 shadow-sm rounded-2" 
+                   placeholder="Поиск новой модели..."
+                   hx-get="{% url 'suggest' %}?field=model_inline&target_obj_uuid={{ obj.uuid }}"
+                   hx-trigger="keyup changed delay:150ms, focus"
+                   hx-target="#results-model-inline"
                    autocomplete="off"
                    autofocus
-                   style="font-size: 0.8rem; height: 31px;"
-                   required>
-            <div id="results-model"></div>
+                   style="font-size: 0.85rem; height: 32px;"
+                   onkeydown="if(event.key==='Escape'){ htmx.ajax('GET', '{% url 'edit_object_model' obj.uuid %}?cancel=1', {target: '#model-display-container', swap: 'outerHTML'}); }">
         </div>
 
-        <button type="submit" class="btn btn-success btn-sm py-1 px-2 flex-shrink-0 d-flex align-items-center justify-content-center" style="height: 31px; width: 31px;" title="Сохранить">
-            <i class="bi bi-check-lg"></i>
-        </button>
-        <button type="button" class="btn btn-light btn-sm py-1 px-2 border flex-shrink-0 d-flex align-items-center justify-content-center" style="height: 31px; width: 31px;" 
+        <button type="button" 
+                class="btn btn-sm btn-link text-muted p-1 ms-1 border-0" 
                 hx-get="{% url 'edit_object_model' obj.uuid %}?cancel=1" 
                 hx-target="#model-display-container" 
-                hx-swap="outerHTML"
-                title="Отмена">
-            <i class="bi bi-x-lg"></i>
+                hx-swap="outerHTML" 
+                title="Отмена (Esc)">
+            <i class="bi bi-x-lg fs-6"></i>
         </button>
-    </form>
+        
+        <!-- Выпадающий список моделей -->
+        <div id="results-model-inline" style="position: absolute; top: 100%; left: 0; width: 280px; z-index: 1200;"></div>
+    </div>
 {% else %}
-    <strong class="text-dark editable-trigger" 
-            hx-get="{% url 'edit_object_model' obj.uuid %}" 
-            hx-target="#model-display-container" 
-            hx-swap="outerHTML" 
-            style="cursor: pointer; font-weight: normal;">
-        <span class="text-muted me-1"><i class="bi bi-tag me-1"></i>Модель:</span>
+    <span class="badge bg-light text-dark border d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 editable-trigger" 
+          {% if not request.user.is_junior %}hx-get="{% url 'edit_object_model' obj.uuid %}" hx-target="#model-display-container" hx-swap="outerHTML"{% endif %}
+          style="cursor: pointer; font-size: 0.85rem;"
+          title="Модель оборудования (кликните для изменения)">
+        <i class="bi bi-tag-fill text-secondary fs-6"></i>
+        <span class="text-secondary fw-normal">Модель:</span>
         <strong class="text-dark fw-bold">{{ obj.model.name }}</strong>
-        <i class="bi bi-pencil-square edit-icon"></i>
-    </strong>
+        {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon ms-1"></i>{% endif %}
+    </span>
 {% endif %}
 </span>

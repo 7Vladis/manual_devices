@@ -1,41 +1,64 @@
 <!-- templates/data/includes/suggestions_list.html -->
-<div class="list-group list-group-flush border shadow-lg rounded-3 mt-1" 
-     style="max-height: 180px; overflow-y: auto; z-index: 1150; position: absolute; top: 100%; left: 0; width: 100%; background: #ffffff;">
+<div class="list-group list-group-flush shadow-lg border rounded-3 p-1 animate-fade mt-1" 
+     style="max-height: 220px; overflow-y: auto; z-index: 1250; position: absolute; top: 100%; left: 0; min-width: 250px; width: 100%; background: #ffffff;">
     
+    <!-- Для Родителя: единственный и понятный пункт очистки -->
+    {% if field == 'parent_inline' and target_obj_uuid %}
+    <button type="button" 
+            class="list-group-item list-group-item-action py-2 px-2.5 text-danger small border-0 rounded-2 d-flex align-items-center hover-bg-light fw-semibold"
+            hx-post="{% url 'edit_parent' target_obj_uuid %}"
+            hx-target="#parent-display-container"
+            hx-swap="outerHTML"
+            hx-vals='{"parent": ""}'>
+        <i class="bi bi-x-circle-fill me-2"></i> Без родителя (сделать корневым)
+    </button>
+    <div class="border-top my-1 opacity-50"></div>
+    {% endif %}
+
     {% for item in results %}
     <button type="button" 
-            class="list-group-item list-group-item-action py-2 px-3 text-start small border-0 hover-bg-light"
-            hx-get="{% url 'select_suggestion' %}?field={{ field }}&uuid={{ item.uuid }}"
-            hx-target="#search-wrapper-{{ field }}"
-            hx-swap="outerHTML">
-        {% if field == 'model' %}
-            <i class="bi bi-layers text-secondary me-2"></i><strong>{{ item.name }}</strong> <span class="text-muted">({{ item.object_type.type }})</span>
-        {% elif field in 'parent,source_object' %}
-            <i class="bi bi-box text-primary me-2"></i><strong>{{ item.name|default:item.model.name }}</strong> <small class="text-muted">| {{ item.inventory_number|default:"Без инв. №" }}</small>
-        {% elif field == 'date_update_rule' %}
-            <i class="bi bi-calendar-range text-info me-2"></i><strong>{{ item.name }}</strong>
-        {% else %}
-            <i class="bi bi-tag text-muted me-2"></i>{{ item.type }}
-        {% endif %}
+            class="list-group-item list-group-item-action py-2 px-2.5 text-start small border-0 rounded-2 d-flex align-items-center justify-content-between hover-bg-light"
+            {% if field == 'model_inline' and target_obj_uuid %}
+                hx-post="{% url 'edit_object_model' target_obj_uuid %}"
+                hx-target="#model-display-container"
+                hx-swap="outerHTML"
+                hx-vals='{"model": "{{ item.uuid }}"}'
+            {% elif field == 'parent_inline' and target_obj_uuid %}
+                hx-post="{% url 'edit_parent' target_obj_uuid %}"
+                hx-target="#parent-display-container"
+                hx-swap="outerHTML"
+                hx-vals='{"parent": "{{ item.uuid }}"}'
+            {% else %}
+                hx-get="{% url 'select_suggestion' %}?field={{ field }}&uuid={{ item.uuid }}"
+                hx-target="#search-wrapper-{{ field }}"
+                hx-swap="outerHTML"
+            {% endif %}>
+        
+        <div class="d-flex align-items-center text-truncate me-2">
+            {% if field in 'model,model_inline' %}
+                <i class="bi bi-layers text-secondary me-2 flex-shrink-0"></i>
+                <span class="fw-semibold text-dark text-truncate">{{ item.name }}</span>
+                <span class="text-muted ms-1.5 small text-truncate">({{ item.object_type.type }})</span>
+            {% elif field in 'parent,parent_inline,source_object' %}
+                <i class="bi bi-box text-primary me-2 flex-shrink-0"></i>
+                <span class="fw-semibold text-dark text-truncate">{{ item.name|default:item.model.name }}</span>
+                {% if item.inventory_number %}
+                    <small class="text-muted ms-1.5 text-truncate">| {{ item.inventory_number }}</small>
+                {% endif %}
+            {% elif field == 'date_update_rule' %}
+                <i class="bi bi-arrow-repeat text-success me-2 flex-shrink-0"></i>
+                <span class="fw-semibold text-dark text-truncate">{{ item.name }}</span>
+            {% else %}
+                <i class="bi bi-tag text-muted me-2 flex-shrink-0"></i>
+                <span class="fw-semibold text-dark">{{ item.type }}</span>
+            {% endif %}
+        </div>
+        <i class="bi bi-check2 text-primary opacity-0 hover-opacity-100"></i>
     </button>
+    {% empty %}
+    <div class="p-3 text-center text-muted small">
+        <i class="bi bi-search d-block mb-1 opacity-50"></i>
+        Ничего не найдено
+    </div>
     {% endfor %}
-
-    {% if show_create_option %}
-        {% if field == 'date_update_rule' %}
-            <a href="{% url 'settings_page' %}?tab=rules" 
-               target="_blank" 
-               class="list-group-item list-group-item-action py-2 px-3 text-primary text-start small border-0 bg-light fw-bold text-decoration-none d-flex align-items-center justify-content-between">
-                <span><i class="bi bi-plus-circle-fill me-2"></i>Создать правило в настройках</span>
-                <i class="bi bi-box-arrow-up-right small text-muted"></i>
-            </a>
-        {% elif field == 'object_type' %}
-            <button type="button" 
-                    class="list-group-item list-group-item-action py-2 px-3 text-primary text-start small border-0 bg-light fw-bold"
-                    hx-get="{% url 'select_suggestion' %}?field={{ field }}&name={{ q|urlencode }}"
-                    hx-target="#search-wrapper-{{ field }}"
-                    hx-swap="outerHTML">
-                <i class="bi bi-plus-circle-fill me-2"></i>Создать новый: "{{ q }}"
-            </button>
-        {% endif %}
-    {% endif %}
 </div>

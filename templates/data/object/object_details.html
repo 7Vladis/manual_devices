@@ -1,134 +1,100 @@
 <!-- templates/data/object/object_details.html -->
 <div class="d-flex flex-column h-100 bg-white animate-fade">
     
-    <!-- 1. ШАПКА КАРТОЧКИ ОБЪЕКТА -->
-    <div class="px-4 py-4 border-bottom bg-white">
-        <div class="d-flex justify-content-between align-items-start mb-3">
-            <div>
-                <!-- Название объекта -->
-                <div id="name-display-container" class="d-inline-block">
-                    {% if not request.user.is_junior %}
-                        <h4 hx-get="{% url 'edit_name' obj.uuid %}" 
-                            hx-target="#name-display-container" 
-                            hx-swap="outerHTML" 
-                            class="fw-bold mb-0 text-dark d-inline-block editable-trigger"
-                            style="font-size: 1.35rem;">
-                            {{ obj.name|default:obj.model.name }} <i class="bi bi-pencil-square edit-icon ms-1" style="font-size: 0.85rem;"></i>
-                        </h4>
-                    {% else %}
-                        <h4 class="fw-bold mb-0 text-dark d-inline-block" style="font-size: 1.35rem;">{{ obj.name|default:obj.model.name }}</h4>
-                    {% endif %}
-                </div>
-                
-                <!-- Подстрока: Модель и Дата следующего ТО -->
-                <div class="text-muted small d-flex flex-wrap gap-3 mt-1.5 align-items-center">
-                    <span id="model-display-container" class="d-inline-flex align-items-center">
-                        {% if not request.user.is_junior %}
-                            <span class="editable-trigger" 
-                                  hx-get="{% url 'edit_object_model' obj.uuid %}" 
-                                  hx-target="#model-display-container" 
-                                  hx-swap="outerHTML">
-                                <span class="text-muted me-1"><i class="bi bi-tag-fill me-1 text-secondary"></i>Модель:</span>
-                                <strong class="text-dark fw-semibold">{{ obj.model.name }}</strong>
-                                <i class="bi bi-pencil-square edit-icon ms-1" style="font-size: 0.75rem;"></i>
-                            </span>
-                        {% else %}
-                            <span class="text-muted me-1"><i class="bi bi-tag-fill me-1 text-secondary"></i>Модель:</span>
-                            <strong class="text-dark fw-semibold">{{ obj.model.name }}</strong>
-                        {% endif %}
-                    </span>
-
-                    <span class="d-flex align-items-center">
-                        <i class="bi bi-calendar3 me-1.5 text-secondary"></i>След. ТО: 
-                        <strong id="maintenance-date-display" class="ms-1 {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}text-danger{% else %}text-primary{% endif %}">
-                            {{ obj.next_maintenance_date|date:"d.m.Y"|default:"Не запланировано" }}
-                        </strong>
-                    </span>
-                </div>
-            </div>
+    <!-- 1. ШАПКА ОБЪЕКТА С ВЫВЕРЕННЫМ ВОЗДУХОМ -->
+    <div class="px-4 pt-3 pb-2 border-bottom bg-white">
+        
+        <!-- ЯРУС 1: Заголовок объекта -->
+        <div class="mb-2">
+            {% include 'data/object/inline_name.html' with obj=obj editing=False %}
         </div>
 
-        <!-- Сетка мета-свойств (4 колонки) -->
-        <div class="row g-3 mt-1 pt-3 border-top" style="border-color: var(--border-subtle) !important;">
+        <!-- ЯРУС 2: Чипы Модели и Даты следующего ТО -->
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <!-- Модель оборудования -->
+            {% include 'data/object/inline_model.html' with obj=obj editing=False %}
+
+            <!-- Дата следующего ТО -->
+            <span class="badge d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 border fw-medium {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}bg-light-danger text-danger border-danger-subtle{% else %}bg-light-primary text-primary border-primary-subtle{% endif %}" style="font-size: 0.85rem;">
+                <i class="bi bi-calendar3 fs-6"></i>
+                <span class="text-secondary fw-normal">След. ТО:</span>
+                <strong id="maintenance-date-display" class="fw-bold">
+                    {{ obj.next_maintenance_date|date:"d.m.Y"|default:"Не запланировано" }}
+                </strong>
+            </span>
+        </div>
+
+        <!-- ЯРУС 3: Параметры объекта с просторным шагом (gap-4) -->
+        <div class="d-flex flex-wrap align-items-center gap-4 text-secondary" style="font-size: 0.9rem;">
             
-            <!-- Инвентарный номер -->
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="p-2.5 bg-light rounded-3 border d-flex flex-column justify-content-between h-100" style="border-color: var(--border-subtle) !important;">
-                    <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Инв. №</small>
-                    <div class="mt-auto">
-                        {% if not request.user.is_junior %}
-                            {% include 'data/object/inline_inventory.html' with obj=obj editing=False %}
-                        {% else %}
-                            <strong class="text-dark small">{{ obj.inventory_number|default:"—" }}</strong>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Родительский агрегат -->
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="p-2.5 bg-light rounded-3 border d-flex flex-column justify-content-between h-100" style="border-color: var(--border-subtle) !important;">
-                    <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">В составе (Родитель)</small>
-                    <div class="mt-auto text-truncate" style="line-height: 1.2;">
-                        {% if not request.user.is_junior %}
-                            {% include 'data/object/inline_parent.html' with obj=obj current_parent=parent editing=False %}
-                        {% else %}
-                            <strong class="text-primary small text-truncate d-block" title="{{ parent.name|default:parent.model.name }}">{{ parent.name|default:parent.model.name|default:"—" }}</strong>
-                        {% endif %}
-                    </div>
-                </div>
+            <!-- 1. Инвентарный номер -->
+            <div class="d-inline-flex align-items-center">
+                <i class="bi bi-upc-scan text-muted me-2 fs-6"></i>
+                {% if not request.user.is_junior %}
+                    {% include 'data/object/inline_inventory.html' with obj=obj editing=False %}
+                {% else %}
+                    <span class="text-muted me-1.5">Инв. №:</span>
+                    <strong class="text-dark">{{ obj.inventory_number|default:"не указан" }}</strong>
+                {% endif %}
             </div>
 
-            <!-- Правило планирования ТО -->
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="p-2.5 bg-light rounded-3 border d-flex flex-column justify-content-between h-100" style="border-color: var(--border-subtle) !important;">
-                    <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Правило ТО</small>
-                    <div class="mt-auto">
-                        {% if not request.user.is_junior %}
-                        <span id="rule-display-container" 
-                              data-bs-toggle="modal" 
-                              data-bs-target="#editRuleModal"
-                              hx-get="{% url 'edit_rule' obj.uuid %}" 
-                              hx-target="#edit-rule-modal-content"
-                              class="editable-trigger small">
-                            <strong class="text-dark">{{ obj.date_update_rule.name|default:"ручной ввод" }}</strong>
-                            <i class="bi bi-pencil-square edit-icon ms-1" style="font-size: 0.75rem;"></i>
-                        </span>
-                        {% else %}
-                            <strong class="text-dark small">{{ obj.date_update_rule.name|default:"ручной ввод" }}</strong>
-                        {% endif %}
-                    </div>
-                </div>
+            <!-- 2. Родительский агрегат -->
+            <div class="d-inline-flex align-items-center position-relative">
+                <i class="bi bi-diagram-2 text-muted me-2 fs-6"></i>
+                {% if not request.user.is_junior %}
+                    {% include 'data/object/inline_parent.html' with obj=obj current_parent=parent editing=False %}
+                {% else %}
+                    <span class="text-muted me-1.5">Родитель:</span>
+                    <strong class="text-primary text-truncate" style="max-width: 240px;" title="{{ parent.name|default:parent.model.name }}">{{ parent.name|default:parent.model.name|default:"отсутствует" }}</strong>
+                {% endif %}
             </div>
 
-            <!-- YouTrack Задача -->
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="p-2.5 bg-light rounded-3 border d-flex flex-column justify-content-between h-100" style="border-color: var(--border-subtle) !important;">
-                    <small class="text-muted d-block fw-bold text-uppercase mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">YouTrack</small>
-                    <div class="mt-auto">
-                        {% if not request.user.is_junior %}
-                            {% include 'data/object/inline_youtrack.html' %}
-                        {% else %}
-                            {% if obj.youtrack_issue_id %}
-                                <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" target="_blank" class="text-primary fw-bold small">
-                                    {{ obj.youtrack_issue_id }}
-                                </a>
-                            {% else %}
-                                <span class="text-muted small">—</span>
-                            {% endif %}
-                        {% endif %}
-                    </div>
-                </div>
+            <!-- 3. Правило планирования ТО -->
+            <div class="d-inline-flex align-items-center">
+                <i class="bi bi-arrow-repeat text-muted me-2 fs-6"></i>
+                {% if not request.user.is_junior %}
+                <span id="rule-display-container" 
+                      data-bs-toggle="modal" 
+                      data-bs-target="#editRuleModal"
+                      hx-get="{% url 'edit_rule' obj.uuid %}" 
+                      hx-target="#edit-rule-modal-content"
+                      class="editable-trigger"
+                      title="Кликните для изменения правила ТО">
+                    <span class="text-muted me-1">Правило ТО:</span>
+                    <strong class="text-dark ms-1">{{ obj.date_update_rule.name|default:"ручной ввод" }}</strong>
+                    <i class="bi bi-pencil-square edit-icon ms-1"></i>
+                </span>
+                {% else %}
+                    <span class="text-muted me-1.5">Правило ТО:</span>
+                    <strong class="text-dark">{{ obj.date_update_rule.name|default:"ручной ввод" }}</strong>
+                {% endif %}
             </div>
-            
+
+            <!-- 4. YouTrack Задача -->
+            <div class="d-inline-flex align-items-center">
+                <i class="bi bi-hdd-network text-muted me-2 fs-6"></i>
+                {% if not request.user.is_junior %}
+                    {% include 'data/object/inline_youtrack.html' with obj=obj editing=False %}
+                {% else %}
+                    <span class="text-muted me-1.5">YouTrack:</span>
+                    {% if obj.youtrack_issue_id %}
+                        <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" target="_blank" class="text-primary fw-bold">
+                            {{ obj.youtrack_issue_id }}
+                        </a>
+                    {% else %}
+                        <strong class="text-muted">не привязана</strong>
+                    {% endif %}
+                {% endif %}
+            </div>
+
         </div>
     </div>
 
     <!-- 2. ВКЛАДКИ НАВИГАЦИИ -->
-    <div class="bg-light px-4 py-2 border-bottom" style="border-color: var(--border-subtle) !important;">
-        <ul class="nav nav-pills gap-1" id="objectTabs" role="tablist">
+    <div class="bg-light px-4 py-2.5 border-bottom d-flex align-items-center" style="border-color: var(--border-subtle) !important;">
+        <ul class="nav nav-pills gap-2" id="objectTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active py-1.5 px-3 rounded-2 fw-semibold btn-sm" 
+                <button class="nav-link active py-2 px-3.5 rounded-3 fw-semibold btn-sm" 
                         id="short-info-tab" 
                         data-bs-toggle="pill" 
                         data-bs-target="#tab-pane-short-info" 
@@ -136,12 +102,13 @@
                         role="tab" 
                         hx-get="{% url 'object_tab' obj.uuid 'short_info' %}"
                         hx-target="#tab-pane-short-info"
-                        hx-trigger="click">
+                        hx-trigger="click"
+                        style="font-size: 0.88rem;">
                     <i class="bi bi-info-circle me-1.5"></i>Инфо
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link py-1.5 px-3 rounded-2 fw-semibold btn-sm text-secondary" 
+                <button class="nav-link py-2 px-3.5 rounded-3 fw-semibold btn-sm text-secondary hover-bg-light" 
                         id="specs-tab" 
                         data-bs-toggle="pill" 
                         data-bs-target="#tab-pane-specs" 
@@ -149,12 +116,13 @@
                         role="tab" 
                         hx-get="{% url 'object_tab' obj.uuid 'specs' %}"
                         hx-target="#tab-pane-specs"
-                        hx-trigger="click">
+                        hx-trigger="click"
+                        style="font-size: 0.88rem;">
                     <i class="bi bi-cpu me-1.5"></i>Характеристики
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link py-1.5 px-3 rounded-2 fw-semibold btn-sm text-secondary" 
+                <button class="nav-link py-2 px-3.5 rounded-3 fw-semibold btn-sm text-secondary hover-bg-light" 
                         id="comments-tab" 
                         data-bs-toggle="pill" 
                         data-bs-target="#tab-pane-comments" 
@@ -162,12 +130,13 @@
                         role="tab" 
                         hx-get="{% url 'object_tab' obj.uuid 'comments' %}"
                         hx-target="#tab-pane-comments"
-                        hx-trigger="click">
+                        hx-trigger="click"
+                        style="font-size: 0.88rem;">
                     <i class="bi bi-chat-left-text me-1.5"></i>Комментарии
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link py-1.5 px-3 rounded-2 fw-semibold btn-sm text-secondary" 
+                <button class="nav-link py-2 px-3.5 rounded-3 fw-semibold btn-sm text-secondary hover-bg-light" 
                         id="files-tab" 
                         data-bs-toggle="pill" 
                         data-bs-target="#tab-pane-files" 
@@ -175,12 +144,13 @@
                         role="tab" 
                         hx-get="{% url 'object_tab' obj.uuid 'files' %}"
                         hx-target="#tab-pane-files"
-                        hx-trigger="click">
+                        hx-trigger="click"
+                        style="font-size: 0.88rem;">
                     <i class="bi bi-paperclip me-1.5"></i>Файлы
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link py-1.5 px-3 rounded-2 fw-semibold btn-sm text-secondary" 
+                <button class="nav-link py-2 px-3.5 rounded-3 fw-semibold btn-sm text-secondary hover-bg-light" 
                         id="history-tab" 
                         data-bs-toggle="pill" 
                         data-bs-target="#tab-pane-history" 
@@ -188,7 +158,8 @@
                         role="tab" 
                         hx-get="{% url 'object_tab' obj.uuid 'history' %}"
                         hx-target="#tab-pane-history"
-                        hx-trigger="click">
+                        hx-trigger="click"
+                        style="font-size: 0.88rem;">
                     <i class="bi bi-clock-history me-1.5"></i>История
                 </button>
             </li>
