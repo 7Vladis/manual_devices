@@ -1,36 +1,44 @@
-<!-- START OF FILE manual_devices-develop/templates/data/object/object_tab_history.html -->
-<div class="card border-0 shadow-sm p-4 bg-white animate-fade" style="border-radius: 8px;">
-    <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-clock-history me-2"></i>История событий объекта</h6>
-    
-    <div class="position-relative ps-3 border-start border-light" style="margin-left: 10px;">
-        {% for event in history %}
-        <div class="position-relative mb-4">
-            <!-- Стилизованная точка на таймлайне в зависимости от типа события -->
-            {% if event.action_type == 'maintenance' %}
-                <span class="position-absolute translate-middle bg-success rounded-circle" style="left: -23px; top: 10px; width: 12px; height: 12px;" title="Обслуживание"></span>
-            {% elif event.action_type == 'create' %}
-                <span class="position-absolute translate-middle bg-primary rounded-circle" style="left: -23px; top: 10px; width: 10px; height: 10px;" title="Создание"></span>
-            {% elif event.action_type == 'sync' %}
-                <span class="position-absolute translate-middle bg-info rounded-circle" style="left: -23px; top: 10px; width: 10px; height: 10px;" title="Синхронизация"></span>
-            {% else %}
-                <span class="position-absolute translate-middle bg-secondary rounded-circle" style="left: -23px; top: 10px; width: 8px; height: 8px;"></span>
-            {% endif %}
-            
-            <div class="small">
-                <div class="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
-                    <div>
-                        <span class="badge {% if event.action_type == 'maintenance' %}bg-success-subtle text-success border border-success-subtle{% elif event.action_type == 'create' %}bg-primary-subtle text-primary border border-primary-subtle{% elif event.action_type == 'sync' %}bg-info-subtle text-info border border-info-subtle{% else %}bg-light text-muted border{% endif %} me-1" style="font-size: 0.7rem;">
-                            {{ event.get_action_type_display }}
-                        </span>
-                        <strong class="text-dark">{{ event.action }}</strong>
-                    </div>
-                    <span class="text-muted" style="font-size: 0.75rem;">{{ event.created_at|date:"d.m.Y H:i" }}</span>
+<!-- templates/data/object/object_tab_history.html -->
+<span id="tab-count-history" class="tab-count" hx-swap-oob="true">{{ history|length }}</span>
+
+<div class="panel animate-fade">
+    <div class="panel-head">
+        <h6 class="panel-title"><i class="bi bi-clock-history"></i>История событий объекта</h6>
+        <span class="text-muted" style="font-size: 0.75rem;">Всего записей: {{ history|length }}</span>
+    </div>
+
+    <div class="panel-body">
+    {% if history %}
+        <div class="timeline">
+            {% for event in history %}
+            <div class="timeline-item">
+                <span class="timeline-dot {% if event.action_type == 'maintenance' %}is-maintenance{% elif event.action_type == 'create' %}is-create{% elif event.action_type == 'sync' %}is-sync{% elif event.action_type == 'rule_change' %}is-rule{% endif %}"
+                      title="{{ event.get_action_type_display }}"></span>
+
+                <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-1">
+                    <span class="badge rounded-pill {% if event.action_type == 'maintenance' %}bg-success-subtle text-success-emphasis{% elif event.action_type == 'create' %}bg-primary-subtle text-primary-emphasis{% elif event.action_type == 'sync' %}bg-info-subtle text-info-emphasis{% elif event.action_type == 'rule_change' %}bg-light text-purple{% else %}bg-light text-secondary{% endif %} border"
+                          style="font-size: 0.68rem;">
+                        {{ event.get_action_type_display }}
+                    </span>
+                    <span class="text-muted ms-auto" style="font-size: 0.75rem;">{{ event.created_at|date:"d.m.Y H:i" }}</span>
                 </div>
-                <span class="text-muted" style="font-size: 0.75rem;">Исполнитель: {{ event.user.username|default:event.user.email }}</span>
+
+                <div class="text-dark" style="font-size: 0.86rem; line-height: 1.5;">{{ event.action }}</div>
+
+                <div class="text-muted mt-1" style="font-size: 0.75rem;">
+                    <i class="bi bi-person"></i>
+                    {{ event.user.username|default:event.user.email|default:"Система" }}
+                    {% if event.youtrack_id %} • <i class="bi bi-hdd-network"></i> списано в YouTrack{% endif %}
+                </div>
             </div>
+            {% endfor %}
         </div>
-        {% empty %}
-        <div class="text-center py-4 text-muted small">История пуста.</div>
-        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <span class="empty-icon"><i class="bi bi-clock-history"></i></span>
+            <span class="empty-title">История пуста</span>
+            <span class="empty-hint">Здесь появятся записи о ТО, изменениях и синхронизациях.</span>
+        </div>
+    {% endif %}
     </div>
 </div>

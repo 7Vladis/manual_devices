@@ -1,116 +1,105 @@
 <!-- templates/data/tree/service_modal_body.html -->
-<div class="modal-header border-0 pb-0">
-    <h5 class="modal-title fw-bold text-dark">Техническое обслуживание</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="sheet-header animate-fade">
+    <span class="sheet-icon bg-light-success text-success"><i class="bi bi-tools"></i></span>
+    <div class="sheet-heading">
+        <h5>Фиксация обслуживания</h5>
+        <p class="text-truncate" title="{{ obj.name|default:obj.model.name }}">{{ obj.name|default:obj.model.name }}</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
 </div>
 
-<form hx-post="{% url 'service_object' obj.uuid %}" 
-      hx-target="#node-{{ obj.uuid }}" 
+<form hx-post="{% url 'service_object' obj.uuid %}"
+      hx-target="#node-{{ obj.uuid }}"
       hx-swap="outerHTML"
-      hx-on::after-request="bootstrap.Modal.getInstance(document.getElementById('serviceModal')).hide();">
+      hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('serviceModal')).hide(); }">
     {% csrf_token %}
-    <div class="modal-body py-3 text-center">
-        <i class="bi bi-tools text-primary fs-1 mb-2 d-block"></i>
-        <p class="text-muted small mb-3">Фиксация выполненных работ для объекта:<br>
-            <strong class="text-dark fs-6">{{ obj.name|default:obj.model.name }}</strong>
-        </p>
 
-        <!-- Предупреждение YouTrack -->
+    <div class="sheet-body">
+
         {% if effective_yt_id and not request.user.youtrack_token %}
-        <div class="alert alert-warning py-2 px-3 text-start small mb-3 rounded-3 animate-fade">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-exclamation-triangle-fill me-2 text-warning fs-5"></i>
-                <div>
-                    <strong>Внимание:</strong> У вас не настроен персональный токен YouTrack. Запись о ТО и списание времени <strong>не попадут</strong> в задачу <strong>{{ effective_yt_id }}</strong>.
-                </div>
+        <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3 small animate-fade">
+            <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
+            <div>
+                Персональный токен YouTrack не настроен — запись о ТО и списание времени
+                <strong>не попадут</strong> в задачу <strong>{{ effective_yt_id }}</strong>.
+                <a href="#" data-bs-toggle="modal" data-bs-target="#userTokenModal" class="alert-link">Указать токен</a>
             </div>
         </div>
         {% endif %}
 
-        <!-- ПЕРЕКЛЮЧАТЕЛЬ: Внеплановое обслуживание -->
-        <div class="p-3 bg-light rounded-3 border mb-3 text-start">
-            <div class="d-flex align-items-center justify-content-between">
-                <div>
-                    <label class="form-check-label fw-bold small text-dark d-block" for="isUnplannedCheck" style="cursor: pointer;">
-                        Внеплановое обслуживание / Ремонт
-                    </label>
-                    <small class="text-muted d-block" style="font-size: 0.73rem; line-height: 1.2;">
-                        Сохранить текущую плановую дату ТО без изменений
-                    </small>
-                </div>
-                <div class="form-check form-switch m-0">
+        <!-- Тип работ -->
+        <div class="field">
+            <label class="switch-row" for="isUnplannedCheck">
+                <span class="switch-text">
+                    <b>Внеплановое обслуживание / ремонт</b>
+                    <small>Плановая дата ТО останется без изменений.</small>
+                </span>
+                <span class="form-check form-switch m-0 flex-shrink-0">
                     <input class="form-check-input shadow-none" type="checkbox" name="is_unplanned" id="isUnplannedCheck"
-                           style="cursor: pointer; transform: scale(1.15);"
                            onchange="
                                 const dateGroup = document.getElementById('next-date-group');
                                 const dateInput = document.getElementById('maintenance-date-input');
-                                const unplannedNotice = document.getElementById('unplanned-notice');
-                                if (this.checked) {
-                                    dateGroup.classList.add('d-none');
-                                    dateInput.removeAttribute('required');
-                                    unplannedNotice.classList.remove('d-none');
-                                } else {
-                                    dateGroup.classList.remove('d-none');
-                                    dateInput.setAttribute('required', 'required');
-                                    unplannedNotice.classList.add('d-none');
-                                }
+                                const notice = document.getElementById('unplanned-notice');
+                                dateGroup.classList.toggle('d-none', this.checked);
+                                notice.classList.toggle('d-none', !this.checked);
+                                if (this.checked) { dateInput.removeAttribute('required'); }
+                                else { dateInput.setAttribute('required', 'required'); }
                            ">
-                </div>
-            </div>
+                </span>
+            </label>
 
-            <!-- Подсказка, если включен внеплановый режим -->
-            <div id="unplanned-notice" class="d-none text-primary small mt-2 pt-2 border-top animate-fade" style="font-size: 0.75rem;">
-                <i class="bi bi-info-circle-fill me-1"></i> Дата планового ТО останется: 
-                <strong>{{ obj.next_maintenance_date|date:'d.m.Y'|default:'Не назначена' }}</strong>
+            <div id="unplanned-notice" class="d-none alert alert-info py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">
+                <i class="bi bi-info-circle-fill me-1"></i>
+                Дата планового ТО останется прежней:
+                <strong>{{ obj.next_maintenance_date|date:'d.m.Y'|default:'не назначена' }}</strong>
             </div>
         </div>
 
-        <!-- 1. Описание выполненных работ -->
-        <div class="mb-3 text-start">
-            <label class="form-label small fw-bold text-muted text-uppercase d-block">Описание выполненных работ</label>
-            <textarea name="comment" rows="3" class="form-control bg-light border-0 py-2 small shadow-none" 
-                      placeholder="Опишите, что было сделано (например: заменен кулер, продувка от пыли)..."></textarea>
+        <!-- Описание работ -->
+        <div class="field">
+            <label for="service-comment">Что было сделано</label>
+            <textarea name="comment" id="service-comment" rows="3" class="form-control"
+                      style="resize: vertical;"
+                      placeholder="Например: заменён кулер, выполнена продувка от пыли"></textarea>
+            <span class="hint">Текст попадёт в историю объекта и в комментарий к задаче YouTrack.</span>
         </div>
-        
-        <!-- 2. Дата следующего ТО (Скрывается при внеплановом обслуживании) -->
-        <div class="mb-3 text-start animate-fade" id="next-date-group">
-            <label class="form-label small fw-bold text-muted text-uppercase d-block">Дата следующего ТО</label>
-            <input type="date" name="maintenance_date" id="maintenance-date-input" class="form-control bg-light border-0 py-2 shadow-none" required 
+
+        <!-- Дата следующего ТО -->
+        <div class="field animate-fade" id="next-date-group">
+            <label for="maintenance-date-input">Дата следующего ТО<span class="req">*</span></label>
+            <input type="date" name="maintenance_date" id="maintenance-date-input" class="form-control" required
                    value="{% if proposed_date %}{{ proposed_date|date:'Y-m-d' }}{% elif obj.next_maintenance_date %}{{ obj.next_maintenance_date|date:'Y-m-d' }}{% endif %}">
-            
             {% if proposed_date %}
-            <div class="form-text text-success d-flex align-items-center mt-2" style="font-size: 0.75rem;">
-                <i class="bi bi-info-circle-fill me-1"></i> 
-                Дата рассчитана по правилу: 
-                <strong class="ms-1">{{ obj.date_update_rule.name }}</strong>.
-            </div>
+            <span class="hint text-success">
+                <i class="bi bi-magic me-1"></i>Рассчитана по правилу «{{ obj.date_update_rule.name }}».
+            </span>
             {% else %}
-            <div class="form-text text-muted d-flex align-items-center mt-2" style="font-size: 0.75rem;">
-                <i class="bi bi-exclamation-circle me-1"></i> Правило автоматического расчета не назначено.
-            </div>
+            <span class="hint">
+                <i class="bi bi-exclamation-circle me-1"></i>Правило автоматического расчёта не назначено — укажите дату вручную.
+            </span>
             {% endif %}
         </div>
 
-        <!-- 3. Списание времени в YouTrack -->
+        <!-- Списание времени -->
         {% if effective_yt_id %}
-        <div class="mb-3 text-start animate-fade">
-            <label class="form-label small fw-bold text-muted text-uppercase d-block">Потраченное время (для YouTrack)</label>
-            <input type="text" name="spent_time" class="form-control bg-light border-0 py-2 shadow-none" placeholder="Например: 1h 30m или 45m">
-            
-            <div class="form-text text-muted mt-1" style="font-size: 0.73rem; line-height: 1.35;">
+        <div class="field animate-fade">
+            <label for="service-spent-time">Потраченное время</label>
+            <input type="text" name="spent_time" id="service-spent-time" class="form-control" placeholder="1h 30m или 45m">
+            <span class="hint">
                 <i class="bi bi-clock-history me-1 text-primary"></i>
-                Время спишется в задачу 
-                <strong class="text-primary">{{ effective_yt_id }}</strong>
-                {% if obj != target_yt_obj %}
-                    (родитель: <em>{{ target_yt_obj.name|default:target_yt_obj.model.name }}</em>)
-                {% endif %}.
-            </div>
+                Спишется в задачу <strong>{{ effective_yt_id }}</strong>{% if obj != target_yt_obj %}
+                (родительский объект «{{ target_yt_obj.name|default:target_yt_obj.model.name }}»){% endif %}.
+                Оставьте пустым, если списывать не нужно.
+            </span>
         </div>
         {% endif %}
 
     </div>
-    <div class="modal-footer border-0 pt-0">
-        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-        <button type="submit" class="btn btn-primary px-4 fw-bold">Зафиксировать ТО</button>
+
+    <div class="sheet-footer">
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary px-4 fw-semibold">
+            <i class="bi bi-check2-circle"></i>Зафиксировать ТО
+        </button>
     </div>
 </form>

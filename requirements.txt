@@ -5,6 +5,7 @@ python-dateutil
 requests
 openpyxl
 markdown
+nh3
 python-dotenv
 # Дополнительно для LDAP (раскомментируйте при необходимости использования LDAP):
 # django-auth-ldap

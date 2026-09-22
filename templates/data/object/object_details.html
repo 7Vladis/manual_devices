@@ -1,173 +1,160 @@
 <!-- templates/data/object/object_details.html -->
-<div class="d-flex flex-column h-100 bg-white animate-fade">
-    
-    <!-- 1. ШАПКА ОБЪЕКТА С ВЫВЕРЕННЫМ ВОЗДУХОМ -->
-    <div class="px-4 pt-3 pb-2 border-bottom bg-white">
-        
-        <!-- ЯРУС 1: Заголовок объекта -->
-        <div class="mb-2">
-            {% include 'data/object/inline_name.html' with obj=obj editing=False %}
-        </div>
+<div class="detail-view animate-fade">
 
-        <!-- ЯРУС 2: Чипы Модели и Даты следующего ТО -->
-        <div class="d-flex align-items-center gap-3 mb-3">
-            <!-- Модель оборудования -->
-            {% include 'data/object/inline_model.html' with obj=obj editing=False %}
+    <!-- ============ ШАПКА КАРТОЧКИ ============ -->
+    <header class="detail-header">
 
-            <!-- Дата следующего ТО -->
-            <span class="badge d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 border fw-medium {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}bg-light-danger text-danger border-danger-subtle{% else %}bg-light-primary text-primary border-primary-subtle{% endif %}" style="font-size: 0.85rem;">
-                <i class="bi bi-calendar3 fs-6"></i>
-                <span class="text-secondary fw-normal">След. ТО:</span>
-                <strong id="maintenance-date-display" class="fw-bold">
-                    {{ obj.next_maintenance_date|date:"d.m.Y"|default:"Не запланировано" }}
-                </strong>
-            </span>
-        </div>
+        <!-- Путь от корня до объекта -->
+        <nav class="obj-breadcrumb" aria-label="Расположение объекта">
+            {% if ancestors %}
+                {% for anc in ancestors %}
+                    <a href="{% url 'dict' %}?object={{ anc.uuid }}"
+                       hx-get="{% url 'object_detail' anc.uuid %}?sidebar=1"
+                       hx-target="#detail-container"
+                       title="Перейти к «{{ anc.name|default:anc.model.name }}»">{{ anc.name|default:anc.model.name }}</a>
+                    <i class="bi bi-chevron-right sep"></i>
+                {% endfor %}
+            {% else %}
+                <span class="current"><i class="bi bi-house-door me-1"></i>Корневой объект</span>
+                {% if obj.children.all %}<i class="bi bi-chevron-right sep"></i>{% endif %}
+            {% endif %}
+            {% if ancestors %}<span class="current">{{ obj.name|default:obj.model.name }}</span>{% endif %}
+        </nav>
 
-        <!-- ЯРУС 3: Параметры объекта с просторным шагом (gap-4) -->
-        <div class="d-flex flex-wrap align-items-center gap-4 text-secondary" style="font-size: 0.9rem;">
-            
-            <!-- 1. Инвентарный номер -->
-            <div class="d-inline-flex align-items-center">
-                <i class="bi bi-upc-scan text-muted me-2 fs-6"></i>
-                {% if not request.user.is_junior %}
-                    {% include 'data/object/inline_inventory.html' with obj=obj editing=False %}
-                {% else %}
-                    <span class="text-muted me-1.5">Инв. №:</span>
-                    <strong class="text-dark">{{ obj.inventory_number|default:"не указан" }}</strong>
-                {% endif %}
-            </div>
-
-            <!-- 2. Родительский агрегат -->
-            <div class="d-inline-flex align-items-center position-relative">
-                <i class="bi bi-diagram-2 text-muted me-2 fs-6"></i>
-                {% if not request.user.is_junior %}
-                    {% include 'data/object/inline_parent.html' with obj=obj current_parent=parent editing=False %}
-                {% else %}
-                    <span class="text-muted me-1.5">Родитель:</span>
-                    <strong class="text-primary text-truncate" style="max-width: 240px;" title="{{ parent.name|default:parent.model.name }}">{{ parent.name|default:parent.model.name|default:"отсутствует" }}</strong>
-                {% endif %}
-            </div>
-
-            <!-- 3. Правило планирования ТО -->
-            <div class="d-inline-flex align-items-center">
-                <i class="bi bi-arrow-repeat text-muted me-2 fs-6"></i>
-                {% if not request.user.is_junior %}
-                <span id="rule-display-container" 
-                      data-bs-toggle="modal" 
-                      data-bs-target="#editRuleModal"
-                      hx-get="{% url 'edit_rule' obj.uuid %}" 
-                      hx-target="#edit-rule-modal-content"
-                      class="editable-trigger"
-                      title="Кликните для изменения правила ТО">
-                    <span class="text-muted me-1">Правило ТО:</span>
-                    <strong class="text-dark ms-1">{{ obj.date_update_rule.name|default:"ручной ввод" }}</strong>
-                    <i class="bi bi-pencil-square edit-icon ms-1"></i>
+        <!-- Заголовок, срок ТО и быстрые действия -->
+        <div class="detail-title-row">
+            <div class="detail-title-main">
+                {% include 'data/object/inline_name.html' with obj=obj editing=False %}
+                {% if obj.children.all %}
+                <span class="text-muted" style="font-size: 0.78rem;">
+                    <i class="bi bi-diagram-3 me-1"></i>Входящих компонентов: <strong>{{ obj.children.all|length }}</strong>
                 </span>
-                {% else %}
-                    <span class="text-muted me-1.5">Правило ТО:</span>
-                    <strong class="text-dark">{{ obj.date_update_rule.name|default:"ручной ввод" }}</strong>
                 {% endif %}
             </div>
 
-            <!-- 4. YouTrack Задача -->
-            <div class="d-inline-flex align-items-center">
-                <i class="bi bi-hdd-network text-muted me-2 fs-6"></i>
-                {% if not request.user.is_junior %}
-                    {% include 'data/object/inline_youtrack.html' with obj=obj editing=False %}
-                {% else %}
-                    <span class="text-muted me-1.5">YouTrack:</span>
-                    {% if obj.youtrack_issue_id %}
-                        <a href="{{ YOUTRACK_BASE_URL }}/issue/{{ obj.youtrack_issue_id }}" target="_blank" class="text-primary fw-bold">
-                            {{ obj.youtrack_issue_id }}
-                        </a>
-                    {% else %}
-                        <strong class="text-muted">не привязана</strong>
-                    {% endif %}
+            <div class="detail-actions">
+                {% include 'data/object/maintenance_pill.html' with obj=obj today=today soon_date=soon_date oob=False %}
+
+                <button type="button"
+                        class="btn btn-primary"
+                        data-bs-toggle="modal"
+                        data-bs-target="#serviceModal"
+                        hx-get="{% url 'service_object' obj.uuid %}"
+                        hx-target="#service-modal-content"
+                        title="Зафиксировать выполненное обслуживание">
+                    <i class="bi bi-wrench-adjustable"></i>
+                    <span class="d-none d-lg-inline">Зафиксировать ТО</span>
+                </button>
+
+                {% if obj.youtrack_issue_id %}
+                <button type="button"
+                        class="btn btn-light border btn-icon"
+                        hx-post="{% url 'sync_youtrack' obj.uuid %}"
+                        hx-target="#detail-container"
+                        hx-swap="innerHTML"
+                        title="Синхронизировать данные с задачей {{ obj.youtrack_issue_id }} в YouTrack">
+                    <i class="bi bi-arrow-repeat"></i>
+                </button>
                 {% endif %}
+
+                {% if not request.user.is_junior %}
+                <button type="button"
+                        class="btn btn-light border btn-icon"
+                        data-bs-toggle="modal"
+                        data-bs-target="#cloneObjectModal"
+                        hx-get="{% url 'clone_object_modal' %}?active_object_id={{ obj.uuid }}"
+                        hx-target="#cloneObjectModal .modal-content"
+                        title="Создать копию объекта">
+                    <i class="bi bi-copy"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-light border btn-icon text-danger"
+                        data-bs-toggle="modal"
+                        data-bs-target="#confirmModal"
+                        hx-get="{% url 'delete_object' obj.uuid %}"
+                        hx-target="#confirm-modal-content"
+                        title="Удалить объект">
+                    <i class="bi bi-trash3"></i>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Основная информация объекта -->
+        <div class="meta-grid">
+
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-tag-fill"></i>Модель</span>
+                {% include 'data/object/inline_model.html' with obj=obj editing=False %}
+            </div>
+
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-upc-scan"></i>Инвентарный №</span>
+                {% include 'data/object/inline_inventory.html' with obj=obj editing=False %}
+            </div>
+
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-diagram-2"></i>Входит в состав</span>
+                {% include 'data/object/inline_parent.html' with obj=obj current_parent=parent editing=False %}
+            </div>
+
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-arrow-repeat"></i>Правило ТО</span>
+                {% include 'data/object/inline_rule_value.html' with obj=obj oob=False %}
+            </div>
+
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-hdd-network"></i>Задача YouTrack</span>
+                {% include 'data/object/inline_youtrack.html' with obj=obj editing=False %}
             </div>
 
         </div>
-    </div>
+    </header>
 
-    <!-- 2. ВКЛАДКИ НАВИГАЦИИ -->
-    <div class="bg-light px-4 py-2.5 border-bottom d-flex align-items-center" style="border-color: var(--border-subtle) !important;">
-        <ul class="nav nav-pills gap-2" id="objectTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active py-2 px-3.5 rounded-3 fw-semibold btn-sm" 
-                        id="short-info-tab" 
-                        data-bs-toggle="pill" 
-                        data-bs-target="#tab-pane-short-info" 
-                        type="button" 
-                        role="tab" 
-                        hx-get="{% url 'object_tab' obj.uuid 'short_info' %}"
-                        hx-target="#tab-pane-short-info"
-                        hx-trigger="click"
-                        style="font-size: 0.88rem;">
-                    <i class="bi bi-info-circle me-1.5"></i>Инфо
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link py-2 px-3.5 rounded-3 fw-semibold btn-sm text-secondary hover-bg-light" 
-                        id="specs-tab" 
-                        data-bs-toggle="pill" 
-                        data-bs-target="#tab-pane-specs" 
-                        type="button" 
-                        role="tab" 
-                        hx-get="{% url 'object_tab' obj.uuid 'specs' %}"
-                        hx-target="#tab-pane-specs"
-                        hx-trigger="click"
-                        style="font-size: 0.88rem;">
-                    <i class="bi bi-cpu me-1.5"></i>Характеристики
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link py-2 px-3.5 rounded-3 fw-semibold btn-sm text-secondary hover-bg-light" 
-                        id="comments-tab" 
-                        data-bs-toggle="pill" 
-                        data-bs-target="#tab-pane-comments" 
-                        type="button" 
-                        role="tab" 
-                        hx-get="{% url 'object_tab' obj.uuid 'comments' %}"
-                        hx-target="#tab-pane-comments"
-                        hx-trigger="click"
-                        style="font-size: 0.88rem;">
-                    <i class="bi bi-chat-left-text me-1.5"></i>Комментарии
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link py-2 px-3.5 rounded-3 fw-semibold btn-sm text-secondary hover-bg-light" 
-                        id="files-tab" 
-                        data-bs-toggle="pill" 
-                        data-bs-target="#tab-pane-files" 
-                        type="button" 
-                        role="tab" 
-                        hx-get="{% url 'object_tab' obj.uuid 'files' %}"
-                        hx-target="#tab-pane-files"
-                        hx-trigger="click"
-                        style="font-size: 0.88rem;">
-                    <i class="bi bi-paperclip me-1.5"></i>Файлы
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link py-2 px-3.5 rounded-3 fw-semibold btn-sm text-secondary hover-bg-light" 
-                        id="history-tab" 
-                        data-bs-toggle="pill" 
-                        data-bs-target="#tab-pane-history" 
-                        type="button" 
-                        role="tab" 
-                        hx-get="{% url 'object_tab' obj.uuid 'history' %}"
-                        hx-target="#tab-pane-history"
-                        hx-trigger="click"
-                        style="font-size: 0.88rem;">
-                    <i class="bi bi-clock-history me-1.5"></i>История
-                </button>
-            </li>
-        </ul>
-    </div>
+    <!-- ============ ВКЛАДКИ ============ -->
+    <nav class="seg-tabs" id="objectTabs" role="tablist">
+        <button class="seg-tab active" id="short-info-tab" type="button" role="tab"
+                data-bs-toggle="pill" data-bs-target="#tab-pane-short-info"
+                hx-get="{% url 'object_tab' obj.uuid 'short_info' %}"
+                hx-target="#tab-pane-short-info" hx-trigger="click">
+            <i class="bi bi-info-circle"></i>Инфо
+        </button>
 
-    <!-- 3. СОДЕРЖИМОЕ ВКЛАДОК -->
-    <div class="tab-content flex-grow-1 overflow-auto p-4 bg-light" id="object-tab-panes">
+        <button class="seg-tab" id="specs-tab" type="button" role="tab"
+                data-bs-toggle="pill" data-bs-target="#tab-pane-specs"
+                hx-get="{% url 'object_tab' obj.uuid 'specs' %}"
+                hx-target="#tab-pane-specs" hx-trigger="click">
+            <i class="bi bi-cpu"></i>Характеристики
+            <span class="tab-count" id="tab-count-specs">{{ specs_count }}</span>
+        </button>
+
+        <button class="seg-tab" id="comments-tab" type="button" role="tab"
+                data-bs-toggle="pill" data-bs-target="#tab-pane-comments"
+                hx-get="{% url 'object_tab' obj.uuid 'comments' %}"
+                hx-target="#tab-pane-comments" hx-trigger="click">
+            <i class="bi bi-chat-left-text"></i>Комментарии
+            <span class="tab-count" id="tab-count-comments">{{ comments_count }}</span>
+        </button>
+
+        <button class="seg-tab" id="files-tab" type="button" role="tab"
+                data-bs-toggle="pill" data-bs-target="#tab-pane-files"
+                hx-get="{% url 'object_tab' obj.uuid 'files' %}"
+                hx-target="#tab-pane-files" hx-trigger="click">
+            <i class="bi bi-paperclip"></i>Файлы
+            <span class="tab-count" id="tab-count-files">{{ files_count }}</span>
+        </button>
+
+        <button class="seg-tab" id="history-tab" type="button" role="tab"
+                data-bs-toggle="pill" data-bs-target="#tab-pane-history"
+                hx-get="{% url 'object_tab' obj.uuid 'history' %}"
+                hx-target="#tab-pane-history" hx-trigger="click">
+            <i class="bi bi-clock-history"></i>История
+            <span class="tab-count" id="tab-count-history">{{ history_count }}</span>
+        </button>
+    </nav>
+
+    <!-- ============ СОДЕРЖИМОЕ ВКЛАДОК ============ -->
+    <div class="tab-content detail-body" id="object-tab-panes">
         <div class="tab-pane fade show active" id="tab-pane-short-info" role="tabpanel" aria-labelledby="short-info-tab"
              hx-get="{% url 'object_tab' obj.uuid 'short_info' %}" hx-trigger="load" hx-swap="innerHTML">
             <div class="text-center py-5"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>
@@ -189,5 +176,5 @@
             <div class="text-center py-5"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>
         </div>
     </div>
-    
+
 </div>

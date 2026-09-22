@@ -1,0 +1,13 @@
+{% comment %}
+Пилюля срока следующего ТО. Используется в шапке карточки объекта и
+возвращается OOB-свопом после фиксации ТО или смены правила расчета,
+чтобы вместе с датой обновлялся и цвет состояния.
+{% endcomment %}
+<span id="maintenance-pill"
+      class="pill {% if not obj.next_maintenance_date %}pill-neutral{% elif obj.next_maintenance_date < today %}pill-danger{% elif obj.next_maintenance_date <= soon_date %}pill-warning{% else %}pill-success{% endif %}"
+      title="{% if not obj.next_maintenance_date %}Дата следующего обслуживания не назначена{% elif obj.next_maintenance_date < today %}Обслуживание просрочено{% elif obj.next_maintenance_date <= soon_date %}Обслуживание в ближайшие 14 дней{% else %}Обслуживание по графику{% endif %}"
+      {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+    <i class="bi {% if not obj.next_maintenance_date %}bi-calendar-x{% elif obj.next_maintenance_date < today %}bi-exclamation-triangle-fill{% elif obj.next_maintenance_date <= soon_date %}bi-clock-fill{% else %}bi-calendar-check-fill{% endif %}"></i>
+    <span class="pill-label">След. ТО:</span>
+    <strong id="maintenance-date-display">{{ obj.next_maintenance_date|date:"d.m.Y"|default:"не назначено" }}</strong>
+</span>

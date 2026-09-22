@@ -1,0 +1,49 @@
+<!-- templates/data/includes/confirm_delete_model.html -->
+<div class="sheet-header animate-fade">
+    <span class="sheet-icon bg-light-danger text-danger"><i class="bi bi-trash3"></i></span>
+    <div class="sheet-heading">
+        <h5>Удаление модели</h5>
+        <p class="text-truncate" title="{{ model_obj.name }}">{{ model_obj.name }} · {{ model_obj.object_type.type }}</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+</div>
+
+{% if objects_count %}
+<div class="sheet-body">
+    <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3 small">
+        <i class="bi bi-shield-lock-fill fs-5"></i>
+        <div>
+            Модель используется <strong>{{ objects_count }}</strong> объектами, поэтому удалить её нельзя:
+            вместе с моделью пропали бы сами объекты, их история, комментарии и вложения.
+        </div>
+    </div>
+    <p class="text-secondary small mb-0">
+        Чтобы освободить модель, откройте каждый объект во вкладке «Объекты» карточки модели
+        и назначьте ему другую модель в поле «Модель».
+    </p>
+</div>
+<div class="sheet-footer">
+    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Закрыть</button>
+    <a href="{% url 'dict' %}?model={{ model_obj.uuid }}" class="btn btn-primary fw-semibold"
+       onclick="bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();">
+        <i class="bi bi-box-seam"></i>Показать объекты
+    </a>
+</div>
+{% else %}
+<form hx-post="{% url 'delete_model' model_obj.uuid %}"
+      hx-target="find .form-feedback"
+      hx-swap="innerHTML"
+      hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide(); }">
+    {% csrf_token %}
+    <div class="sheet-body">
+        <div class="form-feedback"></div>
+        <p class="text-secondary small mb-0">
+            Объектов на этой модели нет. Шаблон характеристик будет удалён безвозвратно.
+        </p>
+    </div>
+    <div class="sheet-footer">
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-danger px-4 fw-semibold"><i class="bi bi-trash3"></i>Удалить модель</button>
+    </div>
+</form>
+{% endif %}

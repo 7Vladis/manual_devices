@@ -1,80 +1,110 @@
 <!-- templates/data/includes/create_object_modal_body.html -->
-<div class="modal-header border-0 pb-0 animate-fade">
-    <h5 class="modal-title fw-bold">Новый объект</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="sheet-header animate-fade">
+    <span class="sheet-icon bg-light-primary text-primary"><i class="bi bi-box-seam"></i></span>
+    <div class="sheet-heading">
+        <h5>Новый объект</h5>
+        <p>Экземпляр оборудования: попадёт в дерево справочника и в план ТО.</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
 </div>
 
-<form hx-post="{% url 'create_object' %}" 
-      hx-target="#sidebar-container" 
-      hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('createObjectModal')).hide(); }">
+<form hx-post="{% url 'create_object' %}"
+      hx-target="#sidebar-container"
+      hx-on::before-request="if (event.detail.elt === this && !this.querySelector('input[name=&quot;model&quot;]')) { event.preventDefault(); window.mdShowFormError(this, 'Выберите модель оборудования из выпадающего списка подсказок.'); }"
+      hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('createObjectModal')).hide(); }">
     {% csrf_token %}
-    <div class="modal-body py-3">
-        <div class="row g-4">
-            
-            <!-- Левая колонка: Основные данные -->
-            <div class="col-md-6 border-end">
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Название объекта</label>
-                    <input type="text" name="name" class="form-control bg-light border-0 py-2" 
-                           placeholder="Котельная установка КУ-5" required
-                           hx-get="{% url 'check_object_name' %}"
-                           hx-trigger="keyup changed delay:500ms"
-                           hx-target="#name-check-container"
-                           autocomplete="off">
-                    <div id="name-check-container"></div>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Инвентарный номер</label>
-                    <input type="text" name="inventory_number" class="form-control bg-light border-0 py-2" placeholder="ИНВ-003429">
-                </div>
 
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">ID задачи в Youtrack</label>
-                    <input type="text" name="youtrack_issue_id" class="form-control bg-light border-0 py-2" placeholder="Например: MNT-412">
+    <div class="sheet-body">
+
+        <div class="form-feedback"></div>
+
+        <!-- 1. Идентификация -->
+        <section class="form-section">
+            <div class="form-section-title"><i class="bi bi-card-text"></i>Идентификация</div>
+
+            <div class="field">
+                <label for="new-object-name">Название объекта<span class="req">*</span></label>
+                <input type="text" name="name" id="new-object-name" class="form-control"
+                       placeholder="Например: Котельная установка КУ-5" required
+                       hx-get="{% url 'check_object_name' %}"
+                       hx-trigger="keyup changed delay:500ms"
+                       hx-target="#name-check-container"
+                       autocomplete="off">
+                <div id="name-check-container"></div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <div class="field">
+                        <label for="new-object-inv">Инвентарный номер</label>
+                        <input type="text" name="inventory_number" id="new-object-inv" class="form-control"
+                               placeholder="ИНВ-003429" autocomplete="off">
+                    </div>
                 </div>
-                
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Модель оборудования *</label>
-                    <div id="search-wrapper-model" class="w-100 position-relative">
-                        <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2 w-100" 
-                               placeholder="Введите название модели для поиска..."
-                               hx-get="{% url 'suggest' %}?field=model"
-                               hx-trigger="keyup changed delay:300ms"
-                               hx-target="#results-model"
-                               autocomplete="off"
-                               required>
-                        <div id="results-model"></div>
+                <div class="col-12 col-md-6">
+                    <div class="field">
+                        <label for="new-object-yt">Задача в YouTrack</label>
+                        <input type="text" name="youtrack_issue_id" id="new-object-yt" class="form-control"
+                               placeholder="MNT-412" autocomplete="off">
+                        <span class="hint">Если не задать — используется задача родителя.</span>
                     </div>
                 </div>
             </div>
-            
-            <!-- Правая колонка: Настройка планирования и Родитель -->
-            <div class="col-md-6">
-                <!-- Кастомный красивый переключатель режима ТО + поля -->
-                {% include 'data/includes/scheduling_mode_fields.html' with mode='manual' %}
+        </section>
 
-                <hr class="my-3 opacity-25">
+        <!-- 2. Модель и размещение -->
+        <section class="form-section">
+            <div class="form-section-title"><i class="bi bi-diagram-3"></i>Модель и размещение</div>
 
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Родительский объект (в состав чего входит)</label>
-                    <div id="search-wrapper-parent" class="w-100 position-relative">
-                        <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2 w-100" 
-                               placeholder="Поиск родительского объекта..."
-                               hx-get="{% url 'suggest' %}?field=parent"
-                               hx-trigger="keyup changed delay:300ms"
-                               hx-target="#results-parent"
-                               autocomplete="off">
-                        <div id="results-parent"></div>
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <div class="field">
+                        <label>Модель оборудования<span class="req">*</span></label>
+                        <div id="search-wrapper-model" class="w-100 position-relative">
+                            <input type="text" name="q" class="form-control"
+                                   placeholder="Начните вводить название модели..."
+                                   hx-get="{% url 'suggest' %}?field=model"
+                                   hx-trigger="keyup changed delay:300ms, focus"
+                                   hx-target="#results-model"
+                                   autocomplete="off"
+                                   required>
+                            <div id="results-model"></div>
+                        </div>
+                        <span class="hint">Модель задаёт тип оборудования и шаблон характеристик.</span>
                     </div>
-                    <div class="form-text text-muted" style="font-size: 0.75rem;">Оставьте пустым, если это корневой агрегат.</div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <div class="field">
+                        <label>Родительский объект</label>
+                        <div id="search-wrapper-parent" class="w-100 position-relative">
+                            <input type="text" name="q" class="form-control"
+                                   placeholder="В состав чего входит..."
+                                   hx-get="{% url 'suggest' %}?field=parent"
+                                   hx-trigger="keyup changed delay:300ms, focus"
+                                   hx-target="#results-parent"
+                                   autocomplete="off">
+                            <div id="results-parent"></div>
+                        </div>
+                        <span class="hint">Оставьте пустым, если это самостоятельный корневой агрегат.</span>
+                    </div>
                 </div>
             </div>
+        </section>
 
-        </div>
+        <!-- 3. Планирование ТО -->
+        <section class="form-section">
+            <div class="form-section-title"><i class="bi bi-calendar-check"></i>Планирование обслуживания</div>
+            {% include 'data/includes/scheduling_mode_fields.html' with mode='manual' %}
+        </section>
+
     </div>
-    <div class="modal-footer border-0 pt-0">
-        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-        <button type="submit" class="btn btn-primary px-4 fw-bold">Создать</button>
+
+    <div class="sheet-footer">
+        <span class="footer-note"><span class="req">*</span> — обязательные поля</span>
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary px-4 fw-semibold">
+            <i class="bi bi-plus-lg"></i>Создать объект
+        </button>
     </div>
 </form>

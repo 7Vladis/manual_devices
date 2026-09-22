@@ -1,6 +1,7 @@
 import uuid
 import os
 import re
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
@@ -69,7 +70,9 @@ class ObjectModel(models.Model):
 class DataObject(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     parent = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='children', verbose_name="Родительский объект")
-    model = models.ForeignKey(ObjectModel, on_delete=models.CASCADE, related_name='data_objects', verbose_name="Модель")
+    # PROTECT: модель с привязанными объектами удалить нельзя — иначе вместе с ней
+    # каскадом исчезли бы объекты, их история, комментарии и вложения.
+    model = models.ForeignKey(ObjectModel, on_delete=models.PROTECT, related_name='data_objects', verbose_name="Модель")
     name = models.CharField(max_length=255, verbose_name="Имя объекта", blank=True, null=True)
     inventory_number = models.CharField(max_length=100, verbose_name="Инвентарный номер", blank=True, null=True)
     youtrack_issue_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID задачи в Youtrack")
@@ -105,6 +108,51 @@ class DataObject(models.Model):
     def effective_youtrack_issue_id(self):
         issue_id, _ = self.get_effective_youtrack_issue()
         return issue_id
+
+    # --- Целостность иерархии ---
+
+    MAX_TREE_DEPTH = 64
+
+    def get_descendant_uuids(self):
+        """
+        UUID всех потомков объекта (обход в ширину, защищён от циклов).
+        Используется, чтобы запретить назначать потомка родителем.
+        """
+        visited = {self.uuid}
+        frontier = [self.uuid]
+        while frontier:
+            children = DataObject.objects.filter(parent__in=frontier).values_list('uuid', flat=True)
+            frontier = [uuid for uuid in children if uuid not in visited]
+            visited.update(frontier)
+        visited.discard(self.uuid)
+        return visited
+
+    def get_subtree_stats(self):
+        """Сколько записей исчезнет при удалении объекта вместе с поддеревом."""
+        uuids = self.get_descendant_uuids() | {self.uuid}
+        return {
+            'descendants': len(uuids) - 1,
+            'comments': Comment.objects.filter(data_object__in=uuids).count(),
+            'attachments': Attachment.objects.filter(data_object__in=uuids).count(),
+            'history': ActionHistory.objects.filter(data_object__in=uuids).count(),
+        }
+
+    def validate_parent(self, new_parent):
+        """
+        Проверяет, что new_parent можно назначить родителем без образования цикла.
+        Бросает ValidationError; вызывается из представлений и clean().
+        """
+        if new_parent is None:
+            return
+        if new_parent.pk == self.pk:
+            raise ValidationError("Объект не может быть родителем самого себя.")
+        if new_parent.pk in self.get_descendant_uuids():
+            raise ValidationError("Нельзя назначить родителем собственный дочерний объект: образуется цикл.")
+
+    def clean(self):
+        super().clean()
+        if self.pk:
+            self.validate_parent(self.parent)
 
 
 class ActionHistory(models.Model):

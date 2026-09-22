@@ -1,18 +1,20 @@
 <!-- templates/data/includes/scheduling_mode_fields_inline.html -->
 <div id="inline-scheduling-mode-fields" class="animate-fade">
     {% if mode == 'manual' %}
-        <div class="form-text text-muted small" style="font-size: 0.75rem;">Правило расчета будет удалено, дата ТО задается вручную.</div>
+        <span class="hint">Правило расчёта будет отвязано, дата ТО задаётся вручную.</span>
     {% else %}
-        <!-- ДОБАВЛЕН ID: search-wrapper-date_update_rule -->
-        <div id="search-wrapper-date_update_rule" class="position-relative mt-1" style="min-width: 250px;">
-            <input type="text" name="q" class="form-control form-control-sm bg-light py-1 shadow-none" 
-                   placeholder="Введите название правила для поиска..."
-                   hx-get="{% url 'suggest' %}?field=date_update_rule"
-                   hx-trigger="keyup changed delay:300ms"
-                   hx-target="#results-date_update_rule"
-                   autocomplete="off"
-                   style="font-size: 0.8rem;">
-            <div id="results-date_update_rule"></div>
+        <div class="field">
+            <label>Выберите правило расчёта</label>
+            <div id="search-wrapper-date_update_rule" class="w-100 position-relative">
+                <input type="text" name="q" class="form-control"
+                       placeholder="Начните вводить название правила..."
+                       hx-get="{% url 'suggest' %}?field=date_update_rule"
+                       hx-trigger="keyup changed delay:300ms, focus"
+                       hx-target="#results-date_update_rule"
+                       autocomplete="off">
+                <div id="results-date_update_rule"></div>
+            </div>
+            <span class="hint">Новые правила создаются в разделе «Настройки → Правила ТО».</span>
         </div>
     {% endif %}
 </div>

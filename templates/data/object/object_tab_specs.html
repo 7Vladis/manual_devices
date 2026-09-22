@@ -1,35 +1,51 @@
-<div class="card border-0 shadow-sm p-4 bg-white animate-fade" style="border-radius: 8px;">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-cpu me-2"></i>Технические характеристики</h6>
-        <!-- Клик по кнопке загружает модель справа и переключает сайдбар на вкладку "Модели" слева (скрыто для младшего инженера) -->
-        {% if not request.user.is_junior %}
-        <a href="{% url 'dict' %}?model={{ obj.model.uuid }}" 
-           class="btn btn-outline-primary btn-sm fw-bold text-decoration-none">
-            <i class="bi bi-pencil-square me-1"></i> Изменить в модели
-        </a>
-        {% endif %}
+<!-- templates/data/object/object_tab_specs.html -->
+<span id="tab-count-specs" class="tab-count" hx-swap-oob="true">{{ specifications|length }}</span>
+
+<div class="panel animate-fade">
+    <div class="panel-head">
+        <h6 class="panel-title"><i class="bi bi-cpu"></i>Технические характеристики</h6>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="text-muted" style="font-size: 0.75rem;">
+                Наследуются от модели <strong class="text-secondary">{{ obj.model.name }}</strong>
+            </span>
+            {% if not request.user.is_junior %}
+            <a href="{% url 'dict' %}?model={{ obj.model.uuid }}" class="btn btn-light border fw-semibold">
+                <i class="bi bi-pencil-square"></i>Изменить в модели
+            </a>
+            {% endif %}
+        </div>
     </div>
 
+    {% if specifications %}
     <div class="table-responsive">
-        <table class="table table-striped table-hover table-borderless align-middle mb-0" style="font-size: 0.9rem;">
+        <table class="kv-table">
             <thead>
-                <tr class="border-bottom text-muted" style="font-size: 0.75rem; letter-spacing: 0.5px;">
-                    <th class="py-2 w-50 text-uppercase">Параметр (Ключ)</th>
-                    <th class="py-2 w-50 text-uppercase">Значение</th>
+                <tr>
+                    <th>Параметр</th>
+                    <th>Значение</th>
                 </tr>
             </thead>
             <tbody>
                 {% for key, val in specifications.items %}
-                <tr class="border-bottom border-light">
-                    <td class="text-muted py-2 w-50">{{ key }}</td>
-                    <td class="fw-bold text-dark py-2">{{ val }}</td>
-                </tr>
-                {% empty %}
                 <tr>
-                    <td colspan="2" class="text-center py-4 text-muted small">У модели данного объекта не заданы технические характеристики.</td>
+                    <td class="kv-key">{{ key }}</td>
+                    <td class="kv-val">{{ val }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% else %}
+    <div class="empty-state">
+        <span class="empty-icon"><i class="bi bi-cpu"></i></span>
+        <span class="empty-title">Характеристики не заданы</span>
+        <span class="empty-hint">
+            {% if request.user.is_junior %}
+                У модели «{{ obj.model.name }}» ещё нет шаблона характеристик.
+            {% else %}
+                Добавьте параметры в карточке модели «{{ obj.model.name }}».
+            {% endif %}
+        </span>
+    </div>
+    {% endif %}
 </div>

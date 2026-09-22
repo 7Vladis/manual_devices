@@ -1,0 +1,23 @@
+{% comment %}
+Значение поля «Правило ТО» в шапке карточки объекта.
+Клик открывает модальное окно смены правила; после сохранения представление
+возвращает этот же фрагмент OOB-свопом.
+{% endcomment %}
+<span id="rule-display-container"
+      class="meta-value {% if not request.user.is_junior %}editable-trigger{% endif %}"
+      {% if not request.user.is_junior %}
+      data-bs-toggle="modal"
+      data-bs-target="#editRuleModal"
+      hx-get="{% url 'edit_rule' obj.uuid %}"
+      hx-target="#edit-rule-modal-content"
+      title="Кликните, чтобы изменить правило расчета ТО"
+      style="cursor: pointer;"
+      {% endif %}
+      {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+    {% if obj.date_update_rule %}
+        <span class="text-truncate" title="{{ obj.date_update_rule.name }}">{{ obj.date_update_rule.name }}</span>
+    {% else %}
+        <span class="text-empty">ручной ввод</span>
+    {% endif %}
+    {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon"></i>{% endif %}
+</span>

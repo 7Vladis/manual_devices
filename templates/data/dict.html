@@ -27,18 +27,7 @@
                     </div>
                 </div>
             {% else %}
-                <!-- Заглушка выбора объекта -->
-                <div class="d-flex align-items-center justify-content-center text-center h-100 p-4 animate-fade">
-                    <div style="max-width: 420px;">
-                        <div class="rounded-circle bg-light-primary text-primary mx-auto mb-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 64px; height: 64px;">
-                            <i class="bi bi-diagram-3-fill fs-3"></i>
-                        </div>
-                        <h6 class="fw-bold text-dark mb-1">Выберите объект или модель</h6>
-                        <p class="text-secondary small mb-0">
-                            Кликните на элемент в левом дереве для просмотра характеристик, истории ТО, прикрепленных файлов и комментариев.
-                        </p>
-                    </div>
-                </div>
+                {% include 'data/includes/detail_placeholder.html' %}
             {% endif %}
         </main>
         
@@ -47,8 +36,8 @@
 
 <!-- Модальное окно: Обслуживание (ТО) -->
 <div class="modal fade" id="serviceModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
-        <div class="modal-content border-0 shadow-lg rounded-3" id="service-modal-content">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);" id="service-modal-content">
         </div>
     </div>
 </div>
@@ -56,7 +45,7 @@
 <!-- Модальное окно: Создание Объекта -->
 <div class="modal fade" id="createObjectModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content border-0 shadow-lg rounded-3">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);">
         </div>
     </div>
 </div>
@@ -64,7 +53,7 @@
 <!-- Модальное окно: Создание Модели -->
 <div class="modal fade" id="createModelModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content border-0 shadow-lg rounded-3">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);">
         </div>
     </div>
 </div>
@@ -72,15 +61,23 @@
 <!-- Модальное окно: Редактирование Правила ТО -->
 <div class="modal fade" id="editRuleModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 540px;">
-        <div class="modal-content border-0 shadow-lg rounded-3" id="edit-rule-modal-content">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);" id="edit-rule-modal-content">
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно: Подтверждение удаления (объект / модель) -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 560px;">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);" id="confirm-modal-content">
         </div>
     </div>
 </div>
 
 <!-- Модальное окно: Клонирование Объекта -->
 <div class="modal fade" id="cloneObjectModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 500px;">
-        <div class="modal-content border-0 shadow-lg rounded-3">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 560px;">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);">
         </div>
     </div>
 </div>

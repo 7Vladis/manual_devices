@@ -1,14 +1,14 @@
 <!-- templates/data/object/inline_parent.html -->
-<span id="parent-display-container" class="d-inline-block position-relative inline-edit-wrapper">
+<span id="parent-display-container" class="meta-value position-relative inline-edit-wrapper">
 {% if editing %}
-    <div class="d-inline-flex align-items-center position-relative">
-        <div class="position-relative" style="min-width: 220px; max-width: 300px;">
-            <input type="text" 
+    <span class="d-flex align-items-center gap-1 w-100 position-relative">
+        <span class="position-relative flex-grow-1" style="min-width: 0;">
+            <input type="text"
                    id="parent-search-input"
-                   name="q" 
-                   value="{% if current_parent %}{% if current_parent.name %}{{ current_parent.name }}{% elif current_parent.model %}{{ current_parent.model.name }}{% endif %}{% endif %}"
-                   class="form-control form-control-sm bg-white border py-1 ps-2.5 pe-4 shadow-sm rounded-2" 
-                   placeholder="Начните вводить родителя..."
+                   name="q"
+                   value="{% if current_parent %}{{ current_parent.name|default:current_parent.model.name }}{% endif %}"
+                   class="form-control form-control-sm pe-4"
+                   placeholder="Начните вводить название..."
                    hx-get="{% url 'suggest' %}?field=parent_inline&exclude_uuid={{ obj.uuid }}&target_obj_uuid={{ obj.uuid }}"
                    hx-trigger="keyup changed delay:150ms, focus"
                    hx-target="#results-parent-inline"
@@ -17,41 +17,43 @@
                    style="font-size: 0.85rem; height: 30px;"
                    onkeydown="if(event.key==='Escape'){ htmx.ajax('GET', '{% url 'edit_parent' obj.uuid %}?cancel=1', {target: '#parent-display-container', swap: 'outerHTML'}); }">
 
-            <!-- Кнопка быстрой очистки поля -->
-            <button type="button" 
+            <button type="button"
                     class="btn btn-link text-muted p-0 position-absolute end-0 top-50 translate-middle-y me-2 border-0"
                     onclick="const inp = document.getElementById('parent-search-input'); inp.value=''; inp.focus(); htmx.trigger(inp, 'keyup');"
                     title="Очистить поле">
                 <i class="bi bi-x-circle-fill" style="font-size: 0.8rem;"></i>
             </button>
-        </div>
+        </span>
 
-        <button type="button" 
-                class="btn btn-sm btn-link text-muted p-1 ms-1 border-0" 
-                hx-get="{% url 'edit_parent' obj.uuid %}?cancel=1" 
-                hx-target="#parent-display-container" 
-                hx-swap="outerHTML" 
+        <button type="button"
+                class="btn btn-link text-muted p-0 border-0 flex-shrink-0"
+                hx-get="{% url 'edit_parent' obj.uuid %}?cancel=1"
+                hx-target="#parent-display-container"
+                hx-swap="outerHTML"
                 title="Отмена (Esc)">
-            <i class="bi bi-x-lg fs-6"></i>
+            <i class="bi bi-x-lg"></i>
         </button>
 
-        <div id="results-parent-inline" style="position: absolute; top: 100%; left: 0; width: 280px; z-index: 1200;"></div>
-    </div>
-{% else %}
-    <span {% if not request.user.is_junior %}hx-get="{% url 'edit_parent' obj.uuid %}" hx-target="#parent-display-container" hx-swap="outerHTML"{% endif %}
-          style="cursor: pointer;" 
-          class="editable-trigger d-inline-flex align-items-center">
-        <span class="text-muted">Родитель:</span>
-        
-        {% if current_parent %}
-            <span class="ms-1 text-primary fw-semibold text-truncate" style="max-width: 220px;" title="{% if current_parent.name %}{{ current_parent.name }}{% elif current_parent.model %}{{ current_parent.model.name }}{% endif %}">
-                {% if current_parent.name %}{{ current_parent.name }}{% elif current_parent.model %}{{ current_parent.model.name }}{% endif %}
-            </span>
-        {% else %}
-            <span class="ms-1 text-muted">отсутствует</span>
-        {% endif %}
-        
-        {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon ms-1"></i>{% endif %}
+        <span id="results-parent-inline" class="position-absolute" style="top: 100%; left: 0; width: 290px; z-index: 1250;"></span>
     </span>
+{% else %}
+    <span class="d-inline-flex align-items-center text-truncate {% if not request.user.is_junior %}editable-trigger{% endif %}"
+          {% if not request.user.is_junior %}
+          hx-get="{% url 'edit_parent' obj.uuid %}"
+          hx-target="#parent-display-container"
+          hx-swap="outerHTML"
+          style="cursor: pointer;"
+          title="Родительский объект — кликните, чтобы изменить"
+          {% endif %}>
+        {% if current_parent %}
+            <span class="text-truncate" title="{{ current_parent.name|default:current_parent.model.name }}">{{ current_parent.name|default:current_parent.model.name }}</span>
+        {% else %}
+            <span class="text-empty">корневой объект</span>
+        {% endif %}
+        {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon"></i>{% endif %}
+    </span>
+    {% if error %}
+    <i class="bi bi-exclamation-circle-fill text-danger ms-2 flex-shrink-0 animate-fade" style="cursor: help;" title="{{ error }}"></i>
+    {% endif %}
 {% endif %}
 </span>

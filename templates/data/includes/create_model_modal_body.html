@@ -1,54 +1,71 @@
 <!-- templates/data/includes/create_model_modal_body.html -->
-<div class="modal-header border-0 pb-0 animate-fade">
-    <h5 class="modal-title fw-bold">Новая модель</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="sheet-header animate-fade">
+    <span class="sheet-icon bg-light-purple text-purple"><i class="bi bi-layers"></i></span>
+    <div class="sheet-heading">
+        <h5>Новая модель</h5>
+        <p>Шаблон оборудования: задаёт тип и набор характеристик для будущих объектов.</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
 </div>
 
-<form hx-post="{% url 'create_model' %}" 
-      hx-target="#sidebar-container" 
-      hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('createModelModal')).hide(); }">
+<form hx-post="{% url 'create_model' %}"
+      hx-target="#sidebar-container"
+      hx-on::before-request="if (event.detail.elt === this && !this.querySelector('input[name=&quot;object_type&quot;], input[name=&quot;new_object_type&quot;]')) { event.preventDefault(); window.mdShowFormError(this, 'Выберите тип оборудования из подсказок или создайте новый.'); }"
+      hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('createModelModal')).hide(); }">
     {% csrf_token %}
-    <div class="modal-body py-3">
-        <div class="row g-4">
-            
-            <!-- Левая колонка: Идентификация модели -->
-            <div class="col-md-4 border-end-md">
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Название модели</label>
-                    <input type="text" name="name" class="form-control bg-light border-0 py-2" 
-                           placeholder="Например: ВК-25" required
-                           hx-get="{% url 'check_model_name' %}"
-                           hx-trigger="keyup changed delay:500ms"
-                           hx-target="#model-name-check-container"
-                           autocomplete="off">
-                    <div id="model-name-check-container"></div>
+
+    <div class="sheet-body">
+
+        <div class="form-feedback"></div>
+
+        <section class="form-section">
+            <div class="form-section-title"><i class="bi bi-card-text"></i>Идентификация модели</div>
+
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <div class="field">
+                        <label for="new-model-name">Название модели<span class="req">*</span></label>
+                        <input type="text" name="name" id="new-model-name" class="form-control"
+                               placeholder="Например: ВК-25" required
+                               hx-get="{% url 'check_model_name' %}"
+                               hx-trigger="keyup changed delay:500ms"
+                               hx-target="#model-name-check-container"
+                               autocomplete="off">
+                        <div id="model-name-check-container"></div>
+                    </div>
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Тип оборудования</label>
-                    <div id="search-wrapper-object_type" class="position-relative">
-                        <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2" 
-                               placeholder="Введите или найдите тип оборудования..."
-                               hx-get="{% url 'suggest' %}?field=object_type"
-                               hx-trigger="keyup changed delay:300ms"
-                               hx-target="#results-object_type"
-                               autocomplete="off">
-                        <div id="results-object_type"></div>
+                <div class="col-12 col-md-6">
+                    <div class="field">
+                        <label>Тип оборудования<span class="req">*</span></label>
+                        <div id="search-wrapper-object_type" class="w-100 position-relative">
+                            <input type="text" name="q" class="form-control"
+                                   placeholder="Найдите тип или введите новый..."
+                                   hx-get="{% url 'suggest' %}?field=object_type"
+                                   hx-trigger="keyup changed delay:300ms, focus"
+                                   hx-target="#results-object_type"
+                                   autocomplete="off">
+                            <div id="results-object_type"></div>
+                        </div>
+                        <span class="hint">Если подходящего типа нет — его можно создать прямо из подсказки.</span>
                     </div>
                 </div>
             </div>
-            
-            <!-- Правая колонка: Спецификации -->
-            <div class="col-md-8">
-                <div id="specs-builder-container" hx-get="{% url 'specs_builder' %}" hx-trigger="load" hx-target="this">
-                    <!-- Загрузит чистый конструктор характеристик -->
-                </div>
-            </div>
+        </section>
 
-        </div>
+        <section class="form-section">
+            <div id="specs-builder-container" hx-get="{% url 'specs_builder' %}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">
+                <div class="text-center py-4"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
+            </div>
+        </section>
+
     </div>
-    <div class="modal-footer border-0 pt-0">
-        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-        <button type="submit" class="btn btn-primary px-4 fw-bold">Создать</button>
+
+    <div class="sheet-footer">
+        <span class="footer-note"><span class="req">*</span> — обязательные поля</span>
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary px-4 fw-semibold">
+            <i class="bi bi-plus-lg"></i>Создать модель
+        </button>
     </div>
 </form>

@@ -1,31 +1,37 @@
 <!-- templates/data/includes/clone_object_modal_body.html -->
-<div class="modal-header border-0 pb-0 animate-fade">
-    <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
-        <i class="bi bi-copy text-primary me-2"></i> Копирование объекта
-    </h5>
-    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="sheet-header animate-fade">
+    <span class="sheet-icon bg-light-success text-success"><i class="bi bi-copy"></i></span>
+    <div class="sheet-heading">
+        <h5>Копирование объекта</h5>
+        <p>Создаёт новый объект по образцу существующего. Инв. № и задача YouTrack не копируются.</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
 </div>
 
-<form hx-post="{% url 'clone_object' %}" 
-      hx-target="#sidebar-container" 
-      hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('cloneObjectModal')).hide(); }">
+<form hx-post="{% url 'clone_object' %}"
+      hx-target="#sidebar-container"
+      hx-on::before-request="if (event.detail.elt === this && !this.querySelector('input[name=&quot;source_object&quot;]')) { event.preventDefault(); window.mdShowFormError(this, 'Выберите исходный объект из списка подсказок.'); }"
+      hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('cloneObjectModal')).hide(); }">
     {% csrf_token %}
-    <div class="modal-body py-3">
-        
-        <!-- 1. Исходный объект для копирования -->
-        <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase">Исходный объект *</label>
-            
+
+    <div class="sheet-body">
+
+        <div class="form-feedback"></div>
+
+        <div class="field">
+            <label>Исходный объект<span class="req">*</span></label>
             {% if preselected_object %}
                 <div id="search-wrapper-source_object" class="w-100 animate-fade">
-                    <div class="d-flex align-items-center justify-content-between bg-light border border-primary-subtle px-3 py-2 rounded-2 w-100">
-                        <span class="small fw-semibold text-dark text-truncate me-2" title="{{ preselected_object.name|default:preselected_object.model.name }}">
-                            <i class="bi bi-check-circle-fill text-success me-1"></i> {{ preselected_object.name|default:preselected_object.model.name }}
+                    <div class="suggest-chosen">
+                        <span class="d-inline-flex align-items-center gap-2 text-truncate fw-semibold text-dark"
+                              title="{{ preselected_object.name|default:preselected_object.model.name }}">
+                            <i class="bi bi-check-circle-fill text-success flex-shrink-0"></i>
+                            <span class="text-truncate">{{ preselected_object.name|default:preselected_object.model.name }}</span>
                         </span>
                         <input type="hidden" name="source_object" value="{{ preselected_object.uuid }}">
-                        <button type="button" 
-                                class="btn btn-sm btn-link text-secondary p-0 shadow-none border-0 fw-bold flex-shrink-0"
-                                style="font-size: 0.75rem;"
+                        <button type="button"
+                                class="btn btn-link text-secondary p-0 border-0 fw-semibold flex-shrink-0"
+                                style="font-size: 0.78rem;"
                                 hx-get="{% url 'reset_suggestion' %}?field=source_object"
                                 hx-target="#search-wrapper-source_object"
                                 hx-swap="outerHTML">
@@ -35,10 +41,10 @@
                 </div>
             {% else %}
                 <div id="search-wrapper-source_object" class="w-100 position-relative">
-                    <input type="text" name="q" class="form-control bg-light border-0 shadow-none py-2 w-100" 
-                           placeholder="Поиск объекта для копирования..."
+                    <input type="text" name="q" class="form-control"
+                           placeholder="Найдите объект, который нужно продублировать..."
                            hx-get="{% url 'suggest' %}?field=source_object"
-                           hx-trigger="keyup changed delay:300ms"
+                           hx-trigger="keyup changed delay:300ms, focus"
                            hx-target="#results-source_object"
                            autocomplete="off"
                            required>
@@ -47,53 +53,46 @@
             {% endif %}
         </div>
 
-        <!-- 2. Название нового объекта -->
-        <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase">Название нового объекта *</label>
-            <input type="text" 
-                   name="new_name" 
-                   class="form-control bg-light border-0 py-2 shadow-none" 
+        <div class="field">
+            <label for="clone-new-name">Название копии<span class="req">*</span></label>
+            <input type="text" name="new_name" id="clone-new-name" class="form-control"
                    placeholder="{% if preselected_object %}{{ preselected_object.name|default:preselected_object.model.name }} (копия){% else %}Например: ПК-102{% endif %}"
                    value="{% if preselected_object %}{{ preselected_object.name|default:preselected_object.model.name }} (копия){% endif %}"
-                   required 
-                   autocomplete="off"
-                   style="font-size: 0.9rem;">
+                   required autocomplete="off">
+            <span class="hint">Имена дочерних компонентов будут автоматически переименованы под новое название.</span>
         </div>
 
-        <!-- 3. Опции копирования -->
-        <div class="p-3 bg-light rounded-3 border mb-2">
-            
-            <!-- Флаг 1: Копирование с дочерними элементами -->
-            <div class="form-check form-switch d-flex align-items-center mb-2">
-                <input class="form-check-input me-2 shadow-none" type="checkbox" name="clone_children" id="cloneChildrenCheck" checked style="cursor: pointer; transform: scale(1.1);">
-                <label class="form-check-label small fw-bold text-dark" for="cloneChildrenCheck" style="cursor: pointer;">
-                    Копировать с дочерними элементами
-                </label>
-            </div>
-            <div class="text-muted small mb-3" style="font-size: 0.73rem; margin-left: 2.2rem; line-height: 1.3;">
-                Продублировать всю вложенную структуру компонентов с автозаменой суффикса.
-            </div>
+        <div class="field">
+            <label>Параметры копирования</label>
 
-            <hr class="opacity-25 my-2">
+            <label class="switch-row" for="cloneChildrenCheck">
+                <span class="switch-text">
+                    <b>Копировать дочерние компоненты</b>
+                    <small>Продублировать всю вложенную структуру объекта целиком.</small>
+                </span>
+                <span class="form-check form-switch m-0 flex-shrink-0">
+                    <input class="form-check-input shadow-none" type="checkbox" name="clone_children" id="cloneChildrenCheck" checked>
+                </span>
+            </label>
 
-            <!-- Флаг 2: Сохранить родителя -->
-            <div class="form-check form-switch d-flex align-items-center mb-1">
-                <input class="form-check-input me-2 shadow-none" type="checkbox" name="keep_parent" id="keepParentCheck" checked style="cursor: pointer; transform: scale(1.1);">
-                <label class="form-check-label small fw-bold text-dark" for="keepParentCheck" style="cursor: pointer;">
-                    Сохранить родительский объект
-                </label>
-            </div>
-            <div class="text-muted small" style="font-size: 0.73rem; margin-left: 2.2rem; line-height: 1.3;">
-                Если исходный объект находится внутри другого агрегата, копия останется в том же родителе. Если выключить — копия станет самостоятельным корневым объектом.
-            </div>
-
+            <label class="switch-row" for="keepParentCheck">
+                <span class="switch-text">
+                    <b>Оставить в том же родителе</b>
+                    <small>Иначе копия станет самостоятельным корневым объектом.</small>
+                </span>
+                <span class="form-check form-switch m-0 flex-shrink-0">
+                    <input class="form-check-input shadow-none" type="checkbox" name="keep_parent" id="keepParentCheck" checked>
+                </span>
+            </label>
         </div>
 
     </div>
-    <div class="modal-footer border-0 pt-0">
-        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-        <button type="submit" class="btn btn-primary px-4 fw-bold">
-            <i class="bi bi-copy me-1"></i> Создать копию
+
+    <div class="sheet-footer">
+        <span class="footer-note"><span class="req">*</span> — обязательные поля</span>
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary px-4 fw-semibold">
+            <i class="bi bi-copy"></i>Создать копию
         </button>
     </div>
 </form>

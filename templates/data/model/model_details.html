@@ -1,79 +1,66 @@
-<div class="card d-flex flex-column h-100 bg-white border-0 animate-fade" style="border-radius: 0;">
-    
-    <!-- МИНИ-ШАПКА МОДЕЛИ -->
-    <div class="px-4 py-3 border-bottom bg-white">
-        <div id="model-name-display-container" class="d-inline-block">
-            {% if not request.user.is_junior %}
-                <h4 hx-get="{% url 'edit_model_name' model_obj.uuid %}" 
-                    hx-target="#model-name-display-container" 
-                    hx-swap="outerHTML" 
-                    style="cursor: pointer;" 
-                    class="fw-bold mb-1 text-dark d-inline-block">
-                    {{ model_obj.name }} <i class="bi bi-pencil-square ms-1 text-muted" style="font-size: 0.9rem;"></i>
-                </h4>
-            {% else %}
-                <h4 class="fw-bold mb-1 text-dark d-inline-block">{{ model_obj.name }}</h4>
-            {% endif %}
+<!-- templates/data/model/model_details.html -->
+<div class="detail-view animate-fade">
+
+    <header class="detail-header">
+        <nav class="obj-breadcrumb" aria-label="Расположение модели">
+            <span class="current"><i class="bi bi-layers me-1"></i>Модели оборудования</span>
+            <i class="bi bi-chevron-right sep"></i>
+            <span class="current">{{ model_obj.object_type.type }}</span>
+        </nav>
+
+        <div class="detail-title-row">
+            <div class="detail-title-main">
+                {% include 'data/model/inline_model_name.html' with model_obj=model_obj editing=False %}
+            </div>
+
+            <div class="detail-actions">
+                <span class="pill pill-neutral">
+                    <i class="bi bi-tag-fill"></i>
+                    <span class="pill-label">Тип:</span>
+                    <strong>{{ model_obj.object_type.type }}</strong>
+                </span>
+            </div>
         </div>
-        <div class="text-muted small">
-            <span><i class="bi bi-tag me-1"></i>Тип оборудования: <strong class="text-primary">{{ model_obj.object_type.type }}</strong></span>
+
+        <div class="meta-grid">
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-cpu"></i>Характеристик в шаблоне</span>
+                <span class="meta-value">{{ specs_count }}</span>
+            </div>
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-box-seam"></i>Объектов на этой модели</span>
+                <span class="meta-value">{{ objects_count }}</span>
+            </div>
+        </div>
+    </header>
+
+    <nav class="seg-tabs" id="modelTabs" role="tablist">
+        <button class="seg-tab active" id="model-specs-tab" type="button" role="tab"
+                data-bs-toggle="pill" data-bs-target="#tab-pane-model-specs"
+                hx-get="{% url 'model_tab' model_obj.uuid 'specs' %}"
+                hx-target="#tab-pane-model-specs" hx-trigger="click">
+            <i class="bi bi-cpu"></i>Характеристики
+            <span class="tab-count" id="tab-count-model-specs">{{ specs_count }}</span>
+        </button>
+
+        <button class="seg-tab" id="model-objects-tab" type="button" role="tab"
+                data-bs-toggle="pill" data-bs-target="#tab-pane-model-objects"
+                hx-get="{% url 'model_tab' model_obj.uuid 'objects' %}"
+                hx-target="#tab-pane-model-objects" hx-trigger="click">
+            <i class="bi bi-box-seam"></i>Объекты
+            <span class="tab-count" id="tab-count-model-objects">{{ objects_count }}</span>
+        </button>
+    </nav>
+
+    <div class="tab-content detail-body" id="model-tab-panes">
+        <div class="tab-pane fade show active" id="tab-pane-model-specs" role="tabpanel" aria-labelledby="model-specs-tab"
+             hx-get="{% url 'model_tab' model_obj.uuid 'specs' %}" hx-trigger="load" hx-swap="innerHTML">
+            <div class="text-center py-5"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-pane-model-objects" role="tabpanel" aria-labelledby="model-objects-tab">
+            <div class="text-center py-5"><span class="spinner-border spinner-border-sm text-primary" role="status"></span></div>
         </div>
     </div>
 
-    <!-- Вкладки (2 штуки, без JS) -->
-    <div class="bg-light px-3 py-1 border-bottom">
-        <ul class="nav nav-tabs border-0" id="modelTabs" role="tablist" style="font-size: 0.85rem;">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active border-0 py-2 fw-semibold" 
-                        id="model-specs-tab" 
-                        data-bs-toggle="tab" 
-                        data-bs-target="#tab-pane-model-specs" 
-                        type="button" 
-                        role="tab" 
-                        hx-get="{% url 'model_tab' model_obj.uuid 'specs' %}"
-                        hx-target="#tab-pane-model-specs"
-                        hx-trigger="click"
-                        aria-controls="tab-pane-model-specs" 
-                        aria-selected="true">Характеристики</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link border-0 py-2 fw-semibold" 
-                        id="model-objects-tab" 
-                        data-bs-toggle="tab" 
-                        data-bs-target="#tab-pane-model-objects" 
-                        type="button" 
-                        role="tab" 
-                        hx-get="{% url 'model_tab' model_obj.uuid 'objects' %}"
-                        hx-target="#tab-pane-model-objects"
-                        hx-trigger="click"
-                        aria-controls="tab-pane-model-objects" 
-                        aria-selected="false">Объекты</button>
-            </li>
-        </ul>
-    </div>
-
-    <!-- ТАБ-ПАНЕЛИ -->
-    <div class="tab-content flex-grow-1 overflow-auto p-4 bg-light" id="model-tab-panes">
-        
-        <!-- Характеристики модели (загружаются сразу) -->
-        <div class="tab-pane fade show active" 
-             id="tab-pane-model-specs" 
-             role="tabpanel" 
-             aria-labelledby="model-specs-tab"
-             hx-get="{% url 'model_tab' model_obj.uuid 'specs' %}" 
-             hx-trigger="load" 
-             hx-swap="innerHTML">
-            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
-        </div>
-
-        <!-- Объекты, использующие модель -->
-        <div class="tab-pane fade" 
-             id="tab-pane-model-objects" 
-             role="tabpanel" 
-             aria-labelledby="model-objects-tab">
-            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
-        </div>
-
-    </div>
-    
 </div>

@@ -1,42 +1,43 @@
 <!-- templates/data/model/model_tab_objects.html -->
-<div class="card border-0 shadow-sm p-4 bg-white animate-fade" style="border-radius: 8px;">
-    <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-box-seam me-2"></i>Связанные объекты (состоят из этой модели)</h6>
+<span id="tab-count-model-objects" class="tab-count" hx-swap-oob="true">{{ objects|length }}</span>
 
-    <div class="d-flex flex-column gap-2">
-        {% for item in objects %}
-        <!-- Полноценная ссылка <a>: ЛКМ обновит карточку через HTMX на месте, колесико откроет новую вкладку -->
-        <a href="{% url 'dict' %}?object={{ item.uuid }}" 
-           hx-get="{% url 'object_detail' item.uuid %}?sidebar=1" 
-           hx-target="#detail-container"
-           class="card p-3 border hover-bg-light transition-all shadow-none text-decoration-none d-block" 
-           style="border-radius: 8px; cursor: pointer;">
-            <div class="d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center">
-                    <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px; min-width: 40px;">
-                        <i class="bi bi-wrench text-muted"></i>
-                    </div>
-                    <div>
-                        <span class="fw-bold text-dark small d-block">{{ item.name|default:item.model.name }}</span>
-                        <small class="text-muted d-block" style="font-size: 0.75rem;">
-                            Инв. №: {{ item.inventory_number|default:"Без инв. номера" }}
-                            {% if item.next_maintenance_date %}
-                                • <i class="bi bi-calendar-event ms-1"></i> ТО: {{ item.next_maintenance_date|date:"d.m.Y" }}
-                            {% endif %}
-                        </small>
-                    </div>
-                </div>
-                <div>
-                    <span class="badge bg-light text-muted border py-1 px-2" style="font-size: 0.75rem;">
-                        Перейти <i class="bi bi-arrow-right ms-1"></i>
+<div class="panel animate-fade">
+    <div class="panel-head">
+        <h6 class="panel-title"><i class="bi bi-box-seam"></i>Объекты на базе этой модели</h6>
+        <span class="text-muted" style="font-size: 0.75rem;">Всего: {{ objects|length }}</span>
+    </div>
+
+    <div class="panel-body">
+        {% if objects %}
+        <div class="row g-2">
+            {% for item in objects %}
+            <div class="col-12 col-xl-6">
+                <a href="{% url 'dict' %}?object={{ item.uuid }}"
+                   hx-get="{% url 'object_detail' item.uuid %}?sidebar=1"
+                   hx-target="#detail-container"
+                   class="file-row text-decoration-none h-100"
+                   title="Перейти к объекту «{{ item.name|default:item.model.name }}»">
+                    <span class="file-thumb"><i class="bi bi-hdd text-secondary fs-5"></i></span>
+                    <span class="flex-grow-1 text-truncate">
+                        <span class="d-block fw-semibold text-dark text-truncate" style="font-size: 0.85rem;">
+                            {{ item.name|default:item.model.name }}
+                        </span>
+                        <span class="d-block text-muted text-truncate" style="font-size: 0.75rem;">
+                            Инв. №: {{ item.inventory_number|default:"не указан" }}
+                            {% if item.next_maintenance_date %} • ТО: {{ item.next_maintenance_date|date:"d.m.Y" }}{% endif %}
+                        </span>
                     </span>
-                </div>
+                    <i class="bi bi-arrow-right text-muted flex-shrink-0"></i>
+                </a>
             </div>
-        </a>
-        {% empty %}
-        <div class="text-center py-5 text-muted small border border-dashed rounded-3">
-            <i class="bi bi-info-circle fs-3 d-block mb-2 text-secondary opacity-50"></i>
-            В системе пока нет объектов, созданных на основе этой модели.
+            {% endfor %}
         </div>
-        {% endfor %}
+        {% else %}
+        <div class="empty-state">
+            <span class="empty-icon"><i class="bi bi-box-seam"></i></span>
+            <span class="empty-title">Объектов пока нет</span>
+            <span class="empty-hint">На основе этой модели ещё не создано ни одного объекта.</span>
+        </div>
+        {% endif %}
     </div>
 </div>

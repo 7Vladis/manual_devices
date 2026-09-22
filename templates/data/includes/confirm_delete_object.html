@@ -1,0 +1,70 @@
+<!-- templates/data/includes/confirm_delete_object.html -->
+<div class="sheet-header animate-fade">
+    <span class="sheet-icon bg-light-danger text-danger"><i class="bi bi-trash3"></i></span>
+    <div class="sheet-heading">
+        <h5>Удаление объекта</h5>
+        <p class="text-truncate" title="{{ obj.name|default:obj.model.name }}">{{ obj.name|default:obj.model.name }}</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+</div>
+
+<form hx-post="{% url 'delete_object' obj.uuid %}"
+      hx-target="find .form-feedback"
+      hx-swap="innerHTML"
+      hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide(); }">
+    {% csrf_token %}
+    <div class="sheet-body">
+        <div class="form-feedback"></div>
+
+        {% if stats.descendants %}
+        <div class="alert alert-danger d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3 small">
+            <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+            <div>
+                Объект содержит <strong>{{ stats.descendants }}</strong> дочерних компонентов.
+                Они будут удалены вместе с ним — <strong>восстановить данные будет невозможно</strong>.
+            </div>
+        </div>
+        {% else %}
+        <p class="text-secondary small mb-3">Объект будет удалён безвозвратно вместе со всеми связанными записями.</p>
+        {% endif %}
+
+        <div class="meta-grid mb-3">
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-diagram-3"></i>Компонентов</span>
+                <span class="meta-value {% if stats.descendants %}text-danger{% endif %}">{{ stats.descendants }}</span>
+            </div>
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-chat-left-text"></i>Комментариев</span>
+                <span class="meta-value">{{ stats.comments }}</span>
+            </div>
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-paperclip"></i>Файлов</span>
+                <span class="meta-value">{{ stats.attachments }}</span>
+            </div>
+            <div class="meta-cell">
+                <span class="meta-label"><i class="bi bi-clock-history"></i>Записей истории</span>
+                <span class="meta-value">{{ stats.history }}</span>
+            </div>
+        </div>
+
+        {% if stats.descendants %}
+        <label class="switch-row" for="confirmSubtreeCheck">
+            <span class="switch-text">
+                <b>Удалить вместе с {{ stats.descendants }} дочерними компонентами</b>
+                <small>Если компоненты нужно сохранить — сначала перенесите их в другой объект.</small>
+            </span>
+            <span class="form-check form-switch m-0 flex-shrink-0">
+                <input class="form-check-input shadow-none" type="checkbox" name="confirm_subtree" id="confirmSubtreeCheck" value="yes"
+                       onchange="document.getElementById('confirm-delete-btn').disabled = !this.checked;">
+            </span>
+        </label>
+        {% endif %}
+    </div>
+
+    <div class="sheet-footer">
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+        <button type="submit" id="confirm-delete-btn" class="btn btn-danger px-4 fw-semibold" {% if stats.descendants %}disabled{% endif %}>
+            <i class="bi bi-trash3"></i>Удалить{% if stats.descendants %} поддерево{% endif %}
+        </button>
+    </div>
+</form>

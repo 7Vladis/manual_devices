@@ -1,0 +1,52 @@
+{% comment %}
+Результат проверки названия при создании модели/объекта.
+Контекст: kind ('model'|'object'), exact (точное совпадение или None),
+similar (список похожих), modal_id (модалка, которую нужно закрыть при переходе).
+Все названия экранируются шаблонизатором — HTML здесь не собирается из строк.
+{% endcomment %}
+{% if exact %}
+<div class="alert alert-danger py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">
+    <div class="fw-bold mb-1">
+        <i class="bi bi-x-circle-fill me-1"></i>
+        {% if kind == 'model' %}Модель с таким названием уже существует!{% else %}Объект с таким именем уже существует!{% endif %}
+    </div>
+    <a href="#" class="text-danger fw-bold"
+       {% if kind == 'model' %}hx-get="{% url 'model_detail' exact.uuid %}?sidebar=1"{% else %}hx-get="{% url 'object_detail' exact.uuid %}?sidebar=1"{% endif %}
+       hx-target="#detail-container"
+       hx-on:click="bootstrap.Modal.getInstance(document.getElementById('{{ modal_id }}')).hide();">
+        {% if kind == 'model' %}
+            Перейти к существующей модели: {{ exact.name }} ({{ exact.object_type.type }})
+        {% else %}
+            Перейти к объекту: {{ exact.name|default:exact.model.name }} ({{ exact.model.name }})
+        {% endif %}
+    </a>
+</div>
+{% elif similar %}
+<div class="alert alert-warning py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">
+    <div class="fw-bold text-dark mb-1">
+        <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+        {% if kind == 'model' %}Похожие модели{% else %}Похожие объекты{% endif %} ({{ similar|length }} шт.):
+    </div>
+    <ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">
+        {% for item in similar %}
+        <li class="mb-1">
+            <a href="#" class="alert-link text-primary fw-semibold"
+               {% if kind == 'model' %}hx-get="{% url 'model_detail' item.uuid %}?sidebar=1"{% else %}hx-get="{% url 'object_detail' item.uuid %}?sidebar=1"{% endif %}
+               hx-target="#detail-container"
+               hx-on:click="bootstrap.Modal.getInstance(document.getElementById('{{ modal_id }}')).hide();">
+                {% if kind == 'model' %}
+                    {{ item.name }} <span class="text-muted fw-normal">({{ item.object_type.type }})</span>
+                {% else %}
+                    {{ item.name|default:item.model.name }} <span class="text-muted fw-normal">({{ item.model.name }})</span>
+                {% endif %}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% else %}
+<div class="text-success small mt-1">
+    <i class="bi bi-check-circle-fill me-1"></i>
+    {% if kind == 'model' %}Название свободно{% else %}Имя свободно{% endif %}
+</div>
+{% endif %}

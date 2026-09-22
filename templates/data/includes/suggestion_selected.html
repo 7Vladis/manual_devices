@@ -1,15 +1,16 @@
 <!-- templates/data/includes/suggestion_selected.html -->
 <div id="search-wrapper-{{ field }}" class="w-100 animate-fade">
-    <div class="d-flex align-items-center justify-content-between bg-light border border-primary-subtle px-3 py-2 rounded-2 w-100">
-        <span class="small fw-semibold text-dark text-truncate me-2" title="{{ display_name }}">
-            <i class="bi bi-check-circle-fill text-success me-1"></i> {{ display_name }}
+    <div class="suggest-chosen">
+        <span class="d-inline-flex align-items-center gap-2 text-truncate fw-semibold text-dark" title="{{ display_name }}">
+            <i class="bi bi-check-circle-fill text-success flex-shrink-0"></i>
+            <span class="text-truncate">{{ display_name }}</span>
         </span>
-        
+
         <input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">
-        
-        <button type="button" 
-                class="btn btn-sm btn-link text-secondary p-0 shadow-none border-0 fw-bold flex-shrink-0"
-                style="font-size: 0.75rem;"
+
+        <button type="button"
+                class="btn btn-link text-secondary p-0 border-0 fw-semibold flex-shrink-0"
+                style="font-size: 0.78rem;"
                 hx-get="{% url 'reset_suggestion' %}?field={{ field }}"
                 hx-target="#search-wrapper-{{ field }}"
                 hx-swap="outerHTML">

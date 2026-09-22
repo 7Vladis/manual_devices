@@ -1,41 +1,47 @@
 <!-- templates/data/object/inline_inventory.html -->
-<span id="inventory-display-container" class="d-inline-block inline-edit-wrapper">
+<span id="inventory-display-container" class="meta-value inline-edit-wrapper">
 {% if editing %}
-    <form hx-post="{% url 'edit_inventory' obj.uuid %}" 
-          hx-target="#inventory-display-container" 
-          hx-swap="outerHTML" 
-          class="d-inline-flex gap-1 align-items-center m-0">
+    <form hx-post="{% url 'edit_inventory' obj.uuid %}"
+          hx-target="#inventory-display-container"
+          hx-swap="outerHTML"
+          class="d-flex gap-1 align-items-center w-100 m-0">
         {% csrf_token %}
-        <input type="text" 
-               name="inventory_number" 
-               value="{{ obj.inventory_number|default:'' }}" 
-               class="form-control form-control-sm bg-white border py-0.5 px-2 shadow-sm rounded-2" 
+        <input type="text"
+               name="inventory_number"
+               value="{{ obj.inventory_number|default:'' }}"
+               class="form-control form-control-sm"
                placeholder="Инв. №"
-               style="width: 130px; font-size: 0.85rem; height: 28px;"
+               style="font-size: 0.85rem; height: 30px;"
                autocomplete="off"
                autofocus
                onkeydown="if(event.key==='Escape'){ htmx.ajax('GET', '{% url 'edit_inventory' obj.uuid %}?cancel=1', {target: '#inventory-display-container', swap: 'outerHTML'}); }">
-               
-        <button type="submit" class="btn btn-sm btn-link text-success p-0 ms-1 border-0" title="Сохранить (Enter)">
+
+        <button type="submit" class="btn btn-link text-success p-0 border-0 flex-shrink-0" title="Сохранить (Enter)">
             <i class="bi bi-check-lg fs-5"></i>
         </button>
-        <button type="button" class="btn btn-sm btn-link text-muted p-0 border-0" 
-                hx-get="{% url 'edit_inventory' obj.uuid %}?cancel=1" 
-                hx-target="#inventory-display-container" 
-                hx-swap="outerHTML" 
+        <button type="button" class="btn btn-link text-muted p-0 border-0 flex-shrink-0"
+                hx-get="{% url 'edit_inventory' obj.uuid %}?cancel=1"
+                hx-target="#inventory-display-container"
+                hx-swap="outerHTML"
                 title="Отмена (Esc)">
-            <i class="bi bi-x-lg fs-6"></i>
+            <i class="bi bi-x-lg"></i>
         </button>
     </form>
 {% else %}
-    <span {% if not request.user.is_junior %}hx-get="{% url 'edit_inventory' obj.uuid %}" hx-target="#inventory-display-container" hx-swap="outerHTML"{% endif %}
-          style="cursor: pointer;" 
-          class="editable-trigger d-inline-flex align-items-center">
-        <span class="text-muted">Инв. №:</span>
-        <span class="ms-1 {% if obj.inventory_number %}text-dark fw-semibold{% else %}text-muted{% endif %}">
-            {{ obj.inventory_number|default:"не указан" }}
-        </span>
-        {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon ms-1"></i>{% endif %}
+    <span class="d-inline-flex align-items-center text-truncate {% if not request.user.is_junior %}editable-trigger{% endif %}"
+          {% if not request.user.is_junior %}
+          hx-get="{% url 'edit_inventory' obj.uuid %}"
+          hx-target="#inventory-display-container"
+          hx-swap="outerHTML"
+          style="cursor: pointer;"
+          title="Инвентарный номер — кликните, чтобы изменить"
+          {% endif %}>
+        {% if obj.inventory_number %}
+            <span class="text-truncate">{{ obj.inventory_number }}</span>
+        {% else %}
+            <span class="text-empty">не указан</span>
+        {% endif %}
+        {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon"></i>{% endif %}
     </span>
 {% endif %}
 </span>

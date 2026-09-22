@@ -5,33 +5,46 @@
 {% if editing %}
     <form hx-post="{% url 'edit_description' obj.uuid %}" hx-target="#description-container" hx-swap="outerHTML">
         {% csrf_token %}
-        <textarea name="description" 
-                  class="form-control bg-light border-0 shadow-none small mb-2" 
-                  style="min-height: 280px; resize: vertical; font-size: 0.9rem; line-height: 1.6;"
-                  placeholder="Введите подробное описание объекта (поддерживается Markdown)...">{{ obj.description|default:'' }}</textarea>
-        <div class="text-end">
-            <button type="button" class="btn btn-light btn-sm px-3 me-1 border" 
-                    hx-get="{% url 'edit_description' obj.uuid %}?cancel=1" 
-                    hx-target="#description-container" 
+        <textarea name="description"
+                  class="form-control mb-2"
+                  style="min-height: 240px; resize: vertical; font-size: 0.88rem; line-height: 1.6;"
+                  autofocus
+                  placeholder="Введите подробное описание объекта. Поддерживается Markdown: **жирный**, *курсив*, списки, `код`.">{{ obj.description|default:'' }}</textarea>
+        <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-light border"
+                    hx-get="{% url 'edit_description' obj.uuid %}?cancel=1"
+                    hx-target="#description-container"
                     hx-swap="outerHTML">Отмена</button>
-            <button type="submit" class="btn btn-primary btn-sm px-3 fw-bold">Сохранить</button>
+            <button type="submit" class="btn btn-primary fw-semibold">
+                <i class="bi bi-check-lg"></i>Сохранить
+            </button>
         </div>
     </form>
 {% else %}
-    <div hx-get="{% url 'edit_description' obj.uuid %}" hx-target="#description-container" hx-swap="outerHTML" style="cursor: pointer;">
-        {% if obj.description %}
-            <div class="markdown-content">
-                {{ obj.description|markdown }}
-            </div>
-            {% if not request.user.is_junior %}
-            <button class="btn btn-sm btn-light border text-muted mt-3"><i class="bi bi-pencil me-1"></i> Редактировать</button>
-            {% endif %}
-        {% else %}
-            <div class="text-center py-5 text-muted small">
-                <i class="bi bi-pencil-square d-block fs-3 mb-1 opacity-50"></i>
-                Кликните, чтобы добавить описание...
-            </div>
+    {% if obj.description %}
+        <div class="markdown-content">{{ obj.description|markdown }}</div>
+        {% if not request.user.is_junior %}
+        <button type="button" class="btn btn-light border mt-3"
+                hx-get="{% url 'edit_description' obj.uuid %}"
+                hx-target="#description-container"
+                hx-swap="outerHTML">
+            <i class="bi bi-pencil"></i>Редактировать
+        </button>
         {% endif %}
-    </div>
+    {% else %}
+        <div class="empty-state"
+             {% if not request.user.is_junior %}
+             hx-get="{% url 'edit_description' obj.uuid %}"
+             hx-target="#description-container"
+             hx-swap="outerHTML"
+             style="cursor: pointer;"
+             {% endif %}>
+            <span class="empty-icon"><i class="bi bi-pencil-square"></i></span>
+            <span class="empty-title">Описание не заполнено</span>
+            <span class="empty-hint">
+                {% if request.user.is_junior %}Описание добавляет инженер с правами на редактирование.{% else %}Нажмите, чтобы добавить описание объекта.{% endif %}
+            </span>
+        </div>
+    {% endif %}
 {% endif %}
 </div>

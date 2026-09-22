@@ -1,108 +1,100 @@
 <!-- templates/data/object/object_tab_files.html -->
+<span id="tab-count-files" class="tab-count" hx-swap-oob="true">{{ files|length }}</span>
+
 <div class="animate-fade">
-    
-    <!-- Форма загрузки документов -->
-    <form hx-post="{% url 'add_attachment' obj.uuid %}" 
-          hx-encoding="multipart/form-data" 
-          hx-target="#tab-pane-files" 
-          class="mb-4">
+
+    <!-- Загрузка документа -->
+    <form hx-post="{% url 'add_attachment' obj.uuid %}"
+          hx-encoding="multipart/form-data"
+          hx-target="#tab-pane-files"
+          class="panel mb-3">
         {% csrf_token %}
         <input type="hidden" name="is_preview" value="false">
-        <div class="card border-0 shadow-sm p-3 bg-white" style="border-radius: 8px;">
-            <label class="form-label small fw-bold text-muted mb-2 text-uppercase">Загрузить новый документ или фото</label>
-            <div class="input-group">
-                <input type="file" name="file" class="form-control form-control-sm bg-light border-0 shadow-none" required>
-                <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Загрузить</button>
+        <div class="panel-body">
+            <label class="form-label fw-semibold text-secondary mb-2" style="font-size: 0.8rem;">
+                Загрузить документ или фотографию
+            </label>
+            <div class="d-flex gap-2 flex-wrap">
+                <input type="file" name="file" class="form-control flex-grow-1" required style="min-width: 220px;">
+                <button type="submit" class="btn btn-primary fw-semibold px-4">
+                    <i class="bi bi-upload"></i>Загрузить
+                </button>
             </div>
         </div>
     </form>
 
-    <!-- Список документов -->
+    <!-- Список вложений -->
     <form hx-post="{% url 'delete_attachments_bulk' %}" hx-target="#tab-pane-files">
         {% csrf_token %}
         <input type="hidden" name="object_uuid" value="{{ obj.uuid }}">
-        
-        <div class="d-flex justify-content-between align-items-center mb-3 px-1">
-            <h6 class="fw-bold mb-0 text-dark">Документы и вложения ({{ files|length }})</h6>
+
+        <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+            <h6 class="panel-title mb-0"><i class="bi bi-paperclip"></i>Документы и вложения</h6>
             {% if files and not request.user.is_junior %}
-            <button type="submit" class="btn btn-outline-danger btn-sm fw-bold" hx-confirm="Удалить выбранные документы?">
-                <i class="bi bi-trash me-1"></i> Удалить выбранные
+            <button type="submit" class="btn btn-light border text-danger fw-semibold"
+                    hx-confirm="Удалить выбранные документы? Файлы будут стёрты с диска безвозвратно.">
+                <i class="bi bi-trash3"></i>Удалить выбранные
             </button>
             {% endif %}
         </div>
 
         <div class="d-flex flex-column gap-2">
             {% for file in files %}
-            <div class="card p-3 border-0 shadow-sm bg-white hover-bg-light transition-all" style="border-radius: 8px;">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div class="d-flex align-items-center text-truncate flex-grow-1">
-                        {% if not request.user.is_junior %}
-                        <input type="checkbox" name="file_ids" value="{{ file.uuid }}" class="form-check-input me-3 shadow-none" style="width: 18px; height: 18px; cursor: pointer;">
-                        {% endif %}
-                        
-                        <!-- Миниатюра / Иконка -->
-                        {% if file.is_image %}
-                            <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3 overflow-hidden border shadow-sm position-relative" 
-                                 style="width: 52px; height: 52px; min-width: 52px; cursor: pointer;"
-                                 data-bs-toggle="modal" 
-                                 data-bs-target="#imageFullscreenModal-{{ file.uuid }}">
-                                <img src="{{ file.path.url }}" style="width: 100%; height: 100%; object-fit: cover;" title="Нажмите, чтобы увеличить">
-                            </div>
-                        {% else %}
-                            <div class="rounded-3 bg-light d-flex align-items-center justify-content-center me-3 border" 
-                                 style="width: 52px; height: 52px; min-width: 52px;">
-                                <i class="bi bi-file-earmark-arrow-down-fill text-primary fs-4"></i>
-                            </div>
-                        {% endif %}
-                        
-                        <div class="text-truncate">
-                            <span class="fw-bold text-dark small d-block text-truncate">{{ file.filename }}</span>
-                            <small class="text-muted d-block" style="font-size: 0.75rem;">
-                                Загрузил: {{ file.user.username|default:file.user.email }} • {{ file.created_at|date:"d.m.Y" }}
-                                {% if file.comment %}
-                                    • <i class="bi bi-chat-left-text me-1"></i>Из комментария
-                                {% endif %}
-                            </small>
-                        </div>
-                    </div>
-                    
-                    <div class="d-flex align-items-center gap-2 ms-3">
-                        <!-- Кнопка назначения главным превью (только для картинок) -->
-                        {% if file.is_image and not request.user.is_junior %}
-                            <button type="button" 
-                                    class="btn btn-sm {% if file.is_preview %}btn-success text-white{% else %}btn-outline-secondary{% endif %} fw-semibold"
-                                    style="font-size: 0.75rem;"
-                                    hx-post="{% url 'set_preview_attachment' file.uuid %}"
-                                    hx-target="#tab-pane-files"
-                                    title="Назначить главным превью объекта">
-                                {% if file.is_preview %}
-                                    <i class="bi bi-star-fill me-1"></i> Превью объекта
-                                {% else %}
-                                    <i class="bi bi-star me-1"></i> Сделать превью
-                                {% endif %}
-                            </button>
-                        {% endif %}
+            <div class="file-row">
+                {% if not request.user.is_junior %}
+                <input type="checkbox" name="file_ids" value="{{ file.uuid }}"
+                       class="form-check-input flex-shrink-0 shadow-none"
+                       style="width: 17px; height: 17px; cursor: pointer;"
+                       aria-label="Выбрать файл для удаления">
+                {% endif %}
 
-                        <a href="{{ file.path.url }}" download class="btn btn-light btn-sm text-secondary border shadow-sm px-3">
-                            <i class="bi bi-download"></i>
-                        </a>
-                    </div>
-                </div>
+                <span class="file-thumb">
+                    {% if file.is_image %}
+                        <img src="{{ file.path.url }}" alt="{{ file.filename }}"
+                             data-bs-toggle="modal" data-bs-target="#imageFullscreenModal-{{ file.uuid }}"
+                             title="Нажмите, чтобы увеличить">
+                    {% else %}
+                        <i class="bi bi-file-earmark-text text-secondary fs-5"></i>
+                    {% endif %}
+                </span>
+
+                <span class="flex-grow-1 text-truncate">
+                    <span class="d-block fw-semibold text-dark text-truncate" style="font-size: 0.85rem;" title="{{ file.filename }}">
+                        {{ file.filename }}
+                    </span>
+                    <span class="d-block text-muted text-truncate" style="font-size: 0.75rem;">
+                        {{ file.user.username|default:file.user.email|default:"Система" }} • {{ file.created_at|date:"d.m.Y H:i" }}
+                        {% if file.comment %} • <i class="bi bi-chat-left-text"></i> из комментария{% endif %}
+                        {% if file.youtrack_id %} • <i class="bi bi-hdd-network"></i> в YouTrack{% endif %}
+                    </span>
+                </span>
+
+                <span class="d-flex align-items-center gap-2 flex-shrink-0">
+                    {% if file.is_image and not request.user.is_junior %}
+                    <button type="button"
+                            class="btn {% if file.is_preview %}btn-success{% else %}btn-light border{% endif %} fw-semibold"
+                            style="font-size: 0.75rem;"
+                            hx-post="{% url 'set_preview_attachment' file.uuid %}"
+                            hx-target="#tab-pane-files"
+                            title="{% if file.is_preview %}Снять отметку главного превью{% else %}Сделать главным превью объекта{% endif %}">
+                        <i class="bi {% if file.is_preview %}bi-star-fill{% else %}bi-star{% endif %}"></i>
+                        <span class="d-none d-xl-inline">{% if file.is_preview %}Превью{% else %}Сделать превью{% endif %}</span>
+                    </button>
+                    {% endif %}
+
+                    <a href="{{ file.path.url }}" download class="btn btn-light border btn-icon" title="Скачать файл">
+                        <i class="bi bi-download"></i>
+                    </a>
+                </span>
             </div>
 
-            <!-- Модалка полноэкранного просмотра -->
             {% if file.is_image %}
             <div class="modal fade" id="imageFullscreenModal-{{ file.uuid }}" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered modal-xl">
                     <div class="modal-content bg-transparent border-0 shadow-none">
                         <div class="modal-body text-center p-0 position-relative">
-                            <button type="button" 
-                                    class="btn-close btn-close-white position-absolute top-0 end-0 m-3 shadow-none" 
-                                    data-bs-dismiss="modal" 
-                                    aria-label="Close" 
-                                    style="z-index: 1060; width: 25px; height: 25px;"></button>
-                            <img src="{{ file.path.url }}" 
-                                 class="img-fluid rounded-3" 
+                            <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 shadow-none" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                            <img src="{{ file.path.url }}" alt="{{ file.filename }}" class="img-fluid rounded-3"
                                  style="max-height: 85vh; object-fit: contain; box-shadow: 0 10px 45px rgba(0,0,0,0.6);">
                         </div>
                     </div>
@@ -111,9 +103,12 @@
             {% endif %}
 
             {% empty %}
-            <div class="text-center py-5 text-muted small bg-white rounded-3 shadow-sm">
-                <i class="bi bi-file-earmark-slash fs-3 d-block mb-2 text-secondary opacity-50"></i>
-                Документы отсутствуют.
+            <div class="panel">
+                <div class="empty-state">
+                    <span class="empty-icon"><i class="bi bi-folder2-open"></i></span>
+                    <span class="empty-title">Файлов пока нет</span>
+                    <span class="empty-hint">Загрузите паспорт, схему или фотографию оборудования.</span>
+                </div>
             </div>
             {% endfor %}
         </div>

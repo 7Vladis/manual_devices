@@ -1,0 +1,17 @@
+{% comment %}
+Заглушка правой панели справочника. С oob=True возвращается OOB-свопом,
+когда удалён объект/модель, карточка которого была открыта.
+{% endcomment %}
+{% if oob %}<div id="detail-container" hx-swap-oob="innerHTML">{% endif %}
+<div class="d-flex align-items-center justify-content-center text-center h-100 p-4 animate-fade">
+    <div style="max-width: 420px;">
+        <div class="rounded-circle bg-light-primary text-primary mx-auto mb-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 64px; height: 64px;">
+            <i class="bi bi-diagram-3-fill fs-3"></i>
+        </div>
+        <h6 class="fw-bold text-dark mb-1">Выберите объект или модель</h6>
+        <p class="text-secondary small mb-0">
+            Кликните на элемент в левом дереве для просмотра характеристик, истории ТО, прикрепленных файлов и комментариев.
+        </p>
+    </div>
+</div>
+{% if oob %}</div>{% endif %}

@@ -87,6 +87,52 @@
 
     <!-- Интеграция HTMX CSRF и глобальный индикатор -->
     <script>
+        /**
+         * Форма комментария принимает текст ИЛИ файл (либо и то, и другое).
+         * Кнопка отправки остаётся заблокированной, пока не заполнено хотя бы одно поле.
+         * Функция объявлена глобально, так как форма пересоздаётся при каждом HTMX-свопе.
+         */
+        window.mdSyncCommentForm = function (el) {
+            const form = el.closest('form');
+            if (!form) return;
+            const textInput = form.querySelector('textarea[name="text"]');
+            const fileInput = form.querySelector('input[type="file"]');
+            const submitBtn = form.querySelector('[type="submit"]');
+            if (!submitBtn) return;
+
+            const hasText = !!(textInput && textInput.value.trim());
+            const hasFile = !!(fileInput && fileInput.files && fileInput.files.length);
+            submitBtn.disabled = !(hasText || hasFile);
+        };
+
+        /**
+         * Показывает ошибку валидации внутри формы (блок .form-feedback).
+         * Используется, когда значение выбирается из HTMX-подсказок и обычная
+         * браузерная валидация required не может проверить факт выбора.
+         */
+        window.mdShowFormError = function (form, message) {
+            const box = form.querySelector('.form-feedback');
+            if (!box) { alert(message); return; }
+            box.innerHTML =
+                '<div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3 mb-3 rounded-3 small animate-fade">' +
+                '<i class="bi bi-exclamation-circle-fill fs-5"></i><div></div></div>';
+            box.querySelector('div > div').textContent = message;
+            box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        };
+
+        /**
+         * htmx по умолчанию игнорирует тело ответов 4xx. Сервер отдаёт на них
+         * готовые фрагменты с текстом ошибки (и при необходимости HX-Retarget),
+         * поэтому для «ожидаемых» кодов разрешаем своп.
+         */
+        document.body.addEventListener('htmx:beforeSwap', (event) => {
+            const status = event.detail.xhr.status;
+            if ([400, 403, 409, 422].includes(status)) {
+                event.detail.shouldSwap = true;
+                event.detail.isError = false;
+            }
+        });
+
         document.body.addEventListener('htmx:configRequest', (event) => {
             event.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
         });

@@ -21,10 +21,10 @@
                         <!-- Кнопку удаления модели показываем всем, КРОМЕ младшего инженера (Junior) -->
                         {% if not request.user.is_junior %}
                             <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center"
-                                    hx-post="{% url 'delete_model' model.uuid %}"
-                                    hx-target="#model-node-{{ model.uuid }}"
-                                    hx-swap="outerHTML"
-                                    hx-confirm="Вы уверены, что хотите удалить модель '{{ model.name }}'? Все связанные объекты потеряют ссылку на модель."
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#confirmModal"
+                                    hx-get="{% url 'delete_model' model.uuid %}"
+                                    hx-target="#confirm-modal-content"
                                     title="Удалить">
                                 <i class="bi bi-trash3 small"></i>
                             </button>

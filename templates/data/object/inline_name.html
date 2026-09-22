@@ -1,38 +1,39 @@
 <!-- templates/data/object/inline_name.html -->
-<div id="name-display-container" class="animate-fade d-inline-block">
+<div id="name-display-container" class="animate-fade">
 {% if editing %}
-    <form hx-post="{% url 'edit_name' obj.uuid %}" 
-          hx-target="#name-display-container" 
-          hx-swap="outerHTML" 
-          class="d-inline-flex gap-2 align-items-center mb-0">
+    <form hx-post="{% url 'edit_name' obj.uuid %}"
+          hx-target="#name-display-container"
+          hx-swap="outerHTML"
+          class="d-flex gap-2 align-items-center mb-0">
         {% csrf_token %}
-        <input type="text" 
-               name="name" 
-               value="{{ obj.name|default:'' }}" 
+        <input type="text"
+               name="name"
+               value="{{ obj.name|default:'' }}"
                placeholder="{{ obj.model.name }}"
-               class="form-control form-control-lg fw-bold border bg-light py-1 px-3 shadow-none rounded-3" 
-               style="max-width: 440px; font-size: 1.35rem; height: 38px;"
+               class="form-control fw-bold"
+               style="max-width: 460px; font-size: 1.25rem; height: 40px;"
                autocomplete="off"
                autofocus
-               required>
-               
-        <button type="submit" class="btn btn-success btn-icon" style="width: 34px; height: 34px;" title="Сохранить (Enter)">
+               required
+               onkeydown="if(event.key==='Escape'){ htmx.ajax('GET', '{% url 'edit_name' obj.uuid %}?cancel=1', {target: '#name-display-container', swap: 'outerHTML'}); }">
+
+        <button type="submit" class="btn btn-success btn-icon" title="Сохранить (Enter)">
             <i class="bi bi-check-lg fs-6"></i>
         </button>
-        <button type="button" class="btn btn-light btn-icon border" style="width: 34px; height: 34px;" 
-                hx-get="{% url 'edit_name' obj.uuid %}?cancel=1" 
-                hx-target="#name-display-container" 
+        <button type="button" class="btn btn-light border btn-icon"
+                hx-get="{% url 'edit_name' obj.uuid %}?cancel=1"
+                hx-target="#name-display-container"
                 hx-swap="outerHTML"
                 title="Отмена (Esc)">
             <i class="bi bi-x-lg fs-6"></i>
         </button>
     </form>
 {% else %}
-    <h3 {% if not request.user.is_junior %}hx-get="{% url 'edit_name' obj.uuid %}" hx-target="#name-display-container" hx-swap="outerHTML"{% endif %}
-        style="cursor: pointer; font-size: 1.45rem;" 
-        class="fw-bold mb-0 text-dark d-inline-flex align-items-center editable-trigger">
+    <h1 {% if not request.user.is_junior %}hx-get="{% url 'edit_name' obj.uuid %}" hx-target="#name-display-container" hx-swap="outerHTML"{% endif %}
+        class="fw-bold mb-0 text-dark d-inline-flex align-items-center editable-trigger"
+        style="font-size: 1.35rem; line-height: 1.25; cursor: pointer;">
         <span>{{ obj.name|default:obj.model.name }}</span>
-        {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon ms-2 fs-6"></i>{% endif %}
-    </h3>
+        {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon fs-6"></i>{% endif %}
+    </h1>
 {% endif %}
 </div>

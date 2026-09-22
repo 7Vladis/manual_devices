@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
+from django.utils.html import format_html
 from users.decorators import role_required
 from .models import MattermostSetting
 from .services import test_specific_webhook
@@ -26,7 +27,8 @@ def activate_webhook(request, pk):
 def test_webhook(request, pk):
     success, message = test_specific_webhook(pk)
     color = "success" if success else "danger"
-    return HttpResponse(f'<small class="text-{color} ms-2">{message}</small>')
+    # Текст ошибки может содержать URL/тело ответа стороннего сервиса — экранируем
+    return HttpResponse(format_html('<small class="text-{} ms-2">{}</small>', color, message))
 
 @login_required
 @role_required(['admin', 'superuser'])

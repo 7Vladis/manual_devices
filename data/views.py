@@ -5,8 +5,11 @@ from django.db.models import TextField
 from django.shortcuts import render, get_object_or_404
 from django.template.loader import render_to_string
 from django.http import HttpResponse, HttpResponseForbidden
-from django.db.models import Q, Prefetch, Count
+from django.db.models import Q, Prefetch, Count, ProtectedError
+from django.db import transaction
+from django.core.exceptions import ValidationError
 from django.utils import timezone
+from django.utils.html import format_html
 from datetime import timedelta, datetime, date
 from dateutil.relativedelta import relativedelta
 from users.decorators import role_required
@@ -21,6 +24,20 @@ from .youtrack_services import (
     update_comment_in_youtrack
 )
 from .models import DateUpdateRule, DataObject, ActionHistory, ObjectModel, ObjectType, Attachment, Comment
+
+
+def htmx_error(message, status=400, retarget=None):
+    """
+    Ответ с текстом ошибки для HTMX-запроса. Тело — готовый алерт, при необходимости
+    перенаправляется в другой контейнер заголовком HX-Retarget (например, в блок
+    .form-feedback модального окна, чтобы не затирать основную цель формы).
+    """
+    response = render_to_string('data/includes/htmx_error.html', {'message': message})
+    response = HttpResponse(response, status=status)
+    if retarget:
+        response['HX-Retarget'] = retarget
+        response['HX-Reswap'] = 'innerHTML'
+    return response
 
 
 # --- НАСТРОЙКИ СИСТЕМЫ ---
@@ -114,12 +131,9 @@ def delete_object_type_view(request, pk):
     """Удаление типа оборудования с проверкой на использование"""
     obj_type = get_object_or_404(ObjectType, pk=pk)
     if obj_type.models.exists():
-        return HttpResponse(
-            '<div class="alert alert-danger py-2 px-3 m-0 rounded-3 small animate-fade">'
-            '<i class="bi bi-exclamation-triangle-fill me-1"></i> '
-            'Нельзя удалить тип: он привязан к существующим моделям оборудования!'
-            '</div>', 
-            status=400
+        return htmx_error(
+            'Нельзя удалить тип: он привязан к существующим моделям оборудования.',
+            retarget=f'#error-container-type-{obj_type.uuid}'
         )
     obj_type.delete()
     
@@ -296,12 +310,9 @@ def delete_rule_view(request, pk):
     """Удаление правила планирования"""
     rule = get_object_or_404(DateUpdateRule, pk=pk)
     if rule.data_objects.exists():
-        return HttpResponse(
-            '<div class="alert alert-danger py-2 px-3 m-0 rounded-3 small animate-fade">'
-            '<i class="bi bi-exclamation-triangle-fill me-1"></i> '
-            'Нельзя удалить: правило используется в активных объектах!'
-            '</div>', 
-            status=400
+        return htmx_error(
+            'Нельзя удалить: правило используется в активных объектах.',
+            retarget=f'#rule-error-{rule.uuid}'
         )
     rule.delete()
     
@@ -543,10 +554,7 @@ def dict_view(request):
             request.session['active_object_id'] = str(active_object.pk)
             
             # Строим цепочку родителей для разворачивания дерева
-            current = active_object.parent
-            while current:
-                parent_uuids.append(str(current.pk))
-                current = current.parent
+            parent_uuids = [str(anc.pk) for anc in get_ancestors_chain(active_object)]
         except DataObject.DoesNotExist:
             request.session['active_object_id'] = None
                 
@@ -561,11 +569,9 @@ def dict_view(request):
     if explorer_mode == 'flat' and explorer_parent_uuid:
         try:
             explorer_parent = DataObject.objects.select_related('parent').get(pk=explorer_parent_uuid)
-            curr_p = explorer_parent
-            while curr_p:
-                if str(curr_p.pk) not in parent_uuids:
-                    parent_uuids.append(str(curr_p.pk))
-                curr_p = curr_p.parent
+            for node in get_ancestors_chain(explorer_parent) + [explorer_parent]:
+                if str(node.pk) not in parent_uuids:
+                    parent_uuids.append(str(node.pk))
         except DataObject.DoesNotExist:
             explorer_parent_uuid = None
             request.session['explorer_parent_uuid'] = None
@@ -703,10 +709,7 @@ def object_children_view(request, parent_uuid):
     if active_object_id:
         try:
             active_object = DataObject.objects.select_related('parent').get(pk=active_object_id)
-            current = active_object.parent
-            while current:
-                parent_uuids.append(str(current.pk))
-                current = current.parent
+            parent_uuids = [str(anc.pk) for anc in get_ancestors_chain(active_object)]
         except DataObject.DoesNotExist:
             pass
 
@@ -783,10 +786,14 @@ def service_object_view(request, pk):
                 history_entry.save(update_fields=['youtrack_id'])
         
         node_html = render_to_string('data/tree/object_tree_node.html', {'node': obj}, request=request)
-        date_display_str = obj.next_maintenance_date.strftime('%d.%m.%Y') if obj.next_maintenance_date else "Не запланировано"
-        oob_date_html = f'<strong id="maintenance-date-display" class="text-danger" hx-swap-oob="innerHTML">{date_display_str}</strong>'
+        oob_pill_html = render_maintenance_pill(obj, request=request)
+        # Счетчик вкладки «История» в карточке объекта обновляем тем же ответом
+        oob_count_html = format_html(
+            '<span id="tab-count-history" class="tab-count" hx-swap-oob="true">{}</span>',
+            obj.actions.count()
+        )
         
-        response = HttpResponse(node_html + "\n" + oob_date_html)
+        response = HttpResponse(node_html + "\n" + oob_pill_html + "\n" + oob_count_html)
         response['HX-Trigger'] = 'objectServiced'
         return response
 
@@ -804,21 +811,86 @@ def service_object_view(request, pk):
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
 def delete_object_view(request, pk):
-    if request.method in ['POST', 'DELETE']:
-        obj = get_object_or_404(DataObject, pk=pk)
-        obj.delete()
-        return HttpResponse("", status=200)
-    return HttpResponse("Метод не разрешен", status=405)
+    """
+    GET  — модальное окно подтверждения с точным объёмом каскада
+           (потомки, комментарии, вложения, история).
+    POST — удаление поддерева. Удаление непустого узла требует явного
+           подтверждения флагом confirm_subtree.
+    """
+    obj = get_object_or_404(DataObject.objects.select_related('model'), pk=pk)
+    stats = obj.get_subtree_stats()
+
+    if request.method == 'GET':
+        return render(request, 'data/includes/confirm_delete_object.html', {
+            'obj': obj,
+            'stats': stats,
+        })
+
+    if request.method not in ['POST', 'DELETE']:
+        return HttpResponse("Метод не разрешен", status=405)
+
+    if stats['descendants'] and request.POST.get('confirm_subtree') != 'yes':
+        return htmx_error(
+            'Объект содержит дочерние компоненты: подтвердите удаление всего поддерева.',
+            retarget='#confirm-modal-content .form-feedback'
+        )
+
+    was_active = request.session.get('active_object_id') == str(obj.pk)
+    obj_uuid = obj.uuid
+    obj.delete()
+    if was_active:
+        request.session['active_object_id'] = None
+        request.session.modified = True
+
+    # Узел убираем из дерева OOB-свопом: он может отсутствовать в DOM
+    # (свёрнутая ветка, режим проводника) — тогда инструкция просто игнорируется.
+    parts = [format_html('<li id="node-{}" hx-swap-oob="delete"></li>', obj_uuid)]
+    if was_active:
+        parts.append(render_to_string('data/includes/detail_placeholder.html', {'oob': True}, request=request))
+    response = HttpResponse("\n".join(parts), status=200)
+    response['HX-Trigger'] = 'objectDeleted'
+    return response
 
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
 def delete_model_view(request, pk):
-    if request.method in ['POST', 'DELETE']:
-        model_obj = get_object_or_404(ObjectModel, pk=pk)
+    """
+    GET  — окно подтверждения; если модель используется объектами, удаление
+           недоступно (FK защищён PROTECT), окно объясняет, что делать.
+    POST — удаление свободной модели.
+    """
+    model_obj = get_object_or_404(ObjectModel.objects.select_related('object_type'), pk=pk)
+    objects_count = model_obj.data_objects.count()
+
+    if request.method == 'GET':
+        return render(request, 'data/includes/confirm_delete_model.html', {
+            'model_obj': model_obj,
+            'objects_count': objects_count,
+        })
+
+    if request.method not in ['POST', 'DELETE']:
+        return HttpResponse("Метод не разрешен", status=405)
+
+    model_uuid = model_obj.uuid
+    try:
         model_obj.delete()
-        return HttpResponse("", status=200)
-    return HttpResponse("Метод не разрешен", status=405)
+    except ProtectedError:
+        return htmx_error(
+            f'Модель используется объектами ({objects_count} шт.) — сначала переназначьте им другую модель.',
+            status=409,
+            retarget='#confirm-modal-content .form-feedback'
+        )
+
+    was_active = request.session.get('active_model_id') == str(model_uuid)
+    parts = [format_html('<li id="model-node-{}" hx-swap-oob="delete"></li>', model_uuid)]
+    if was_active:
+        request.session['active_model_id'] = None
+        request.session.modified = True
+        parts.append(render_to_string('data/includes/detail_placeholder.html', {'oob': True}, request=request))
+    response = HttpResponse("\n".join(parts), status=200)
+    response['HX-Trigger'] = 'modelDeleted'
+    return response
 
 
 # --- СОЗДАНИЕ ОБЪЕКТОВ И МОДЕЛЕЙ ---
@@ -835,7 +907,12 @@ def create_object_view(request):
         maintenance_str = request.POST.get('next_maintenance_date')
         rule_uuid = request.POST.get('date_update_rule')
         
-        model_obj = get_object_or_404(ObjectModel, pk=model_uuid)
+        model_obj = ObjectModel.objects.filter(pk=model_uuid).first() if model_uuid else None
+        if model_obj is None:
+            return htmx_error(
+                'Не выбрана модель оборудования. Выберите её из списка подсказок.',
+                retarget='#createObjectModal .form-feedback'
+            )
         
         next_maintenance_date = None
         if maintenance_str:
@@ -903,7 +980,13 @@ def create_model_view(request):
         if new_type_name:
             object_type, _ = ObjectType.objects.get_or_create(type=new_type_name)
         else:
-            object_type = get_object_or_404(ObjectType, pk=type_uuid)
+            object_type = ObjectType.objects.filter(pk=type_uuid).first() if type_uuid else None
+
+        if object_type is None:
+            return htmx_error(
+                'Не выбран тип оборудования. Выберите существующий тип или создайте новый.',
+                retarget='#createModelModal .form-feedback'
+            )
             
         ObjectModel.objects.create(
             name=name,
@@ -926,6 +1009,33 @@ def create_model_view(request):
 
 
 # --- ДЕТАЛИ ОБЪЕКТА ---
+
+def render_maintenance_pill(obj, request=None, oob=True):
+    """Рендерит пилюлю срока ТО (для OOB-обновления шапки карточки объекта)."""
+    today = timezone.localdate()
+    return render_to_string('data/object/maintenance_pill.html', {
+        'obj': obj,
+        'today': today,
+        'soon_date': today + timedelta(days=14),
+        'oob': oob,
+    }, request=request)
+
+
+def get_ancestors_chain(obj, max_depth=64):
+    """
+    Возвращает цепочку родителей от корня до непосредственного родителя объекта.
+    Защищена от зацикливания (visited) и от чрезмерной глубины.
+    """
+    chain = []
+    visited = {obj.uuid}
+    current = obj.parent
+    while current and current.uuid not in visited and len(chain) < max_depth:
+        visited.add(current.uuid)
+        chain.append(current)
+        current = current.parent
+    chain.reverse()
+    return chain
+
 
 @login_required
 def object_detail_view(request, pk):
@@ -951,6 +1061,13 @@ def object_detail_view(request, pk):
         'active_tab': 'short_info',
         'sync_status': sync_status,
         'sync_message': sync_message,
+        'today': timezone.localdate(),
+        'soon_date': timezone.localdate() + timedelta(days=14),
+        'ancestors': get_ancestors_chain(obj),
+        'comments_count': obj.comments.count(),
+        'files_count': obj.attachments.count(),
+        'history_count': obj.actions.count(),
+        'specs_count': len(obj.model.specifications or {}) if obj.model else 0,
     }
     
     response_content = render_to_string('data/object/object_details.html', context, request=request)
@@ -1015,11 +1132,13 @@ def unlink_rule_view(request, pk):
 @login_required
 def object_tab_view(request, pk, tab_name):
     obj = get_object_or_404(DataObject, pk=pk)
-    context = {'obj': obj}
+    context = {'obj': obj, 'today': timezone.localdate()}
     
     if tab_name == 'short_info':
         preview = Attachment.objects.filter(data_object=obj, is_preview=True).first()
         context['preview'] = preview
+        context['children'] = obj.children.select_related('model').order_by('name')
+        context['soon_date'] = timezone.localdate() + timedelta(days=14)
         template = 'data/object/object_tab_short_info.html'
         
     elif tab_name == 'specs':
@@ -1027,7 +1146,7 @@ def object_tab_view(request, pk, tab_name):
         template = 'data/object/object_tab_specs.html'
         
     elif tab_name == 'comments':
-        comments = obj.comments.select_related('user').order_by('-created_at')
+        comments = obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
         context['comments'] = comments
         template = 'data/object/object_tab_comments.html'
         
@@ -1125,10 +1244,17 @@ def edit_parent_view(request, pk):
         parent_uuid = request.POST.get('parent') or request.POST.get('parent_uuid')
         
         if parent_uuid:
-            # Защита от установки самого себя родителем
-            if str(obj.pk) == str(parent_uuid):
-                return HttpResponse("Объект не может быть родителем самого себя", status=400)
             new_parent = get_object_or_404(DataObject, pk=parent_uuid)
+            # Защита от циклов: нельзя назначить родителем себя или своего потомка
+            try:
+                obj.validate_parent(new_parent)
+            except ValidationError as exc:
+                return render(request, 'data/object/inline_parent.html', {
+                    'obj': obj,
+                    'current_parent': obj.parent,
+                    'editing': False,
+                    'error': " ".join(exc.messages),
+                }, status=400)
             obj.parent = new_parent
             parent_name = new_parent.name or new_parent.model.name
         else:
@@ -1251,9 +1377,13 @@ def add_comment_view(request, pk):
     text = request.POST.get('text', '').strip()
     file = request.FILES.get('file')
     yt_errors = []
+    form_error = None
     
     # Ищем эффективную задачу YouTrack (свою или первого родителя)
     effective_yt_id, target_yt_obj = obj.get_effective_youtrack_issue()
+
+    if not text and not file:
+        form_error = "Добавьте текст комментария или прикрепите файл."
 
     if text or file:
         comment = Comment.objects.create(
@@ -1318,7 +1448,8 @@ def add_comment_view(request, pk):
     return render(request, 'data/object/object_tab_comments.html', {
         'obj': obj, 
         'comments': comments,
-        'yt_error': " | ".join(yt_errors) if yt_errors else None
+        'yt_error': " | ".join(dict.fromkeys(yt_errors)) if yt_errors else None,
+        'form_error': form_error
     })
 
 
@@ -1507,6 +1638,8 @@ def model_detail_view(request, pk):
     context = {
         'model_obj': model_obj,
         'active_tab': 'specs',
+        'specs_count': len(model_obj.specifications or {}),
+        'objects_count': model_obj.data_objects.count(),
     }
     
     response_content = render_to_string('data/model/model_details.html', context, request=request)
@@ -1646,110 +1779,55 @@ def model_spec_delete_view(request, pk):
 
 @login_required
 def check_model_name_view(request):
+    """Подсказка при вводе названия модели: точный дубликат или похожие записи"""
     name = request.GET.get('name', '').strip()
     if not name or len(name) < 2:
         return HttpResponse('')
 
-    exact_match = ObjectModel.objects.filter(name__iexact=name).first()
-    if exact_match:
-        return HttpResponse(
-            f'<div class="alert alert-danger py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">'
-            f'<div class="fw-bold mb-1"><i class="bi bi-x-circle-fill me-1"></i> Модель с таким названием уже существует!</div>'
-            f'<a href="#" class="text-danger fw-bold" '
-            f'hx-get="/dict/models/{exact_match.uuid}/?sidebar=1" '
-            f'hx-target="#detail-container" '
-            f'hx-on:click="bootstrap.Modal.getInstance(document.getElementById(\'createModelModal\')).hide();">'
-            f'Перейти к существующей модели: {exact_match.name} ({exact_match.object_type.type})'
-            f'</a>'
-            f'</div>'
-        )
-
-    stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по', 'of', 'and', 'the'}
-    words = [w.lower() for w in name.split() if len(w) >= 2 and w.lower() not in stop_words]
-
+    exact_match = ObjectModel.objects.select_related('object_type').filter(name__iexact=name).first()
     similar_models = []
-    if words:
-        query = Q()
-        for word in words:
-            query |= Q(name__icontains=word) | Q(object_type__type__icontains=word)
-        similar_models = ObjectModel.objects.filter(query).select_related('object_type').distinct()[:5]
+    if not exact_match:
+        stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по', 'of', 'and', 'the'}
+        words = [w.lower() for w in name.split() if len(w) >= 2 and w.lower() not in stop_words]
+        if words:
+            query = Q()
+            for word in words:
+                query |= Q(name__icontains=word) | Q(object_type__type__icontains=word)
+            similar_models = ObjectModel.objects.filter(query).select_related('object_type').distinct()[:5]
 
-    if similar_models:
-        links = [
-            f'<li class="mb-1">'
-            f'<a href="#" class="alert-link text-primary fw-semibold" '
-            f'hx-get="/dict/models/{model.uuid}/?sidebar=1" '
-            f'hx-target="#detail-container" '
-            f'hx-on:click="bootstrap.Modal.getInstance(document.getElementById(\'createModelModal\')).hide();">'
-            f'{model.name} <span class="text-muted fw-normal">({model.object_type.type})</span>'
-            f'</a></li>'
-            for model in similar_models
-        ]
-        return HttpResponse(
-            f'<div class="alert alert-warning py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">'
-            f'<div class="fw-bold text-dark mb-1"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Похожие модели ({len(similar_models)} шт.):</div>'
-            f'<ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">{"".join(links)}</ul>'
-            f'</div>'
-        )
-
-    return HttpResponse('<div class="text-success small mt-1"><i class="bi bi-check-circle-fill me-1"></i> Название свободно</div>')
+    return render(request, 'data/includes/name_check_result.html', {
+        'kind': 'model',
+        'exact': exact_match,
+        'similar': similar_models,
+        'modal_id': 'createModelModal',
+    })
 
 
 @login_required
 def check_object_name_view(request):
+    """Подсказка при вводе имени объекта: точный дубликат или похожие записи"""
     name = request.GET.get('name', '').strip()
     if not name or len(name) < 2:
         return HttpResponse('')
 
-    exact_match = DataObject.objects.filter(name__iexact=name).first()
-    if exact_match:
-        exact_name = exact_match.name or exact_match.model.name
-        return HttpResponse(
-            f'<div class="alert alert-danger py-2 px-3 mt-2 mb-0 rounded-3 small">'
-            f'<div class="fw-bold mb-1"><i class="bi bi-x-circle-fill me-1"></i> Объект с таким именем уже существует!</div>'
-            f'<a href="#" class="text-danger fw-bold" '
-            f'hx-get="/dict/objects/{exact_match.uuid}/?sidebar=1" '
-            f'hx-target="#detail-container" '
-            f'hx-on:click="bootstrap.Modal.getInstance(document.getElementById(\'createObjectModal\')).hide();">'
-            f'Перейти к объекту: {exact_name} ({exact_match.model.name})'
-            f'</a>'
-            f'</div>'
-        )
-
-    stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по'}
-    words = [w.lower() for w in name.split() if len(w) >= 3 and w.lower() not in stop_words]
-
+    exact_match = DataObject.objects.select_related('model').filter(name__iexact=name).first()
     similar_objects = []
-    if words:
-        query = Q()
-        for word in words:
-            query |= Q(name__icontains=word) | Q(model__name__icontains=word)
-        similar_objects = DataObject.objects.filter(query).select_related('model').distinct()[:5]
+    if not exact_match:
+        stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по'}
+        words = [w.lower() for w in name.split() if len(w) >= 3 and w.lower() not in stop_words]
+        if words:
+            query = Q()
+            for word in words:
+                query |= Q(name__icontains=word) | Q(model__name__icontains=word)
+            similar_objects = DataObject.objects.filter(query).select_related('model').distinct()[:5]
 
-    if similar_objects:
-        links = [
-            f'<li class="mb-1">'
-            f'<a href="#" class="alert-link text-primary fw-semibold" '
-            f'hx-get="/dict/objects/{obj.uuid}/?sidebar=1" '
-            f'hx-target="#detail-container" '
-            f'hx-on:click="bootstrap.Modal.getInstance(document.getElementById(\'createObjectModal\')).hide();">'
-            f'{obj.name or obj.model.name} <span class="text-muted fw-normal">({obj.model.name})</span>'
-            f'</a></li>'
-            for obj in similar_objects
-        ]
-        return HttpResponse(
-            f'<div class="alert alert-warning py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">'
-            f'<div class="fw-bold text-dark mb-1"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Похожие объекты ({len(similar_objects)} шт.):</div>'
-            f'<ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">{"".join(links)}</ul>'
-            f'</div>'
-        )
+    return render(request, 'data/includes/name_check_result.html', {
+        'kind': 'object',
+        'exact': exact_match,
+        'similar': similar_objects,
+        'modal_id': 'createObjectModal',
+    })
 
-    return HttpResponse('<div class="text-success small mt-1"><i class="bi bi-check-circle-fill me-1"></i> Имя свободно</div>')
-
-
-# data/views.py
-
-# data/views.py
 
 @login_required
 def suggest_view(request):
@@ -1789,9 +1867,13 @@ def suggest_view(request):
     elif field in ['parent', 'parent_inline', 'source_object']:
         qs = DataObject.objects.select_related('model', 'model__object_type').all()
         
-        # Защита от зацикливания: исключаем сам объект из списка
+        # Защита от зацикливания: исключаем сам объект и всё его поддерево
         if exclude_uuid:
-            qs = qs.exclude(pk=exclude_uuid)
+            excluded = {exclude_uuid}
+            source = DataObject.objects.filter(pk=exclude_uuid).first()
+            if source:
+                excluded |= {str(u) for u in source.get_descendant_uuids()}
+            qs = qs.exclude(pk__in=excluded)
             
         if q:
             exact = qs.filter(Q(name__iexact=q) | Q(inventory_number__iexact=q))
@@ -1816,11 +1898,11 @@ def suggest_view(request):
         else:
             results = list(DateUpdateRule.objects.all().order_by('name')[:8])
 
+    # Создание значения «на лету» поддерживается только для типов оборудования:
+    # для правил ТО нужен конструктор параметров, которого нет в подсказках.
     show_create_option = False
-    if field in ['object_type', 'date_update_rule'] and q:
-        has_exact_match = any(
-            (getattr(item, 'type' if field == 'object_type' else 'name', '').lower() == q.lower()) for item in results
-        )
+    if field == 'object_type' and q:
+        has_exact_match = any(item.type.lower() == q.lower() for item in results)
         if not has_exact_match:
             show_create_option = True
 
@@ -2091,25 +2173,14 @@ def edit_rule_view(request, pk):
             action=f"Изменено правило планирования ТО на: {rule_name}."
         )
         
-        rule_name_display = f'<span class="text-muted me-1">Правило ТО:</span><strong class="text-dark fw-semibold">{obj.date_update_rule.name}</strong><i class="bi bi-pencil-square edit-icon"></i>' if obj.date_update_rule else '<span class="text-muted me-1">Правило ТО:</span><strong class="text-dark fw-semibold">ручной ввод</strong><i class="bi bi-pencil-square edit-icon"></i>'
+        oob_rule_html = render_to_string('data/object/inline_rule_value.html', {
+            'obj': obj,
+            'oob': True,
+        }, request=request)
         
-        oob_rule_html = f"""
-        <span id="rule-display-container" 
-              data-bs-toggle="modal" 
-              data-bs-target="#editRuleModal"
-              hx-get="/dict/objects/{obj.uuid}/edit-rule/" 
-              hx-target="#edit-rule-modal-content"
-              style="cursor: pointer;" 
-              class="transition-all editable-trigger"
-              hx-swap-oob="outerHTML">
-            {rule_name_display}
-        </span>
-        """
+        oob_pill_html = render_maintenance_pill(obj, request=request)
         
-        date_str = obj.next_maintenance_date.strftime('%d.%m.%Y') if obj.next_maintenance_date else "Не запланировано"
-        oob_date_html = f'<strong id="maintenance-date-display" class="text-danger" hx-swap-oob="innerHTML">{date_str}</strong>'
-        
-        return HttpResponse(f"{oob_rule_html}\n{oob_date_html}")
+        return HttpResponse(f"{oob_rule_html}\n{oob_pill_html}")
 
     current_mode = 'auto' if obj.date_update_rule else 'manual'
     rule_details = None
@@ -2239,12 +2310,22 @@ def sync_youtrack_view(request, pk):
 
 # --- СЕРВИС И ПРЕДСТАВЛЕНИЯ КЛОНИРОВАНИЯ ОБЪЕКТОВ ---
 
-def deep_clone_object(source_obj, new_root_name, new_parent=None, source_root_name=None, user=None, clone_children=True):
+def deep_clone_object(source_obj, new_root_name, new_parent=None, source_root_name=None, user=None,
+                      clone_children=True, _visited=None, _depth=0):
     """
     Рекурсивно клонирует объект и всю его дочернюю иерархию с умным суффиксированием:
     - Если в названии детали было имя старого родителя -> подменяем на новое имя.
     - Если название детали общее (например, "Блок питания") -> добавляем суффикс "(НовоеИмя)".
+
+    Защищено от циклов в дереве (visited) и от чрезмерной глубины. Атомарность
+    всей операции обеспечивает вызывающий код (clone_object_view).
     """
+    if _visited is None:
+        _visited = set()
+    if source_obj.uuid in _visited or _depth > DataObject.MAX_TREE_DEPTH:
+        return None
+    _visited.add(source_obj.uuid)
+
     is_root = (source_root_name is None)
     if is_root:
         source_root_name = source_obj.name or (source_obj.model.name if source_obj.model else "")
@@ -2292,7 +2373,9 @@ def deep_clone_object(source_obj, new_root_name, new_parent=None, source_root_na
                 new_parent=cloned_obj,
                 source_root_name=source_root_name,
                 user=user,
-                clone_children=True
+                clone_children=True,
+                _visited=_visited,
+                _depth=_depth + 1,
             )
             
     return cloned_obj
@@ -2335,13 +2418,16 @@ def clone_object_view(request):
                 
             new_parent = source_obj.parent if keep_parent else None
             
-            deep_clone_object(
-                source_obj=source_obj,
-                new_root_name=new_name,
-                new_parent=new_parent,
-                user=request.user,
-                clone_children=clone_children
-            )
+            # Вся копия создаётся одной транзакцией: при ошибке в середине
+            # не остаётся наполовину склонированного поддерева.
+            with transaction.atomic():
+                deep_clone_object(
+                    source_obj=source_obj,
+                    new_root_name=new_name,
+                    new_parent=new_parent,
+                    user=request.user,
+                    clone_children=clone_children
+                )
 
         roots = DataObject.objects.filter(parent__isnull=True).prefetch_related('children').order_by('name')
         context = {

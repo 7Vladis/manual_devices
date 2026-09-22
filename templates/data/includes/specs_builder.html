@@ -1,74 +1,62 @@
 <!-- templates/data/includes/specs_builder.html -->
 <div id="specs-builder-container">
-    <label class="form-label fw-bold text-muted text-uppercase mb-2" style="font-size: 0.85rem;">
-        <i class="bi bi-cpu me-1"></i>Спецификация (Характеристики)
-    </label>
-    
-    <!-- Сетка добавленных характеристик (увеличены отступы, убрана теснота) -->
-    <div class="table-responsive bg-light p-3 rounded-3 mb-3 animate-fade" 
-         style="max-height: 220px; overflow-y: auto; border: 1px solid #e9ecef;">
-        <table class="table table-borderless align-middle mb-0">
-            <thead>
-                <tr class="text-muted border-bottom" style="font-size: 0.8rem; letter-spacing: 0.5px;">
-                    <th class="py-2">ПАРАМЕТР</th>
-                    <th class="py-2">ЗНАЧЕНИЕ</th>
-                    <th class="py-2 text-end">ДЕЙСТВИЕ</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for key, val in specifications.items %}
-                <tr class="border-bottom border-light-subtle">
-                    <td class="fw-bold text-dark py-2" style="font-size: 0.95rem;">{{ key }}</td>
-                    <td class="text-secondary py-2" style="font-size: 0.95rem;">{{ val }}</td>
-                    <td class="text-end py-2">
-                        <!-- Кнопка удаления характеристики -->
-                        <button type="button" class="btn btn-link text-danger p-1 border-0"
-                                hx-post="{% url 'specs_builder' %}"
-                                hx-target="#specs-builder-container"
-                                hx-vals='{"remove_key": "{{ key }}"}'
-                                style="font-size: 1.1rem;"
-                                title="Удалить">
-                            {% for k, v in specifications.items %}
-                            <input type="hidden" name="spec_keys" value="{{ k }}">
-                            <input type="hidden" name="spec_values" value="{{ v }}">
-                            {% endfor %}
-                            <i class="bi bi-trash3-fill"></i>
-                        </button>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="3" class="text-center text-muted py-4">Характеристики еще не добавлены.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <span class="form-section-title mb-0"><i class="bi bi-cpu"></i>Характеристики модели</span>
+        <span class="tab-count">{{ specifications|length }}</span>
     </div>
 
-    <!-- Поля ввода для добавления новой характеристики (увеличены размеры полей и кнопки) -->
-    <div class="row g-2">
-        <!-- col заставляет поля ввода равномерно занять всё свободное пространство -->
-        <div class="col">
-            <input type="text" id="new_key_input" class="form-control border-0 bg-light py-2 shadow-none" 
-                placeholder="Ключ (например, Вес)" style="font-size: 0.95rem;">
-        </div>
-        <div class="col">
-            <input type="text" id="new_val_input" class="form-control border-0 bg-light py-2 shadow-none" 
-                placeholder="Значение (например, 15 кг)" style="font-size: 0.95rem;">
-        </div>
-        <!-- col-auto сжимает колонку до естественной ширины кнопки -->
-        <div class="col-auto">
-            <button type="button" class="btn btn-success py-2 px-3 fw-bold"
+    {% if specifications %}
+    <div class="spec-list">
+        {% for key, val in specifications.items %}
+        <div class="spec-item">
+            <span class="spec-key text-truncate" title="{{ key }}">{{ key }}</span>
+            <span class="spec-val text-truncate" title="{{ val }}">{{ val }}</span>
+            <button type="button"
+                    class="btn btn-link text-danger p-0 border-0 flex-shrink-0"
                     hx-post="{% url 'specs_builder' %}"
                     hx-target="#specs-builder-container"
+                    hx-swap="outerHTML"
+                    hx-include="[name='spec_keys'], [name='spec_values']"
+                    hx-vals='{"remove_key": "{{ key|escapejs }}"}'
+                    title="Удалить характеристику «{{ key }}»">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="spec-list">
+        <div class="empty-state" style="padding: 22px 14px;">
+            <span class="empty-title">Характеристики не добавлены</span>
+            <span class="empty-hint">Например: «Мощность» → «5 кВт». Их унаследуют все объекты этой модели.</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Добавление новой характеристики -->
+    <div class="row g-2 align-items-center">
+        <div class="col-12 col-sm">
+            <input type="text" id="new_key_input" class="form-control" placeholder="Параметр (например, Мощность)"
+                   onkeydown="if(event.key==='Enter'){ event.preventDefault(); document.getElementById('spec-add-btn').click(); }">
+        </div>
+        <div class="col-12 col-sm">
+            <input type="text" id="new_val_input" class="form-control" placeholder="Значение (например, 5 кВт)"
+                   onkeydown="if(event.key==='Enter'){ event.preventDefault(); document.getElementById('spec-add-btn').click(); }">
+        </div>
+        <div class="col-12 col-sm-auto">
+            <button type="button" id="spec-add-btn" class="btn btn-primary w-100 fw-semibold"
+                    hx-post="{% url 'specs_builder' %}"
+                    hx-target="#specs-builder-container"
+                    hx-swap="outerHTML"
                     hx-include="[name='spec_keys'], [name='spec_values']"
                     hx-vals='js:{new_key: document.getElementById("new_key_input").value, new_value: document.getElementById("new_val_input").value}'>
-                <i class="bi bi-plus-lg"></i>
+                <i class="bi bi-plus-lg"></i><span class="d-sm-none d-xl-inline">Добавить</span>
             </button>
         </div>
     </div>
 
-    <!-- Скрытые поля для отправки итоговых данных -->
+    <!-- Итоговые значения, уходящие вместе с формой создания модели -->
     {% for key, val in specifications.items %}
         <input type="hidden" name="spec_keys" value="{{ key }}">
         <input type="hidden" name="spec_values" value="{{ val }}">
