@@ -7,5 +7,7 @@ openpyxl
 markdown
 nh3
 python-dotenv
+gunicorn
+whitenoise
 # Дополнительно для LDAP (раскомментируйте при необходимости использования LDAP):
 # django-auth-ldap

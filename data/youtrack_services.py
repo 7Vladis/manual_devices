@@ -259,6 +259,48 @@ def update_comment_in_youtrack(issue_id: str, comment_yt_id: str, text: str, use
         return False, msg
 
 
+WORK_ITEMS_PAGE_SIZE = 100
+WORK_ITEMS_MAX_PAGES = 50
+
+
+def fetch_all_work_items(base_url: str, issue_id: str, headers: dict) -> list | None:
+    """
+    Возвращает все списания времени по задаче, обходя пагинацию YouTrack.
+    None — если хотя бы одна страница не получена: в этом случае локальные
+    записи трогать нельзя.
+    """
+    url = f"{base_url}/api/issues/{issue_id}/timeTracking/workItems"
+    items = []
+    for page in range(WORK_ITEMS_MAX_PAGES):
+        res = requests.get(
+            url,
+            headers=headers,
+            params={
+                "fields": "id,text,created,date,author(id,name,email)",
+                "$top": WORK_ITEMS_PAGE_SIZE,
+                "$skip": page * WORK_ITEMS_PAGE_SIZE,
+            },
+            timeout=10,
+        )
+        if res.status_code != 200:
+            logger.warning("YouTrack %s: страница списаний %s не получена (%s)", issue_id, page, res.status_code)
+            return None
+        chunk = res.json()
+        if not isinstance(chunk, list):
+            return None
+        items.extend(chunk)
+        if len(chunk) < WORK_ITEMS_PAGE_SIZE:
+            return items
+    logger.warning("YouTrack %s: превышен лимит страниц списаний, синхронизация удалений пропущена", issue_id)
+    return None
+
+
+def _log_stale(kind: str, issue_id: str, youtrack_ids) -> None:
+    ids = list(youtrack_ids)
+    if ids:
+        logger.info("YouTrack %s: локально удаляются %s, отсутствующие в задаче: %s", issue_id, kind, ids)
+
+
 def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
     """
     Автоматическая двусторонняя синхронизация с YouTrack:
@@ -302,19 +344,27 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
         User = get_user_model()
         from .models import Comment, Attachment, ActionHistory
 
-        # 1. Синхронизируем описание объекта
-        yt_description = data.get('description', '')
-        if yt_description and yt_description != data_object.description:
-            data_object.description = yt_description
-            data_object.save(update_fields=['description'])
+        # 1. Синхронизируем описание объекта (пустое описание — тоже валидное состояние)
+        if 'description' in data:
+            yt_description = (data.get('description') or '').strip() or None
+            if yt_description != ((data_object.description or '').strip() or None):
+                data_object.description = yt_description
+                data_object.save(update_fields=['description'])
 
         active_yt_comment_ids = set()
         active_yt_attachment_ids = set()
         active_yt_work_item_ids = set()
 
         new_comments_count = 0
+        updated_comments_count = 0
         new_files_count = 0
         new_work_items_count = 0
+
+        # Удалять локальные копии можно только по коллекциям, которые сервер
+        # действительно вернул: частичный ответ не должен трактоваться как удаление.
+        comments_received = 'comments' in data
+        attachments_received = 'attachments' in data
+        work_items_received = False
 
         # 2. Синхронизируем комментарии и их вложения
         yt_comments = data.get('comments', [])
@@ -327,6 +377,11 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
             c_text = c_data.get('text', '') or "Вложение из YouTrack"
             comment_obj = Comment.objects.filter(data_object=data_object, youtrack_id=c_id).first()
             
+            if comment_obj and comment_obj.text != c_text:
+                comment_obj.text = c_text
+                comment_obj.save(update_fields=['text'])
+                updated_comments_count += 1
+
             if not comment_obj:
                 author_email = c_data.get('author', {}).get('email')
                 author_user = User.objects.filter(email__iexact=author_email).first() if author_email else None
@@ -420,17 +475,13 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                     att_obj.comment = matched_comment
                     att_obj.save(update_fields=['comment'])
 
-        # 4. Синхронизируем списания времени (WorkItems)
-        work_items_url = f"{base_url}/api/issues/{issue_id}/timeTracking/workItems"
-        work_items_res = requests.get(
-            work_items_url,
-            headers=headers,
-            params={"fields": "id,text,created,date,author(id,name,email)"},
-            timeout=10
-        )
+        # 4. Синхронизируем списания времени (WorkItems).
+        # Эндпоинт постраничный ($top по умолчанию 42): выбираем все страницы,
+        # иначе старые списания были бы приняты за удалённые.
+        yt_work_items = fetch_all_work_items(base_url, issue_id, headers)
+        work_items_received = yt_work_items is not None
 
-        if work_items_res.status_code == 200:
-            yt_work_items = work_items_res.json()
+        if work_items_received:
             for w_data in yt_work_items:
                 w_id = w_data.get('id')
                 if not w_id:
@@ -456,35 +507,50 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                         action_type='maintenance',
                         action=w_text,
                         youtrack_id=w_id,
-                        created_at=created_dt
+                        created_at=created_dt,
+                        # Списание времени в задаче не закрывает локальное
+                        # плановое событие — в статистику плана не попадает.
+                        maintenance_kind='unplanned',
                     )
                     new_work_items_count += 1
 
-        # 5. Удаляем локальные записи, удаленные в YouTrack
-        deleted_comments_count, _ = Comment.objects.filter(
-            data_object=data_object, 
-            youtrack_id__isnull=False
-        ).exclude(youtrack_id__in=active_yt_comment_ids).delete()
+        # 5. Удаляем локальные записи, удалённые в YouTrack — только по тем
+        # коллекциям, которые сервер вернул целиком.
+        deleted_comments_count = deleted_files_count = deleted_works_count = 0
 
-        deleted_files_count, _ = Attachment.objects.filter(
-            data_object=data_object, 
-            youtrack_id__isnull=False
-        ).exclude(youtrack_id__in=active_yt_attachment_ids).delete()
+        if comments_received:
+            stale_comments = Comment.objects.filter(
+                data_object=data_object, youtrack_id__isnull=False
+            ).exclude(youtrack_id__in=active_yt_comment_ids)
+            _log_stale('комментарии', issue_id, stale_comments.values_list('youtrack_id', flat=True))
+            deleted_comments_count, _ = stale_comments.delete()
 
-        deleted_works_count, _ = ActionHistory.objects.filter(
-            data_object=data_object, 
-            youtrack_id__isnull=False
-        ).exclude(youtrack_id__in=active_yt_work_item_ids).delete()
+        if comments_received and attachments_received:
+            stale_files = Attachment.objects.filter(
+                data_object=data_object, youtrack_id__isnull=False
+            ).exclude(youtrack_id__in=active_yt_attachment_ids)
+            _log_stale('вложения', issue_id, stale_files.values_list('youtrack_id', flat=True))
+            deleted_files_count, _ = stale_files.delete()
+
+        if work_items_received:
+            stale_works = ActionHistory.objects.filter(
+                data_object=data_object, youtrack_id__isnull=False
+            ).exclude(youtrack_id__in=active_yt_work_item_ids)
+            _log_stale('списания времени', issue_id, stale_works.values_list('youtrack_id', flat=True))
+            deleted_works_count, _ = stale_works.delete()
 
         total_deleted = deleted_comments_count + deleted_files_count + deleted_works_count
         total_added = new_comments_count + new_files_count + new_work_items_count
 
-        if total_added > 0 or total_deleted > 0:
+        if total_added or total_deleted or updated_comments_count:
             ActionHistory.objects.create(
                 user=user,
                 data_object=data_object,
                 action_type='sync',
-                action=f"Синхронизация с YouTrack: добавлено ({total_added}), удалено ({total_deleted})."
+                action=(
+                    f"Синхронизация с YouTrack: добавлено {total_added}, "
+                    f"обновлено {updated_comments_count}, удалено {total_deleted}."
+                )
             )
 
         return True, "Данные успешно синхронизированы с YouTrack"

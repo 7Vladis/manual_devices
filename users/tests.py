@@ -3,7 +3,7 @@
 администрирование учётных записей.
 
 Запуск:
-    python manage.py test --settings=core.settings_test
+    python manage.py test
 """
 
 from django.contrib.auth import get_user_model
@@ -145,33 +145,124 @@ class UserAdministrationTests(TestCase):
             email='target@test.local', username='target', password='pass12345', role='junior'
         )
 
+    def _valid_payload(self, **overrides):
+        payload = {
+            'email': 'fresh@test.local',
+            'username': 'Фёдоров Ф.Ф.',
+            'password': 'StrongPass!42',
+            'password_confirm': 'StrongPass!42',
+        }
+        payload.update(overrides)
+        return payload
+
     def test_admin_creates_user(self):
         self.client.force_login(self.admin)
-        response = self.client.post(reverse('users:create_user'), {
-            'email': 'fresh@test.local', 'username': 'Фёдоров Ф.Ф.', 'password': 'StrongPass!42',
-        })
+        response = self.client.post(reverse('users:create_user'), self._valid_payload())
 
         self.assertEqual(response.status_code, 200)
         created = User.objects.get(email='fresh@test.local')
         self.assertEqual(created.username, 'Фёдоров Ф.Ф.')
         self.assertEqual(created.role, 'junior')
+        self.assertTrue(created.check_password('StrongPass!42'))
 
     def test_username_defaults_to_email_local_part(self):
         self.client.force_login(self.admin)
-        self.client.post(reverse('users:create_user'), {
-            'email': 'noname@test.local', 'password': 'StrongPass!42',
-        })
+        self.client.post(reverse('users:create_user'), self._valid_payload(
+            email='noname@test.local', username='',
+        ))
 
         self.assertEqual(User.objects.get(email='noname@test.local').username, 'noname')
 
     def test_senior_cannot_create_user(self):
         self.client.force_login(self.senior)
-        response = self.client.post(reverse('users:create_user'), {
-            'email': 'hack@test.local', 'password': 'StrongPass!42',
-        })
+        response = self.client.post(reverse('users:create_user'), self._valid_payload(email='hack@test.local'))
 
         self.assertEqual(response.status_code, 403)
         self.assertFalse(User.objects.filter(email='hack@test.local').exists())
+
+    def test_weak_password_is_rejected(self):
+        """BUG-021: AUTH_PASSWORD_VALIDATORS раньше не вызывались вовсе."""
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('users:create_user'), self._valid_payload(
+            password='123', password_confirm='123',
+        ))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(email='fresh@test.local').exists())
+        body = response.content.decode()
+        self.assertTrue('корот' in body or 'прост' in body or 'цифр' in body)
+
+    def test_common_password_is_rejected(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('users:create_user'), self._valid_payload(
+            password='password', password_confirm='password',
+        ))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(email='fresh@test.local').exists())
+
+    def test_password_similar_to_email_is_rejected(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('users:create_user'), self._valid_payload(
+            email='fedorov@test.local', password='fedorov@test.local', password_confirm='fedorov@test.local',
+        ))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(email='fedorov@test.local').exists())
+
+    def test_password_mismatch_is_reported(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('users:create_user'), self._valid_payload(
+            password_confirm='OtherPass!42',
+        ))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('не совпадают', response.content.decode())
+        self.assertFalse(User.objects.filter(email='fresh@test.local').exists())
+
+    def test_duplicate_email_is_reported_not_crashing(self):
+        """BUG-021: повторный email давал IntegrityError и ответ 500."""
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('users:create_user'), self._valid_payload(
+            email=self.target.email,
+        ))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('уже зарегистрирован', response.content.decode())
+        self.assertEqual(User.objects.filter(email__iexact=self.target.email).count(), 1)
+
+    def test_duplicate_email_check_ignores_case(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('users:create_user'), self._valid_payload(
+            email=self.target.email.upper(),
+        ))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(User.objects.count(), 3)
+
+    def test_empty_form_does_not_silently_succeed(self):
+        """Раньше пустой POST отвечал редиректом, будто всё прошло."""
+        before = User.objects.count()
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('users:create_user'), {})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(User.objects.count(), before)
+
+    def test_error_response_is_retargeted_to_modal_body(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('users:create_user'), self._valid_payload(password='123', password_confirm='123'))
+
+        self.assertEqual(response['HX-Retarget'], '#create-user-form-body')
+        self.assertEqual(response['HX-Reswap'], 'innerHTML')
+
+    def test_entered_values_survive_validation_error(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse('users:create_user'), self._valid_payload(
+            email='keep@test.local', password='123', password_confirm='123',
+        ))
+
+        self.assertIn('keep@test.local', response.content.decode())
 
     def test_admin_changes_role(self):
         self.client.force_login(self.admin)
@@ -207,6 +298,23 @@ class UserAdministrationTests(TestCase):
         self.client.post(reverse('users:toggle_status', args=[self.target.uuid]))
         self.target.refresh_from_db()
         self.assertTrue(self.target.is_active)
+
+    def test_get_does_not_toggle_status(self):
+        """BUG-005: блокировка по GET (клик по ссылке, префетч браузера) недопустима."""
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse('users:toggle_status', args=[self.target.uuid]))
+
+        self.assertEqual(response.status_code, 405)
+        self.target.refresh_from_db()
+        self.assertTrue(self.target.is_active)
+
+    def test_get_does_not_create_user(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse('users:create_user'), {
+            'email': 'viaget@test.local', 'password': 'StrongPass!42',
+        })
+        self.assertEqual(response.status_code, 405)
+        self.assertFalse(User.objects.filter(email='viaget@test.local').exists())
 
     def test_admin_cannot_block_self(self):
         self.client.force_login(self.admin)
@@ -264,4 +372,40 @@ class YoutrackTokenTests(TestCase):
 
     def test_anonymous_cannot_open_token_modal(self):
         response = self.client.get(reverse('users:profile_youtrack_token'))
+        self.assertEqual(response.status_code, 302)
+
+
+class BackendRejectsInactiveUserTests(TestCase):
+    """
+    Блокировка учётной записи обрывает доступ силами самого Django.
+
+    Раньше для этого существовал ValidateUserActiveMiddleware, но он был
+    недостижим: ModelBackend.get_user() отбраковывает заблокированного
+    пользователя раньше, и request.user к моменту проверки уже анонимен.
+    Middleware удалён — тесты фиксируют, что поведение не изменилось.
+    """
+
+    def test_model_backend_does_not_return_inactive_user(self):
+        from django.contrib.auth.backends import ModelBackend
+
+        user = User.objects.create_user(email='x@test.local', username='x', password='pass12345')
+        self.assertEqual(ModelBackend().get_user(user.pk), user)
+
+        User.objects.filter(pk=user.pk).update(is_active=False)
+        self.assertIsNone(ModelBackend().get_user(user.pk))
+
+    def test_middleware_is_no_longer_registered(self):
+        from django.conf import settings
+
+        self.assertNotIn('core.middleware.ValidateUserActiveMiddleware', settings.MIDDLEWARE)
+
+    def test_request_user_becomes_anonymous_after_block(self):
+        user = User.objects.create_user(email='y@test.local', username='y', password='pass12345')
+        self.client.force_login(user)
+        self.assertTrue(self.client.get(reverse('dashboard')).wsgi_request.user.is_authenticated)
+
+        User.objects.filter(pk=user.pk).update(is_active=False)
+
+        response = self.client.get(reverse('dashboard'))
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
         self.assertEqual(response.status_code, 302)

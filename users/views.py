@@ -1,13 +1,17 @@
+import logging
+
 from django.contrib.auth.views import LoginView
 from django.shortcuts import get_object_or_404, render
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST, require_http_methods
 from django.http import HttpResponse, HttpResponseForbidden
 
-from .forms import LoginForm
+from .forms import LoginForm, UserCreateForm
 from .decorators import role_required
 
 User = get_user_model()
+logger = logging.getLogger('users')
 
 # Твой существующий класс авторизации
 class MyLoginView(LoginView):
@@ -25,25 +29,22 @@ class MyLoginView(LoginView):
 
 @login_required
 @role_required(['admin', 'superuser'])
+@require_POST
 def create_user_view(request):
-    """Создание локального пользователя через форму"""
-    if request.method == 'POST':
-        email = request.POST.get('email', '').strip()
-        username = request.POST.get('username', '').strip() # Получаем имя/FIO из формы
-        password = request.POST.get('password', '').strip()
-        
-        if email and password:
-            # Если имя пользователя не заполнено, берем часть email до собаки
-            final_username = username if username else email.split('@')[0]
-            
-            User.objects.create_user(
-                email=email,
-                username=final_username, # Записываем имя в поле username
-                password=password,
-                role='junior',
-                auth_source='django'
-            )
-            
+    """Создание локальной учётной записи. Валидация — через UserCreateForm."""
+    form = UserCreateForm(request.POST)
+
+    if not form.is_valid():
+        # Форму возвращаем целиком: она уже содержит подсветку полей и тексты
+        # ошибок. HX-Retarget направляет ответ в тело модального окна.
+        response = render(request, 'users/includes/create_user_form.html', {'form': form}, status=400)
+        response['HX-Retarget'] = '#create-user-form-body'
+        response['HX-Reswap'] = 'innerHTML'
+        return response
+
+    user = form.save()
+    logger.info("Создан пользователь %s (роль %s) администратором %s", user.email, user.role, request.user.email)
+
     response = HttpResponse()
     response['HX-Redirect'] = '/settings/?tab=users'
     return response
@@ -51,6 +52,7 @@ def create_user_view(request):
 
 @login_required
 @role_required(['admin', 'superuser'])
+@require_POST
 def update_user_role_view(request, pk):
     """Мгновенное изменение роли пользователя через HTMX dropdown"""
     target_user = get_object_or_404(User, pk=pk)
@@ -75,6 +77,7 @@ def update_user_role_view(request, pk):
 
 @login_required
 @role_required(['admin', 'superuser'])
+@require_POST
 def toggle_user_status_view(request, pk):
     """Блокировка / Активация учетной записи"""
     target_user = get_object_or_404(User, pk=pk)
@@ -90,6 +93,7 @@ def toggle_user_status_view(request, pk):
 
 @login_required
 @role_required(['admin', 'superuser'])
+@require_http_methods(["POST", "DELETE"])
 def delete_user_view(request, pk):
     """Безвозвратное удаление пользователя из системы"""
     target_user = get_object_or_404(User, pk=pk)

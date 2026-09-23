@@ -1,7 +1,7 @@
 <!-- templates/data/object/inline_description.html -->
 {% load markdown_extras %}
 
-<div id="description-container" class="animate-fade">
+<div id="description-container" class="animate-fade"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
 {% if editing %}
     <form hx-post="{% url 'edit_description' obj.uuid %}" hx-target="#description-container" hx-swap="outerHTML">
         {% csrf_token %}

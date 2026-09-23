@@ -811,6 +811,7 @@ a:hover {
 .timeline-dot.is-create      { background-color: var(--primary); }
 .timeline-dot.is-sync        { background-color: var(--info); }
 .timeline-dot.is-rule        { background-color: var(--purple); }
+.timeline-dot.is-unplanned   { background-color: var(--warning); }
 
 /* ==========================================================================
    15. МОДАЛЬНЫЕ ОКНА СОЗДАНИЯ: ЕДИНАЯ ФОРМА
@@ -1119,3 +1120,90 @@ a:hover {
 .markdown-content th { background-color: var(--surface-hover); text-align: left; }
 .markdown-content img { max-width: 100%; border-radius: var(--radius-sm); }
 .markdown-content hr { border-color: var(--border-subtle); opacity: 1; }
+
+/* ==========================================================================
+   17. СТЕК УВЕДОМЛЕНИЙ (результаты обращений к внешним системам)
+   ========================================================================== */
+#toast-stack {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: min(420px, calc(100vw - 36px));
+    pointer-events: none;
+}
+
+.toast-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 11px 13px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    background-color: var(--card-bg);
+    box-shadow: var(--shadow-lg);
+    font-size: 0.83rem;
+    line-height: 1.4;
+    pointer-events: auto;
+    animation: toastIn 0.2s ease-out;
+}
+.toast-item.is-leaving {
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.toast-item b { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.toast-item .btn-close { font-size: 0.65rem; margin-top: 2px; }
+
+.toast-warning { border-left: 3px solid var(--warning); }
+.toast-warning b { color: #b45309; }
+.toast-danger  { border-left: 3px solid var(--danger); }
+.toast-danger b { color: #b91c1c; }
+.toast-success { border-left: 3px solid var(--success); }
+.toast-success b { color: #047857; }
+
+@keyframes toastIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   18. СПРАВОЧНИК НА УЗКОМ ЭКРАНЕ: СПИСОК ↔ КАРТОЧКА
+   ========================================================================== */
+.dict-back-btn { display: none; }
+
+@media (max-width: 767.98px) {
+    /* Видна только одна панель: обе занимают всю высоту, и без переключения
+       карточка оказывалась бы ниже экрана под списком. */
+    #dict-layout .dict-pane-detail { display: none !important; }
+    #dict-layout.show-detail .dict-pane-list { display: none !important; }
+    #dict-layout.show-detail .dict-pane-detail { display: flex !important; }
+
+    #dict-layout.show-detail .dict-back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        z-index: 1040;
+        padding: 9px 16px;
+        border: 1px solid var(--border-strong);
+        border-radius: 999px;
+        background-color: var(--card-bg);
+        color: var(--text-primary);
+        font-size: 0.85rem;
+        font-weight: 600;
+        box-shadow: var(--shadow-lg);
+    }
+    #dict-layout.show-detail .dict-back-btn:active {
+        background-color: var(--surface-hover);
+    }
+
+    /* На узком экране карточке нужен весь доступный простор */
+    .detail-header { padding: 12px 14px 0; }
+    .detail-body { padding: 14px 14px 72px; }
+}

@@ -10,6 +10,7 @@
       hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('createRuleSettingsModal')).hide(); }">
     {% csrf_token %}
     <div class="modal-body py-3">
+        <div id="create-rule-error"></div>
         
         <!-- 1. Название -->
         <div class="mb-3">

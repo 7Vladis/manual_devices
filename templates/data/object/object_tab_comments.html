@@ -78,61 +78,7 @@
 
         <div class="d-flex flex-column gap-2">
             {% for comment in comments %}
-            <div class="feed-item" id="comment-item-{{ comment.uuid }}">
-                {% if not request.user.is_junior %}
-                <input type="checkbox" name="comment_ids" value="{{ comment.uuid }}"
-                       class="form-check-input mt-1 flex-shrink-0 shadow-none"
-                       style="width: 17px; height: 17px; cursor: pointer;"
-                       aria-label="Выбрать комментарий для удаления">
-                {% endif %}
-
-                <span class="feed-avatar">{{ comment.user.email|slice:":2"|default:"—" }}</span>
-
-                <div class="flex-grow-1" style="min-width: 0;">
-                    <div class="feed-meta">
-                        <span class="feed-author">{{ comment.user.username|default:comment.user.email|default:"Система" }}</span>
-                        <span class="feed-time">{{ comment.created_at|date:"d.m.Y H:i" }}</span>
-                        {% if comment.youtrack_id %}
-                        <span class="feed-time" title="Комментарий синхронизирован с YouTrack">
-                            <i class="bi bi-hdd-network"></i>
-                        </span>
-                        {% endif %}
-                    </div>
-
-                    <div class="markdown-content">{{ comment.text|markdown }}</div>
-
-                    {% if comment.attachments.all %}
-                    <div class="d-flex flex-wrap gap-2 mt-2 pt-2 border-top">
-                        {% for att in comment.attachments.all %}
-                            {% if att.is_image %}
-                                <span class="file-thumb" style="width: 60px; height: 60px; min-width: 60px;"
-                                      data-bs-toggle="modal" data-bs-target="#imageModal-{{ att.uuid }}">
-                                    <img src="{{ att.path.url }}" alt="{{ att.filename }}" title="Нажмите, чтобы увеличить">
-                                </span>
-
-                                <div class="modal fade" id="imageModal-{{ att.uuid }}" tabindex="-1" aria-hidden="true">
-                                    <div class="modal-dialog modal-dialog-centered modal-xl">
-                                        <div class="modal-content bg-transparent border-0 shadow-none">
-                                            <div class="modal-body text-center p-0 position-relative">
-                                                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 shadow-none" data-bs-dismiss="modal" aria-label="Закрыть"></button>
-                                                <img src="{{ att.path.url }}" alt="{{ att.filename }}" class="img-fluid rounded-3" style="max-height: 85vh; object-fit: contain;">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% else %}
-                                <a href="{{ att.path.url }}" download
-                                   class="btn btn-light border"
-                                   style="font-size: 0.78rem; max-width: 220px;">
-                                    <i class="bi bi-file-earmark-arrow-down text-primary"></i>
-                                    <span class="text-truncate">{{ att.filename }}</span>
-                                </a>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
+            {% include 'data/object/comment_item.html' with comment=comment editing=False can_edit=comment.can_edit %}
             {% empty %}
             <div class="panel">
                 <div class="empty-state">

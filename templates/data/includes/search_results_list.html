@@ -8,7 +8,10 @@
                     {{ obj.name|default:obj.model.name }}
                 </span>
                 <small class="text-muted text-truncate d-block" style="font-size: 0.8rem;">
-                    {{ obj.model.name }}{% if obj.inventory_number %} | {{ obj.inventory_number }}{% endif %}
+                    {{ obj.model.name }}{% if obj.inventory_number %} • {{ obj.inventory_number }}{% endif %}
+                    {% if obj.youtrack_issue_id %}
+                        • <i class="bi bi-hdd-network"></i> {{ obj.youtrack_issue_id }}
+                    {% endif %}
                 </small>
             </div>
             

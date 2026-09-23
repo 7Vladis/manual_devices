@@ -1,4 +1,18 @@
 <div class="webhook-list">
+    {% if error %}
+    <div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3 mb-3 rounded-3 small animate-fade">
+        <i class="bi bi-exclamation-circle-fill fs-5"></i>
+        <div>{{ error }}</div>
+    </div>
+    {% endif %}
+
+    {% if settings|length > 1 %}
+    <div class="alert alert-info d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3 small">
+        <i class="bi bi-info-circle-fill fs-5"></i>
+        <div>Уведомления отправляются во <strong>все активные</strong> webhook из списка.</div>
+    </div>
+    {% endif %}
+
     {% for item in settings %}
     <div class="card p-3 mb-3 border-0 shadow-sm" style="background: white; border-radius: 12px;">
         <div class="row align-items-center">
@@ -29,7 +43,7 @@
                 
                 <!-- Кнопка Тест -->
                 <button type="button" class="btn btn-light border fw-bold me-2 d-flex align-items-center px-3"
-                        hx-get="{% url 'test_webhook' item.uuid %}"
+                        hx-post="{% url 'test_webhook' item.uuid %}"
                         hx-target="#test-result-{{ item.uuid }}"
                         style="height: 42px;">
                     <i class="bi bi-send me-2"></i> Тест

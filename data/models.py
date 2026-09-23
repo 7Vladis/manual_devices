@@ -3,6 +3,7 @@ import os
 import re
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower, Trim
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 from django.utils import timezone
@@ -62,6 +63,25 @@ class ObjectModel(models.Model):
         db_table = 'object_model'
         verbose_name = 'Модель объекта'
         verbose_name_plural = 'Модели объектов'
+        constraints = [
+            # Внутри одного типа оборудования название модели уникально без
+            # учёта регистра и краевых пробелов. Проверка в представлении
+            # предупреждала о дубликате, но не мешала его создать — в том
+            # числе при гонке двух одновременных запросов.
+            models.UniqueConstraint(
+                Lower(Trim('name')),
+                'object_type',
+                name='unique_model_name_per_object_type',
+                violation_error_message='Модель с таким названием уже существует для этого типа оборудования.',
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        # Нормализуем название, чтобы ограничение уникальности не обходилось
+        # лишними пробелами по краям.
+        if self.name:
+            self.name = self.name.strip()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.object_type.type} {self.name}"
@@ -165,6 +185,11 @@ class ActionHistory(models.Model):
         ('sync', 'Синхронизация с YouTrack'),
         ('other', 'Прочее действие'),
     ]
+    MAINTENANCE_KIND_CHOICES = [
+        ('planned', 'Плановое обслуживание'),
+        ('unplanned', 'Внеплановое обслуживание / ремонт'),
+    ]
+
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name="Исполнитель")
     data_object = models.ForeignKey(DataObject, on_delete=models.CASCADE, related_name='actions', verbose_name="Объект")
@@ -173,10 +198,31 @@ class ActionHistory(models.Model):
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата создания")
     youtrack_id = models.CharField(max_length=100, blank=True, null=True, db_index=True, verbose_name="ID записи в YouTrack")
 
+    # Тип обслуживания хранится отдельным полем, а не выводится из текста
+    # описания: статистика плана не должна зависеть от формулировок.
+    maintenance_kind = models.CharField(
+        max_length=20, choices=MAINTENANCE_KIND_CHOICES, blank=True, null=True, db_index=True,
+        verbose_name="Вид обслуживания",
+    )
+    # Плановая дата, которую закрыла эта запись. Пара (объект, planned_for) —
+    # идентификатор планового события: повторные работы по одному событию
+    # не превращаются в несколько выполненных планов.
+    planned_for = models.DateField(
+        blank=True, null=True, db_index=True,
+        verbose_name="Закрытая плановая дата",
+    )
+
     class Meta:
         db_table = 'action_history'
         verbose_name = 'История действия'
         verbose_name_plural = 'История объектов'
+        indexes = [
+            models.Index(fields=['maintenance_kind', 'planned_for'], name='ah_plan_event_idx'),
+        ]
+
+    @property
+    def is_planned_maintenance(self):
+        return self.action_type == 'maintenance' and self.maintenance_kind == 'planned'
 
 
 class Comment(models.Model):
@@ -191,6 +237,12 @@ class Comment(models.Model):
         db_table = 'comment'
         verbose_name = 'Комментарий'
         verbose_name_plural = 'Комментарии'
+
+    def can_be_edited_by(self, user):
+        """Править комментарий может его автор или администратор."""
+        if not user or not user.is_authenticated:
+            return False
+        return self.user_id == user.pk or user.is_admin_or_higher
 
 
 class Attachment(models.Model):
@@ -221,7 +273,9 @@ class Attachment(models.Model):
         if not self.path:
             return False
         ext = os.path.splitext(self.path.name)[1].lower()
-        return ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
+        # SVG намеренно отсутствует: такой файл отдаётся с нашего origin и
+        # может выполнить скрипт. Загрузка SVG запрещена в data.validators.
+        return ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
 
 
 @receiver(post_delete, sender=Attachment)

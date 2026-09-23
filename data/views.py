@@ -1,4 +1,8 @@
+import calendar
+import logging
+
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST, require_http_methods
 from django.contrib.auth import get_user_model
 from django.db.models.functions import Cast
 from django.db.models import TextField
@@ -6,7 +10,7 @@ from django.shortcuts import render, get_object_or_404
 from django.template.loader import render_to_string
 from django.http import HttpResponse, HttpResponseForbidden
 from django.db.models import Q, Prefetch, Count, ProtectedError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.html import format_html
@@ -24,6 +28,10 @@ from .youtrack_services import (
     update_comment_in_youtrack
 )
 from .models import DateUpdateRule, DataObject, ActionHistory, ObjectModel, ObjectType, Attachment, Comment
+from .forms import MONTH_NAMES, DateUpdateRuleForm, clean_fixed_dates, parse_maintenance_date
+from .validators import validate_attachment
+
+logger = logging.getLogger('data')
 
 
 def htmx_error(message, status=400, retarget=None):
@@ -38,6 +46,31 @@ def htmx_error(message, status=400, retarget=None):
         response['HX-Retarget'] = retarget
         response['HX-Reswap'] = 'innerHTML'
     return response
+
+
+def form_errors_text(form):
+    """Плоский текст ошибок формы — для компактных HTMX-ответов."""
+    parts = list(form.non_field_errors())
+    for field in form:
+        for error in field.errors:
+            label = field.label or field.name
+            parts.append(f"{label}: {error}")
+    return " ".join(parts) or "Проверьте заполнение формы."
+
+
+def yt_toast(messages, level='warning', request=None):
+    """
+    HTML всплывающих уведомлений о проблемах синхронизации с YouTrack.
+    Приклеивается OOB-свопом к обычному ответу: локальная операция уже
+    выполнена, но пользователь должен узнать о расхождении с внешней системой.
+    """
+    if isinstance(messages, str):
+        messages = [messages]
+    unique = list(dict.fromkeys(m for m in messages if m))
+    return "\n".join(
+        render_to_string('data/includes/yt_toast.html', {'message': m, 'level': level}, request=request)
+        for m in unique
+    )
 
 
 # --- НАСТРОЙКИ СИСТЕМЫ ---
@@ -60,12 +93,7 @@ def settings_page(request):
             objects_count=Count('data_objects')
         ).order_by('name')
         
-        month_names = {
-            1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
-            5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
-            9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
-        }
-        
+
         for r in rules_query:
             rule_data = r.rule or {}
             if rule_data.get('strategy') == 'fixed':
@@ -74,7 +102,7 @@ def settings_page(request):
                 for d in dates_list:
                     day = d.get('day', 1)
                     month_num = d.get('month', 1)
-                    month_name = month_names.get(month_num, '')
+                    month_name = MONTH_NAMES.get(month_num, '')
                     formatted_dates.append(f"{day} {month_name}")
                 r.formatted_fixed_dates = ", ".join(formatted_dates)
                 
@@ -103,8 +131,11 @@ def settings_page(request):
 
     # 4. ВКЛАДКА: Пользователи (Только для Админов и Суперпользователей)
     elif active_tab == 'users' and request.user.is_admin_or_higher:
+        from users.forms import UserCreateForm
+
         User = get_user_model()
         context['users_list'] = User.objects.all().order_by('username')
+        context['user_create_form'] = UserCreateForm()
 
     if request.headers.get('HX-Request'):
         return render(request, 'data/settings/settings_layout_inner.html', context)
@@ -113,12 +144,12 @@ def settings_page(request):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_POST
 def create_object_type_view(request):
     """Создание нового типа оборудования из настроек"""
-    if request.method == 'POST':
-        name = request.POST.get('type', '').strip()
-        if name:
-            ObjectType.objects.get_or_create(type=name)
+    name = request.POST.get('type', '').strip()
+    if name:
+        ObjectType.objects.get_or_create(type=name)
             
     response = HttpResponse()
     response['HX-Redirect'] = '/settings/?tab=object_types'
@@ -127,6 +158,7 @@ def create_object_type_view(request):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_POST
 def delete_object_type_view(request, pk):
     """Удаление типа оборудования с проверкой на использование"""
     obj_type = get_object_or_404(ObjectType, pk=pk)
@@ -142,75 +174,24 @@ def delete_object_type_view(request, pk):
     return response
 
 
-def parse_rule_from_request(request):
-    """Разбор параметров правила планирования из POST-запроса"""
-    strategy = request.POST.get('new_rule_strategy', 'relative')
-    if strategy == 'relative':
-        anchor = request.POST.get('new_rule_anchor', 'actual')
-        try:
-            years = int(request.POST.get('new_rule_years', 0))
-        except (ValueError, TypeError):
-            years = 0
-        try:
-            months = int(request.POST.get('new_rule_months', 6))
-        except (ValueError, TypeError):
-            months = 6
-        try:
-            days = int(request.POST.get('new_rule_days', 0))
-        except (ValueError, TypeError):
-            days = 0
-            
-        return {
-            "strategy": "relative",
-            "anchor": anchor,
-            "value": {
-                "years": years,
-                "months": months,
-                "days": days
-            }
-        }
-    elif strategy == 'fixed':
-        fixed_months = request.POST.getlist('fixed_months')
-        fixed_days = request.POST.getlist('fixed_days')
-        
-        dates_list = []
-        for m, d in zip(fixed_months, fixed_days):
-            try:
-                dates_list.append({"month": int(m), "day": int(d)})
-            except (ValueError, TypeError):
-                pass
-                
-        return {
-            "strategy": "fixed",
-            "anchor": "yearly",
-            "value": dates_list
-        }
-    return {"strategy": "relative", "anchor": "actual", "value": {"years": 0, "months": 6, "days": 0}}
-
-
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
 def create_rule_settings_view(request):
     """Создание нового правила планирования ТО из настроек"""
     if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        if name:
-            rule_json = parse_rule_from_request(request)
-            DateUpdateRule.objects.get_or_create(
-                name=name,
-                defaults={"rule": rule_json}
-            )
-            
+        form = DateUpdateRuleForm(
+            request.POST,
+            fixed_months=request.POST.getlist('fixed_months'),
+            fixed_days=request.POST.getlist('fixed_days'),
+        )
+        if not form.is_valid():
+            return htmx_error(form_errors_text(form), retarget='#create-rule-error')
+
+        form.save()
         response = HttpResponse()
         response['HX-Redirect'] = '/settings/?tab=rules'
         return response
 
-    month_names = {
-        1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
-        5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
-        9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
-    }
-    
     return render(request, 'data/settings/create_rule_modal.html', {
         'strategy': 'relative',
         'anchor': 'actual',
@@ -218,7 +199,7 @@ def create_rule_settings_view(request):
         'months': 6,
         'days': 0,
         'fixed_dates': [],
-        'month_names': month_names,
+        'month_names': MONTH_NAMES,
     })
 
 
@@ -227,51 +208,24 @@ def create_rule_settings_view(request):
 def edit_rule_settings_view(request, pk):
     """Редактирование параметров правила планирования ТО"""
     rule_obj = get_object_or_404(DateUpdateRule, pk=pk)
-    
+
     if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        strategy = request.POST.get('new_rule_strategy', 'relative')
-        
-        if name:
-            rule_obj.name = name
-            
-        if strategy == 'relative':
-            anchor = request.POST.get('new_rule_anchor', 'actual')
-            years = int(request.POST.get('new_rule_years', 0))
-            months = int(request.POST.get('new_rule_months', 6))
-            days = int(request.POST.get('new_rule_days', 0))
-            
-            rule_json = {
-                "strategy": "relative",
-                "anchor": anchor,
-                "value": {
-                    "years": years,
-                    "months": months,
-                    "days": days
-                }
-            }
-        elif strategy == 'fixed':
-            fixed_months = request.POST.getlist('fixed_months')
-            fixed_days = request.POST.getlist('fixed_days')
-            
-            dates_list = []
-            for m, d in zip(fixed_months, fixed_days):
-                dates_list.append({"month": int(m), "day": int(d)})
-                
-            rule_json = {
-                "strategy": "fixed",
-                "anchor": "yearly",
-                "value": dates_list
-            }
-            
-        rule_obj.rule = rule_json
-        rule_obj.save()
-        
+        form = DateUpdateRuleForm(
+            request.POST,
+            instance=rule_obj,
+            fixed_months=request.POST.getlist('fixed_months'),
+            fixed_days=request.POST.getlist('fixed_days'),
+        )
+        if not form.is_valid():
+            return htmx_error(form_errors_text(form), retarget=f'#rule-error-{rule_obj.uuid}')
+
+        rule_obj = form.save()
+
         # Пересчитываем даты для объектов с этим правилом
         for obj in rule_obj.data_objects.all():
             obj.next_maintenance_date = calculate_next_maintenance_date(obj, base_date=timezone.localdate())
             obj.save(update_fields=['next_maintenance_date'])
-            
+
         response = HttpResponse()
         response['HX-Redirect'] = '/settings/?tab=rules'
         return response
@@ -280,18 +234,12 @@ def edit_rule_settings_view(request, pk):
     strategy = rule_data.get('strategy', 'relative')
     anchor = rule_data.get('anchor', 'actual')
     val = rule_data.get('value', {})
-    
+
     years = val.get('years', 0) if strategy == 'relative' else 0
     months = val.get('months', 6) if strategy == 'relative' else 0
     days = val.get('days', 0) if strategy == 'relative' else 0
-    fixed_dates = val if strategy == 'fixed' else []
-    
-    month_names = {
-        1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
-        5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
-        9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
-    }
-    
+    fixed_dates = val if strategy == 'fixed' and isinstance(val, list) else []
+
     return render(request, 'data/settings/edit_rule_modal.html', {
         'rule_obj': rule_obj,
         'strategy': strategy,
@@ -300,12 +248,13 @@ def edit_rule_settings_view(request, pk):
         'months': months,
         'days': days,
         'fixed_dates': fixed_dates,
-        'month_names': month_names,
+        'month_names': MONTH_NAMES,
     })
 
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_POST
 def delete_rule_view(request, pk):
     """Удаление правила планирования"""
     rule = get_object_or_404(DateUpdateRule, pk=pk)
@@ -343,6 +292,17 @@ def export_xlsx_view(request):
         queryset = queryset.filter(inventory_number__isnull=False).exclude(inventory_number='')
     
     queryset = queryset.order_by('inventory_number', 'name')
+
+    # Excel/LibreOffice трактуют значение, начинающееся с =, +, -, @ (а также
+    # с управляющих символов табуляции и возврата каретки) как формулу.
+    # Данные приходят от пользователей и из YouTrack, поэтому обезвреживаем их.
+    FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r')
+
+    def escape_formula(value):
+        text = "" if value is None else str(value)
+        if text.startswith(FORMULA_PREFIXES):
+            return "'" + text
+        return text
 
     def get_object_hierarchy_path(obj):
         """Сборка пути от корня до текущего объекта через цепочку parent"""
@@ -393,7 +353,12 @@ def export_xlsx_view(request):
                 specs_str_list.append(f"{k}: {v}")
         specs_formatted = "; ".join(specs_str_list)
 
-        ws.append([inv_num, obj_name, hierarchy_path, description, model_name, specs_formatted])
+        row = [inv_num, obj_name, hierarchy_path, description, model_name, specs_formatted]
+        ws.append([escape_formula(value) for value in row])
+
+        # Явно фиксируем текстовый тип, чтобы Excel не переинтерпретировал строку
+        for cell in ws[ws.max_row]:
+            cell.data_type = 's'
 
     for col in ws.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
@@ -434,13 +399,36 @@ def dashboard(request):
     overdue_count = DataObject.objects.filter(next_maintenance_date__lt=today).count()
     
     def get_stats(period):
+        """
+        Выполнение плана ТО за период.
+
+        Считаем плановые СОБЫТИЯ, а не записи истории:
+        - выполненные — различные пары (объект, плановая дата), закрытые
+          плановым ТО; несколько работ по одному событию дают одну единицу,
+          внеплановые работы и списания из YouTrack не учитываются вовсе;
+        - всего — выполненные плюс ещё не закрытые события периода
+          (объекты, у которых срок ТО приходится на этот период).
+        """
         start, end = get_period_limits(period)
-        completed = ActionHistory.objects.filter(
-            created_at__date__range=(start, end),
-            action_type='maintenance'
-        ).count()
-        current_planned = DataObject.objects.filter(next_maintenance_date__range=(start, end)).count()
-        planned = current_planned + completed
+
+        completed_events = set(
+            ActionHistory.objects.filter(
+                action_type='maintenance',
+                maintenance_kind='planned',
+                planned_for__range=(start, end),
+            ).values_list('data_object_id', 'planned_for')
+        )
+        completed = len(completed_events)
+
+        open_events = set(
+            DataObject.objects.filter(
+                next_maintenance_date__range=(start, end)
+            ).values_list('uuid', 'next_maintenance_date')
+        )
+        # Объект могли обслужить и тут же снова запланировать на этот период —
+        # закрытое и открытое события считаем отдельно, дубли исключаем.
+        planned = len(completed_events | open_events)
+
         return completed, planned
 
     week_done, week_all = get_stats('week')
@@ -470,13 +458,16 @@ def maintenance_list(request):
     elif period == 'all':
         objects = DataObject.objects.all()
         label = "Все объекты системы"
-    elif period == 'month':
-        _, end = get_period_limits('month')
-        objects = DataObject.objects.filter(next_maintenance_date__lte=end)
-        label = "План на месяц"
+    elif period in ('week', 'month'):
+        # Границы периода те же, что в счётчиках дашборда: раньше список брал
+        # всё до конца периода (включая просроченное), и число на плитке
+        # не совпадало с длиной списка. Просроченные — отдельная плитка.
+        start, end = get_period_limits(period)
+        objects = DataObject.objects.filter(next_maintenance_date__range=(start, end))
+        label = "План на неделю" if period == 'week' else "План на месяц"
     else:
-        _, end = get_period_limits('week')
-        objects = DataObject.objects.filter(next_maintenance_date__lte=end)
+        start, end = get_period_limits('week')
+        objects = DataObject.objects.filter(next_maintenance_date__range=(start, end))
         label = "План на неделю"
         
     objects = objects.select_related('model', 'model__object_type').order_by('next_maintenance_date')
@@ -496,33 +487,28 @@ def search_view(request):
 
     words = [w for w in query.split() if w]
 
+    def term_filter(term):
+        """Все поля, по которым ищем один терм (см. подсказку в шапке поиска)."""
+        return (
+            Q(name__icontains=term) |
+            Q(inventory_number__icontains=term) |
+            Q(description__icontains=term) |
+            Q(model__name__icontains=term) |
+            Q(youtrack_issue_id__icontains=term) |
+            Q(comments__text__icontains=term) |
+            Q(actions__action__icontains=term)
+        )
+
     # 1. Поиск по точному совпадению всей фразы (в любом поле)
-    exact_q = (
-        Q(name__icontains=query) |
-        Q(inventory_number__icontains=query) |
-        Q(description__icontains=query) |
-        Q(model__name__icontains=query) |
-        Q(comments__text__icontains=query) |
-        Q(actions__action__icontains=query)
-    )
+    search_filter = term_filter(query)
 
     # 2. Если введено несколько слов (например, "4 стол" или "стол 4"),
-    # ищем объекты, где встречаются ВСЕ эти слова одновременно
+    # дополнительно ищем объекты, где встречаются ВСЕ эти слова одновременно
     if len(words) > 1:
         words_q = Q()
         for word in words:
-            words_q &= (
-                Q(name__icontains=word) |
-                Q(inventory_number__icontains=word) |
-                Q(description__icontains=word) |
-                Q(model__name__icontains=word) |
-                Q(comments__text__icontains=word) |
-                Q(actions__action__icontains=word)
-            )
-        # Объединяем фильтры: точная фраза ИЛИ совпадение всех слов
-        search_filter = exact_q | words_q
-    else:
-        search_filter = exact_q
+            words_q &= term_filter(word)
+        search_filter |= words_q
 
     results = DataObject.objects.filter(
         search_filter
@@ -610,6 +596,7 @@ def dict_view(request):
     return render(request, 'data/dict.html', context)
 
 @login_required
+@require_POST
 def toggle_explorer_mode_view(request):
     """Переключает режим отображения с умной синхронизацией позиции"""
     if request.method == 'POST':
@@ -738,15 +725,23 @@ def service_object_view(request, pk):
     effective_yt_id, target_yt_obj = obj.get_effective_youtrack_issue()
     
     if request.method == 'POST':
+        yt_errors = []
         is_unplanned = request.POST.get('is_unplanned') == 'on'
         date_str = request.POST.get('maintenance_date')
         spent_time = request.POST.get('spent_time', '').strip()
         custom_comment = request.POST.get('comment', '').strip()
         
+        # Плановое событие, которое закрывает эта работа, — это срок ТО,
+        # назначенный ДО обновления. Запоминаем его до перезаписи.
+        closed_plan_date = None if is_unplanned else obj.next_maintenance_date
+
         # 1. Если ТО ПЛАНОВОЕ — обновляем дату следующего обслуживания
         if not is_unplanned and date_str:
-            maintenance_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-            obj.next_maintenance_date = maintenance_date
+            try:
+                obj.next_maintenance_date = parse_maintenance_date(date_str, "Дата следующего ТО")
+            except ValidationError as exc:
+                return htmx_error(" ".join(exc.messages),
+                                  retarget='#service-modal-content .form-feedback')
             obj.save(update_fields=['next_maintenance_date'])
         
         # 2. Формируем текст записи для истории и YouTrack
@@ -766,7 +761,9 @@ def service_object_view(request, pk):
             user=request.user,
             data_object=obj,
             action_type='maintenance',
-            action=action_text
+            action=action_text,
+            maintenance_kind='unplanned' if is_unplanned else 'planned',
+            planned_for=closed_plan_date,
         )
 
         # 4. Списываем время в YouTrack (свою задачу или родительскую)
@@ -784,6 +781,11 @@ def service_object_view(request, pk):
             if success_work and work_id_or_err:
                 history_entry.youtrack_id = work_id_or_err
                 history_entry.save(update_fields=['youtrack_id'])
+            elif not success_work:
+                # ТО зафиксировано локально, но время в задачу не списалось —
+                # молчать об этом нельзя, иначе учёт разойдётся незаметно.
+                logger.warning("Не удалось списать время в YouTrack %s: %s", effective_yt_id, work_id_or_err)
+                yt_errors.append(f"Время не списано в задачу {effective_yt_id}: {work_id_or_err}")
         
         node_html = render_to_string('data/tree/object_tree_node.html', {'node': obj}, request=request)
         oob_pill_html = render_maintenance_pill(obj, request=request)
@@ -793,7 +795,10 @@ def service_object_view(request, pk):
             obj.actions.count()
         )
         
-        response = HttpResponse(node_html + "\n" + oob_pill_html + "\n" + oob_count_html)
+        parts = [node_html, oob_pill_html, oob_count_html]
+        if yt_errors:
+            parts.append(yt_toast(yt_errors, request=request))
+        response = HttpResponse("\n".join(parts))
         response['HX-Trigger'] = 'objectServiced'
         return response
 
@@ -810,6 +815,7 @@ def service_object_view(request, pk):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_http_methods(["GET", "POST", "DELETE"])
 def delete_object_view(request, pk):
     """
     GET  — модальное окно подтверждения с точным объёмом каскада
@@ -854,6 +860,7 @@ def delete_object_view(request, pk):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_http_methods(["GET", "POST", "DELETE"])
 def delete_model_view(request, pk):
     """
     GET  — окно подтверждения; если модель используется объектами, удаление
@@ -914,12 +921,11 @@ def create_object_view(request):
                 retarget='#createObjectModal .form-feedback'
             )
         
-        next_maintenance_date = None
-        if maintenance_str:
-            try:
-                next_maintenance_date = datetime.strptime(maintenance_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
+        try:
+            next_maintenance_date = parse_maintenance_date(maintenance_str, "Дата следующего ТО")
+        except ValidationError as exc:
+            return htmx_error(" ".join(exc.messages),
+                              retarget='#createObjectModal .form-feedback')
 
         selected_rule = get_object_or_404(DateUpdateRule, pk=rule_uuid) if rule_uuid else None
         parent_obj = get_object_or_404(DataObject, pk=parent_uuid) if parent_uuid else None
@@ -988,11 +994,24 @@ def create_model_view(request):
                 retarget='#createModelModal .form-feedback'
             )
             
-        ObjectModel.objects.create(
-            name=name,
-            object_type=object_type,
-            specifications=specifications
-        )
+        try:
+            # atomic() ставит savepoint: после IntegrityError транзакция
+            # остаётся рабочей и мы можем отрендерить ответ с ошибкой.
+            with transaction.atomic():
+                ObjectModel.objects.create(
+                    name=name,
+                    object_type=object_type,
+                    specifications=specifications
+                )
+        except IntegrityError:
+            # Ограничение в БД — последний рубеж: подсказка при вводе имени
+            # не спасает от гонки двух одновременных запросов.
+            return htmx_error(
+                f'Модель «{name}» уже существует для типа «{object_type.type}». '
+                'Откройте существующую модель вместо создания дубликата.',
+                status=409,
+                retarget='#createModelModal .form-feedback'
+            )
         
         object_types = ObjectType.objects.prefetch_related(
             Prefetch('models', queryset=ObjectModel.objects.all().order_by('name'))
@@ -1006,6 +1025,19 @@ def create_model_view(request):
         return render(request, 'data/tree/dict_sidebar.html', context)
 
     return render(request, 'data/includes/create_model_modal_body.html')
+
+
+def get_comments_for(obj, user):
+    """
+    Лента комментариев объекта с проставленным признаком can_edit —
+    шаблон не может вызвать метод с аргументом, поэтому считаем здесь.
+    """
+    comments = list(
+        obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
+    )
+    for comment in comments:
+        comment.can_edit = comment.can_be_edited_by(user)
+    return comments
 
 
 # --- ДЕТАЛИ ОБЪЕКТА ---
@@ -1039,6 +1071,17 @@ def get_ancestors_chain(obj, max_depth=64):
 
 @login_required
 def object_detail_view(request, pk):
+    """
+    Карточка объекта. Это чистый GET: никаких обращений к YouTrack и записи
+    в БД (кроме курсора активного объекта в сессии). Синхронизацию запускает
+    сама карточка сразу после загрузки — фоновым POST на sync_youtrack_view,
+    так что пользователь видит актуальные данные без ручных действий.
+    """
+    return render_object_detail(request, pk)
+
+
+def render_object_detail(request, pk):
+    """Рендер карточки с OOB-обновлением подсветки узлов дерева."""
     obj = get_object_or_404(
         DataObject.objects.select_related('model', 'model__object_type', 'parent', 'parent__model').prefetch_related('children'), 
         pk=pk
@@ -1046,24 +1089,13 @@ def object_detail_view(request, pk):
     prev_active_id = request.session.get('active_object_id')
     request.session['active_object_id'] = str(pk)
     request.session.modified = True
-    
-    sync_status = None
-    sync_message = ""
-    if obj.youtrack_issue_id:
-        sync_success, sync_message = sync_issue_from_youtrack(obj, request.user)
-        sync_status = 'success' if sync_success else 'error'
-        if sync_success:
-            obj.refresh_from_db()
 
     context = {
         'obj': obj,
         'parent': obj.parent,
         'active_tab': 'short_info',
-        'sync_status': sync_status,
-        'sync_message': sync_message,
         'today': timezone.localdate(),
         'soon_date': timezone.localdate() + timedelta(days=14),
-        'ancestors': get_ancestors_chain(obj),
         'comments_count': obj.comments.count(),
         'files_count': obj.attachments.count(),
         'history_count': obj.actions.count(),
@@ -1110,6 +1142,7 @@ def object_detail_view(request, pk):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_POST
 def unlink_rule_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
     obj.date_update_rule = None
@@ -1137,8 +1170,6 @@ def object_tab_view(request, pk, tab_name):
     if tab_name == 'short_info':
         preview = Attachment.objects.filter(data_object=obj, is_preview=True).first()
         context['preview'] = preview
-        context['children'] = obj.children.select_related('model').order_by('name')
-        context['soon_date'] = timezone.localdate() + timedelta(days=14)
         template = 'data/object/object_tab_short_info.html'
         
     elif tab_name == 'specs':
@@ -1146,7 +1177,7 @@ def object_tab_view(request, pk, tab_name):
         template = 'data/object/object_tab_specs.html'
         
     elif tab_name == 'comments':
-        comments = obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
+        comments = get_comments_for(obj, request.user)
         context['comments'] = comments
         template = 'data/object/object_tab_comments.html'
         
@@ -1358,11 +1389,18 @@ def edit_description_view(request, pk):
             )
 
             if obj.youtrack_issue_id:
-                update_issue_description_in_youtrack(
+                ok, detail = update_issue_description_in_youtrack(
                     issue_id=obj.youtrack_issue_id,
                     description=new_desc,
                     user=request.user
                 )
+                if not ok:
+                    logger.warning("Описание не отправлено в YouTrack %s: %s", obj.youtrack_issue_id, detail)
+                    html = render_to_string('data/object/inline_description.html',
+                                            {'obj': obj, 'editing': False}, request=request)
+                    return HttpResponse(html + "\n" + yt_toast(
+                        f"Описание сохранено локально, но не обновлено в задаче {obj.youtrack_issue_id}: {detail}",
+                        request=request))
 
         return render(request, 'data/object/inline_description.html', {'obj': obj, 'editing': False})
         
@@ -1372,6 +1410,7 @@ def edit_description_view(request, pk):
 # --- КОММЕНТАРИИ И ВЛОЖЕНИЯ ---
 
 @login_required
+@require_POST
 def add_comment_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
     text = request.POST.get('text', '').strip()
@@ -1385,7 +1424,16 @@ def add_comment_view(request, pk):
     if not text and not file:
         form_error = "Добавьте текст комментария или прикрепите файл."
 
-    if text or file:
+    if file:
+        try:
+            validate_attachment(file)
+        except ValidationError as exc:
+            form_error = " ".join(exc.messages)
+            file = None
+            if not text:
+                text = ''
+
+    if (text or file) and not form_error:
         comment = Comment.objects.create(
             user=request.user,
             data_object=obj,
@@ -1417,8 +1465,9 @@ def add_comment_view(request, pk):
                             attachment_obj.save(update_fields=['youtrack_id'])
                         elif not success_file:
                             yt_errors.append(result_file)
-                except Exception as e:
-                    yt_errors.append(f"Ошибка чтения файла для YouTrack: {e}")
+                except OSError as exc:
+                    logger.exception("Не удалось прочитать файл комментария для YouTrack")
+                    yt_errors.append(f"Файл сохранён локально, но не прочитан для отправки в YouTrack: {exc}")
 
             # Формируем текст комментария с указанием компонента (если пишем в родителя)
             component_prefix = f"**[{obj.name or obj.model.name}]** " if obj != target_yt_obj else ""
@@ -1444,7 +1493,7 @@ def add_comment_view(request, pk):
                 elif not success_txt:
                     yt_errors.append(result_txt)
 
-    comments = obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
+    comments = get_comments_for(obj, request.user)
     return render(request, 'data/object/object_tab_comments.html', {
         'obj': obj, 
         'comments': comments,
@@ -1454,45 +1503,80 @@ def add_comment_view(request, pk):
 
 
 @login_required
+@require_http_methods(["GET", "POST"])
 def edit_comment_view(request, pk):
-    comment = get_object_or_404(Comment.objects.select_related('data_object', 'user'), pk=pk)
+    """
+    Встроенное редактирование комментария.
+    GET  — форма правки (или возврат к просмотру при ?cancel=1);
+    POST — сохранение с попыткой обновить текст в YouTrack.
+    """
+    comment = get_object_or_404(
+        Comment.objects.select_related('data_object', 'data_object__model', 'user').prefetch_related('attachments'),
+        pk=pk
+    )
     obj = comment.data_object
-    
-    if comment.user != request.user and not request.user.is_admin_or_higher:
-        return HttpResponseForbidden("Вы не можете редактировать чужие комментарии.")
-        
-    if request.method == 'POST':
-        text = request.POST.get('text', '').strip()
-        if text:
-            comment.text = text
-            comment.save(update_fields=['text'])
-            
-            # Синхронизируем обновленный текст в YouTrack
-            effective_yt_id, target_yt_obj = obj.get_effective_youtrack_issue()
-            if effective_yt_id and comment.youtrack_id:
-                component_prefix = f"**[{obj.name or obj.model.name}]**\n" if obj != target_yt_obj else ""
-                full_yt_text = f"{component_prefix}{text}"
-                
-                update_comment_in_youtrack(
-                    issue_id=effective_yt_id,
-                    comment_yt_id=comment.youtrack_id,
-                    text=full_yt_text,
-                    user=request.user
+
+    if not comment.can_be_edited_by(request.user):
+        return htmx_error("Редактировать можно только собственные комментарии.", status=403)
+
+    if request.method == 'GET':
+        return render(request, 'data/object/comment_item.html', {
+            'comment': comment,
+            'editing': request.GET.get('cancel') != '1',
+            'can_edit': True,
+        })
+
+    text = request.POST.get('text', '').strip()
+    if not text:
+        return render(request, 'data/object/comment_item.html', {
+            'comment': comment,
+            'editing': True,
+            'can_edit': True,
+            'error_html': render_to_string('data/includes/htmx_error.html',
+                                           {'message': 'Текст комментария не может быть пустым.'}),
+        }, status=400)
+
+    yt_errors = []
+    if comment.text != text:
+        comment.text = text
+        comment.save(update_fields=['text'])
+
+        # Локальная правка должна уехать в YouTrack, иначе следующая
+        # синхронизация перезапишет её прежним текстом.
+        effective_yt_id, target_yt_obj = obj.get_effective_youtrack_issue()
+        if effective_yt_id and comment.youtrack_id:
+            component_prefix = f"**[{obj.name or obj.model.name}]**\n" if obj != target_yt_obj else ""
+            ok, detail = update_comment_in_youtrack(
+                issue_id=effective_yt_id,
+                comment_yt_id=comment.youtrack_id,
+                text=f"{component_prefix}{text}",
+                user=request.user
+            )
+            if not ok:
+                logger.warning("Комментарий не обновлён в YouTrack %s: %s", effective_yt_id, detail)
+                yt_errors.append(
+                    f"Комментарий изменён локально, но не в YouTrack: {detail}. "
+                    "Следующая синхронизация вернёт прежний текст."
                 )
 
-        comments = obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
-        return render(request, 'data/object/object_tab_comments.html', {'obj': obj, 'comments': comments})
-        
-    return render(request, 'data/object/comment_item_edit.html', {'comment': comment})
+    html = render_to_string('data/object/object_tab_comments.html', {
+        'obj': obj,
+        'comments': get_comments_for(obj, request.user),
+    }, request=request)
+    if yt_errors:
+        html += "\n" + yt_toast(yt_errors, request=request)
+    return HttpResponse(html)
 
 
 @login_required
+@require_POST
 def delete_comments_bulk(request):
     comment_ids = request.POST.getlist('comment_ids')
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
     
     effective_yt_id, _ = obj.get_effective_youtrack_issue()
+    yt_errors = []
     
     if comment_ids:
         queryset = Comment.objects.filter(uuid__in=comment_ids, data_object=obj).prefetch_related('attachments')
@@ -1500,62 +1584,79 @@ def delete_comments_bulk(request):
         if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
             
-        if effective_yt_id:
-            for comment in queryset:
+        deletable_ids = []
+        for comment in queryset:
+            remote_ok = True
+
+            if effective_yt_id:
                 for att in comment.attachments.all():
                     if att.youtrack_id:
-                        delete_attachment_from_youtrack(
+                        ok, detail = delete_attachment_from_youtrack(
                             issue_id=effective_yt_id,
                             attachment_yt_id=att.youtrack_id,
                             user=request.user
                         )
-                if comment.youtrack_id:
-                    delete_comment_from_youtrack(
+                        if not ok:
+                            remote_ok = False
+                            yt_errors.append(f"Вложение «{att.filename}» не удалено в YouTrack: {detail}")
+
+                if remote_ok and comment.youtrack_id:
+                    ok, detail = delete_comment_from_youtrack(
                         issue_id=effective_yt_id,
                         comment_yt_id=comment.youtrack_id,
                         user=request.user
                     )
+                    if not ok:
+                        remote_ok = False
+                        yt_errors.append(f"Комментарий не удалён в YouTrack: {detail}")
+
+            # Локальную запись удаляем только после подтверждённого удаления
+            # в YouTrack, иначе следующая синхронизация вернёт её обратно.
+            if remote_ok:
+                deletable_ids.append(comment.uuid)
+
+        if deletable_ids:
+            Comment.objects.filter(uuid__in=deletable_ids).delete()
         
-        queryset.delete()
-        
-    comments = obj.comments.select_related('user').prefetch_related('attachments').order_by('-created_at')
-    return render(request, 'data/object/object_tab_comments.html', {'obj': obj, 'comments': comments})
+    comments = get_comments_for(obj, request.user)
+    html = render_to_string('data/object/object_tab_comments.html',
+                            {'obj': obj, 'comments': comments}, request=request)
+    if yt_errors:
+        html += "\n" + yt_toast(
+            yt_errors + ["Записи оставлены локально, чтобы данные систем не разошлись."],
+            request=request
+        )
+    return HttpResponse(html)
 
 
 @login_required
+@require_POST
 def add_attachment_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
     file = request.FILES.get('file')
     is_preview_upload = request.POST.get('is_preview') == 'true'
-    
+    yt_errors = []
+
     if file:
+        # Проверяем размер, расширение и (для превью) реальную сигнатуру изображения.
+        try:
+            validate_attachment(file, require_image=is_preview_upload)
+        except ValidationError as exc:
+            target = '#tab-pane-short-info' if is_preview_upload else '#tab-pane-files'
+            return htmx_error(" ".join(exc.messages), retarget=target)
+
         if is_preview_upload:
-            content_type = getattr(file, 'content_type', '')
-            filename_lower = file.name.lower()
-            image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg')
-            is_image_mime = content_type.startswith('image/')
-            is_image_ext = filename_lower.endswith(image_extensions)
-            
-            if not (is_image_mime or is_image_ext):
-                return HttpResponse(
-                    '<div class="alert alert-danger py-2 px-3 mb-3 rounded-3 small animate-fade">'
-                    '<i class="bi bi-exclamation-triangle-fill me-1"></i> '
-                    'Ошибка: файл превью должен быть изображением!'
-                    '</div>',
-                    status=400
-                )
-            
             # Снимаем отметку со старого превью
             Attachment.objects.filter(data_object=obj, is_preview=True).update(is_preview=False)
-            
+
         attachment_obj = Attachment.objects.create(
             user=request.user,
             data_object=obj,
             path=file,
             is_preview=is_preview_upload
         )
-        
-        # Отправляем файл в YouTrack (карточку объекта или первого родителя)
+
+        # Отправляем файл в YouTrack (в карточку объекта или первого родителя)
         effective_yt_id, target_yt_obj = obj.get_effective_youtrack_issue()
         if effective_yt_id and attachment_obj.path:
             try:
@@ -1565,46 +1666,68 @@ def add_attachment_view(request, pk):
                         file_obj=f,
                         user=request.user
                     )
-                    if success_file and result_file:
-                        attachment_obj.youtrack_id = result_file
-                        attachment_obj.save(update_fields=['youtrack_id'])
-                        
-                        comp_name = obj.name or obj.model.name
-                        
-                        # 1. Если загружено фото превью — прикрепляем файл и создаем пост с картинкой в YouTrack
-                        if is_preview_upload:
-                            msg_prefix = f"**[{comp_name}]** " if obj != target_yt_obj else ""
-                            comment_text = f"{msg_prefix}Прикреплено фото (превью): {attachment_obj.filename}\n\n![]({attachment_obj.filename})"
-                            send_comment_to_youtrack(
-                                issue_id=effective_yt_id,
-                                text=comment_text,
-                                user=request.user
-                            )
-                        # 2. Если это документ дочернего компонента — оставляем понятную заметку в YouTrack
-                        elif obj != target_yt_obj:
-                            send_comment_to_youtrack(
-                                issue_id=effective_yt_id,
-                                text=f"**[{comp_name}]** Прикреплен новый документ: {attachment_obj.filename}",
-                                user=request.user
-                            )
-            except Exception as e:
-                pass
-        
+            except OSError as exc:
+                logger.exception("Не удалось прочитать файл вложения для YouTrack")
+                success_file, result_file = False, f"файл недоступен для чтения ({exc})"
+
+            if success_file and result_file:
+                attachment_obj.youtrack_id = result_file
+                attachment_obj.save(update_fields=['youtrack_id'])
+
+                comp_name = obj.name or obj.model.name
+
+                # 1. Превью — прикрепляем файл и публикуем пост с картинкой
+                if is_preview_upload:
+                    msg_prefix = f"**[{comp_name}]** " if obj != target_yt_obj else ""
+                    comment_text = (
+                        f"{msg_prefix}Прикреплено фото (превью): {attachment_obj.filename}"
+                        f"\n\n![]({attachment_obj.filename})"
+                    )
+                    ok, detail = send_comment_to_youtrack(
+                        issue_id=effective_yt_id, text=comment_text, user=request.user
+                    )
+                # 2. Документ дочернего компонента — оставляем понятную заметку
+                elif obj != target_yt_obj:
+                    ok, detail = send_comment_to_youtrack(
+                        issue_id=effective_yt_id,
+                        text=f"**[{comp_name}]** Прикреплён новый документ: {attachment_obj.filename}",
+                        user=request.user
+                    )
+                else:
+                    ok, detail = True, None
+
+                if not ok:
+                    yt_errors.append(f"Заметка о файле не добавлена в задачу {effective_yt_id}: {detail}")
+            else:
+                logger.warning("Вложение не загружено в YouTrack %s: %s", effective_yt_id, result_file)
+                yt_errors.append(
+                    f"Файл «{attachment_obj.filename}» сохранён локально, "
+                    f"но не загружен в задачу {effective_yt_id}: {result_file}"
+                )
+
     if is_preview_upload:
         preview = Attachment.objects.filter(data_object=obj, is_preview=True).first()
-        return render(request, 'data/object/object_tab_short_info.html', {'obj': obj, 'preview': preview})
-        
-    files = obj.attachments.select_related('user').order_by('-created_at')
-    return render(request, 'data/object/object_tab_files.html', {'obj': obj, 'files': files})
+        html = render_to_string('data/object/object_tab_short_info.html',
+                                {'obj': obj, 'preview': preview}, request=request)
+    else:
+        files = obj.attachments.select_related('user').order_by('-created_at')
+        html = render_to_string('data/object/object_tab_files.html',
+                                {'obj': obj, 'files': files}, request=request)
+
+    if yt_errors:
+        html += "\n" + yt_toast(yt_errors, request=request)
+    return HttpResponse(html)
 
 
 @login_required
+@require_POST
 def delete_attachments_bulk(request):
     file_ids = request.POST.getlist('file_ids')
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
     
     effective_yt_id, _ = obj.get_effective_youtrack_issue()
+    yt_errors = []
     
     if file_ids:
         queryset = Attachment.objects.filter(uuid__in=file_ids, data_object=obj)
@@ -1612,19 +1735,35 @@ def delete_attachments_bulk(request):
         if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
             
-        if effective_yt_id:
-            for att in queryset:
-                if att.youtrack_id:
-                    delete_attachment_from_youtrack(
-                        issue_id=effective_yt_id,
-                        attachment_yt_id=att.youtrack_id,
-                        user=request.user
-                    )
-                    
-        queryset.delete()
+        deletable_ids = []
+        for att in queryset:
+            remote_ok = True
+            if effective_yt_id and att.youtrack_id:
+                ok, detail = delete_attachment_from_youtrack(
+                    issue_id=effective_yt_id,
+                    attachment_yt_id=att.youtrack_id,
+                    user=request.user
+                )
+                if not ok:
+                    remote_ok = False
+                    yt_errors.append(f"Файл «{att.filename}» не удалён в YouTrack: {detail}")
+            if remote_ok:
+                deletable_ids.append(att.uuid)
+
+        if deletable_ids:
+            # Удаляем поштучно: post_delete стирает файл с диска.
+            for att in Attachment.objects.filter(uuid__in=deletable_ids):
+                att.delete()
         
     files = obj.attachments.select_related('user').order_by('-created_at')
-    return render(request, 'data/object/object_tab_files.html', {'obj': obj, 'files': files})
+    html = render_to_string('data/object/object_tab_files.html',
+                            {'obj': obj, 'files': files}, request=request)
+    if yt_errors:
+        html += "\n" + yt_toast(
+            yt_errors + ["Файлы оставлены локально, чтобы данные систем не разошлись."],
+            request=request
+        )
+    return HttpResponse(html)
 
 
 # --- ДЕТАЛИ МОДЕЛИ ---
@@ -1704,22 +1843,22 @@ def model_tab_view(request, pk, tab_name):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_POST
 def model_spec_add_view(request, pk):
     model_obj = get_object_or_404(ObjectModel, pk=pk)
-    if request.method == 'POST':
-        key = request.POST.get('key', '').strip()
-        value = request.POST.get('value', '').strip()
-        if key and value:
-            specs = model_obj.specifications or {}
-            specs[key] = value
-            model_obj.specifications = specs
-            model_obj.save(update_fields=['specifications'])
-            
-        context = {
-            'model_obj': model_obj,
-            'specifications': model_obj.specifications
-        }
-        return render(request, 'data/model/model_tab_specs.html', context)
+    key = request.POST.get('key', '').strip()
+    value = request.POST.get('value', '').strip()
+    if key and value:
+        specs = model_obj.specifications or {}
+        specs[key] = value
+        model_obj.specifications = specs
+        model_obj.save(update_fields=['specifications'])
+        
+    context = {
+        'model_obj': model_obj,
+        'specifications': model_obj.specifications or {}
+    }
+    return render(request, 'data/model/model_tab_specs.html', context)
 
 
 @login_required
@@ -1747,7 +1886,8 @@ def model_spec_edit_view(request, pk):
         }
         return render(request, 'data/model/model_tab_specs.html', context)
         
-    value = model_obj.specifications.get(key, '')
+    # specifications допускает NULL — без защиты это AttributeError и 500
+    value = (model_obj.specifications or {}).get(key, '')
     return render(request, 'data/model/inline_spec_row.html', {
         'model_obj': model_obj,
         'key': key,
@@ -1758,6 +1898,7 @@ def model_spec_edit_view(request, pk):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_POST
 def model_spec_delete_view(request, pk):
     model_obj = get_object_or_404(ObjectModel, pk=pk)
     key = request.POST.get('key')
@@ -1784,7 +1925,13 @@ def check_model_name_view(request):
     if not name or len(name) < 2:
         return HttpResponse('')
 
-    exact_match = ObjectModel.objects.select_related('object_type').filter(name__iexact=name).first()
+    # Уникальность действует в пределах типа оборудования, поэтому при
+    # известном типе сужаем проверку до него.
+    exact_qs = ObjectModel.objects.select_related('object_type').filter(name__iexact=name)
+    type_uuid = request.GET.get('object_type')
+    if type_uuid:
+        exact_qs = exact_qs.filter(object_type=type_uuid)
+    exact_match = exact_qs.first()
     similar_models = []
     if not exact_match:
         stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по', 'of', 'and', 'the'}
@@ -1967,6 +2114,7 @@ def reset_suggestion_view(request):
 
 
 @login_required
+@require_POST
 def specs_builder_view(request):
     keys = request.POST.getlist('spec_keys')
     values = request.POST.getlist('spec_values')
@@ -2007,11 +2155,17 @@ def calculate_next_maintenance_date(data_object, base_date=None):
         base_date = data_object.next_maintenance_date
 
     if strategy == 'relative':
-        delta = relativedelta(
-            years=int(value.get('years', 0)),
-            months=int(value.get('months', 0)),
-            days=int(value.get('days', 0))
-        )
+        if not isinstance(value, dict):
+            return None
+        try:
+            delta = relativedelta(
+                years=int(value.get('years', 0) or 0),
+                months=int(value.get('months', 0) or 0),
+                days=int(value.get('days', 0) or 0),
+            )
+        except (TypeError, ValueError):
+            logger.warning("Правило %s содержит нечисловой интервал: %r", data_object.date_update_rule_id, value)
+            return None
         return base_date + delta
         
     elif strategy == 'fixed':
@@ -2020,13 +2174,23 @@ def calculate_next_maintenance_date(data_object, base_date=None):
             
         dates_in_year = []
         for item in value:
-            m = int(item.get('month', 1))
-            d = int(item.get('day', 1))
+            if not isinstance(item, dict):
+                continue
             try:
-                dates_in_year.append(base_date.replace(month=m, day=d))
-            except ValueError:
-                dates_in_year.append(base_date.replace(month=m, day=28))
-                
+                m = int(item.get('month'))
+                d = int(item.get('day'))
+            except (TypeError, ValueError):
+                continue
+            if not 1 <= m <= 12:
+                continue
+            # 29 февраля в невисокосный год — берём последний день месяца,
+            # а не фиксированное 28-е для любого месяца, как было раньше.
+            d = min(max(d, 1), calendar.monthrange(base_date.year, m)[1])
+            dates_in_year.append(base_date.replace(month=m, day=d))
+
+        if not dates_in_year:
+            return None
+
         dates_in_year.sort()
         
         for candidate in dates_in_year:
@@ -2041,48 +2205,33 @@ def calculate_next_maintenance_date(data_object, base_date=None):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_POST
 def rules_dates_builder_view(request):
     months = request.POST.getlist('fixed_months')
     days = request.POST.getlist('fixed_days')
     
-    dates = []
-    for m, d in zip(months, days):
-        try:
-            dates.append({'month': int(m), 'day': int(d)})
-        except (ValueError, TypeError):
-            pass
-        
+    dates = clean_fixed_dates(months, days)
+
     new_month = request.POST.get('new_fixed_month')
     new_day = request.POST.get('new_fixed_day')
-    
     if new_month and new_day:
-        try:
-            m_int = max(1, min(int(new_month), 12))  # Месяц строго от 1 до 12
-            d_int = max(1, min(int(new_day), 31))    # День строго от 1 до 31
-            new_date = {'month': m_int, 'day': d_int}
-            if new_date not in dates:
-                dates.append(new_date)
-        except (ValueError, TypeError):
-            pass
-            
+        # Проверяем календарную корректность: 31 февраля отбрасывается,
+        # а не подменяется 28-м числом, как раньше.
+        dates = clean_fixed_dates(
+            [d['month'] for d in dates] + [new_month],
+            [d['day'] for d in dates] + [new_day],
+        )
+
     remove_idx = request.POST.get('remove_idx')
     if remove_idx is not None:
         try:
             dates.pop(int(remove_idx))
-        except (IndexError, ValueError):
+        except (IndexError, ValueError, TypeError):
             pass
-            
-    dates.sort(key=lambda x: (x['month'], x['day']))
-    
-    month_names = {
-        1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
-        5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
-        9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
-    }
     
     return render(request, 'data/includes/rules_dates_builder.html', {
         'dates': dates,
-        'month_names': month_names
+        'month_names': MONTH_NAMES
     })
 
 
@@ -2100,11 +2249,7 @@ def rule_constructor_view(request):
         'fixed_dates': [],
     }
     if strategy == 'fixed':
-        context['month_names'] = {
-            1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля',
-            5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
-            9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
-        }
+        context['month_names'] = MONTH_NAMES
     return render(request, 'data/includes/rule_constructor_fields.html', context)
 
 
@@ -2134,31 +2279,33 @@ def edit_rule_view(request, pk):
             
             selected_rule = None
             if rule_uuid:
-                selected_rule = get_object_or_404(DateUpdateRule, pk=rule_uuid)
+                selected_rule = DateUpdateRule.objects.filter(pk=rule_uuid).first()
+                if selected_rule is None:
+                    return htmx_error("Выбранное правило не найдено — обновите страницу.", status=404)
             elif new_rule_name:
-                strategy = request.POST.get('new_rule_strategy', 'relative')
-                if strategy == 'relative':
-                    anchor = request.POST.get('new_rule_anchor', 'actual')
-                    years = int(request.POST.get('new_rule_years', 0))
-                    months = int(request.POST.get('new_rule_months', 6))
-                    days = int(request.POST.get('new_rule_days', 0))
-                    rule_json = {
-                        "strategy": "relative",
-                        "anchor": anchor,
-                        "value": {"years": years, "months": months, "days": days}
-                    }
-                elif strategy == 'fixed':
-                    fixed_months = request.POST.getlist('fixed_months')
-                    fixed_days = request.POST.getlist('fixed_days')
-                    dates_list = []
-                    for m, d in zip(fixed_months, fixed_days):
-                        dates_list.append({"month": int(m), "day": int(d)})
-                    rule_json = {"strategy": "fixed", "anchor": "yearly", "value": dates_list}
-                    
-                selected_rule, _ = DateUpdateRule.objects.get_or_create(
-                    name=new_rule_name,
-                    defaults={"rule": rule_json}
+                # Создание правила «на лету»: те же проверки, что и в настройках.
+                form = DateUpdateRuleForm(
+                    {
+                        'name': new_rule_name,
+                        'new_rule_strategy': request.POST.get('new_rule_strategy', 'relative'),
+                        'new_rule_anchor': request.POST.get('new_rule_anchor', 'actual'),
+                        'new_rule_years': request.POST.get('new_rule_years') or 0,
+                        'new_rule_months': request.POST.get('new_rule_months') or 0,
+                        'new_rule_days': request.POST.get('new_rule_days') or 0,
+                    },
+                    fixed_months=request.POST.getlist('fixed_months'),
+                    fixed_days=request.POST.getlist('fixed_days'),
                 )
+                if form.is_valid():
+                    selected_rule = form.save()
+                else:
+                    # Правило с таким названием уже есть — используем его,
+                    # в остальных случаях показываем ошибку.
+                    existing = DateUpdateRule.objects.filter(name__iexact=new_rule_name.strip()).first()
+                    if existing is None:
+                        return htmx_error(form_errors_text(form),
+                                          retarget='#edit-rule-modal-content .form-feedback')
+                    selected_rule = existing
                 
             if selected_rule:
                 obj.date_update_rule = selected_rule
@@ -2199,7 +2346,12 @@ def edit_rule_view(request, pk):
                 7: 'Июл', 8: 'Авг', 9: 'Сен', 10: 'Окт', 11: 'Ноя', 12: 'Дек'
             }
             dates = rule_data.get('value', [])
-            formatted_dates = [f"{d.get('day')} {month_names.get(d.get('month'))}" for d in dates]
+            if not isinstance(dates, list):
+                dates = []
+            formatted_dates = [
+                f"{d.get('day')} {month_names.get(d.get('month'), '')}"
+                for d in dates if isinstance(d, dict)
+            ]
             rule_details = f"Сезонные даты: {', '.join(formatted_dates)}"
 
     return render(request, 'data/object/edit_rule_modal_body.html', {
@@ -2250,7 +2402,7 @@ def edit_object_model_view(request, pk):
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
 def edit_model_name_view(request, pk):
-    model_obj = get_object_or_404(ObjectModel, pk=pk)
+    model_obj = get_object_or_404(ObjectModel.objects.select_related('object_type'), pk=pk)
     
     if request.method == 'GET' and request.GET.get('cancel') == '1':
         return render(request, 'data/model/inline_model_name.html', {'model_obj': model_obj, 'editing': False})
@@ -2261,7 +2413,16 @@ def edit_model_name_view(request, pk):
         
         if new_name and old_name != new_name:
             model_obj.name = new_name
-            model_obj.save(update_fields=['name'])
+            try:
+                with transaction.atomic():
+                    model_obj.save(update_fields=['name'])
+            except IntegrityError:
+                model_obj.name = old_name
+                return htmx_error(
+                    f'Модель «{new_name}» уже существует для типа «{model_obj.object_type.type}».',
+                    status=409,
+                    retarget='#model-name-error'
+                )
             
         model_name_html = render_to_string('data/model/inline_model_name.html', {'model_obj': model_obj, 'editing': False}, request=request)
         sidebar_model_node_html = render_to_string('data/tree/model_tree_node_label.html', {
@@ -2277,6 +2438,7 @@ def edit_model_name_view(request, pk):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_POST
 def set_preview_attachment_view(request, pk):
     attachment = get_object_or_404(Attachment.objects.select_related('data_object'), pk=pk)
     obj = attachment.data_object
@@ -2297,15 +2459,23 @@ def set_preview_attachment_view(request, pk):
 
 
 @login_required
+@require_POST
 def sync_youtrack_view(request, pk):
-    """Запуск синхронизации с YouTrack"""
-    obj = get_object_or_404(DataObject, pk=pk)
+    """Явный запуск синхронизации с YouTrack; карточка перерисовывается с результатом"""
+    obj = get_object_or_404(DataObject.objects.select_related('model'), pk=pk)
     
-    if request.method == 'POST':
-        sync_issue_from_youtrack(obj, request.user)
-        return object_detail_view(request, pk)
+    sync_success, sync_message = sync_issue_from_youtrack(obj, request.user)
+    if sync_success:
+        obj.refresh_from_db()
 
-    return HttpResponse("Метод не разрешен", status=405)
+    return render(request, 'data/object/sync_status.html', {
+        'obj': obj,
+        'sync_status': 'success' if sync_success else 'error',
+        'sync_message': sync_message,
+        'comments_count': obj.comments.count(),
+        'files_count': obj.attachments.count(),
+        'history_count': obj.actions.count(),
+    })
 
 
 # --- СЕРВИС И ПРЕДСТАВЛЕНИЯ КЛОНИРОВАНИЯ ОБЪЕКТОВ ---
@@ -2401,6 +2571,7 @@ def clone_object_modal_view(request):
 
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
+@require_POST
 def clone_object_view(request):
     """Создание копии объекта (обычной или с дочерними элементами)"""
     if request.method == 'POST':

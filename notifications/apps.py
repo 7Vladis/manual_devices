@@ -1,14 +1,11 @@
-import os
 from django.apps import AppConfig
+
 
 class NotificationsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'notifications'
 
-    def ready(self):
-        if os.environ.get('RUN_MAIN') == 'true':
-            from .scheduler import start_scheduler
-            try:
-                start_scheduler()
-            except Exception as e:
-                print(f"Ошибка запуска планировщика: {e}")
+    # Планировщик намеренно не запускается из web-процесса: он живёт в отдельном
+    # процессе (`manage.py run_scheduler`, сервис scheduler в docker-compose).
+    # Иначе задача либо не стартует вовсе под WSGI/ASGI, либо дублируется по
+    # числу воркеров.

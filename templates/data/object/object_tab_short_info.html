@@ -64,47 +64,6 @@
         </div>
     </div>
 
-    <!-- СОСТАВ ОБЪЕКТА: дочерние компоненты -->
-    {% if children %}
-    <div class="col-12">
-        <div class="panel">
-            <div class="panel-head">
-                <h6 class="panel-title"><i class="bi bi-diagram-3"></i>Состав объекта</h6>
-                <span class="tab-count">{{ children|length }}</span>
-            </div>
-            <div class="panel-body">
-                <div class="row g-2">
-                    {% for child in children %}
-                    <div class="col-12 col-md-6 col-xxl-4">
-                        <a href="{% url 'dict' %}?object={{ child.uuid }}"
-                           hx-get="{% url 'object_detail' child.uuid %}?sidebar=1"
-                           hx-target="#detail-container"
-                           class="file-row text-decoration-none h-100"
-                           title="Перейти к компоненту «{{ child.name|default:child.model.name }}»">
-                            <span class="file-thumb"><i class="bi bi-hdd text-secondary"></i></span>
-                            <span class="flex-grow-1 text-truncate">
-                                <span class="d-block fw-semibold text-dark text-truncate" style="font-size: 0.85rem;">
-                                    {{ child.name|default:child.model.name }}
-                                </span>
-                                <span class="d-block text-muted text-truncate" style="font-size: 0.75rem;">
-                                    {{ child.model.name }}{% if child.inventory_number %} • {{ child.inventory_number }}{% endif %}
-                                </span>
-                            </span>
-                            {% if child.next_maintenance_date %}
-                            <span class="pill {% if child.next_maintenance_date < today %}pill-danger{% elif child.next_maintenance_date <= soon_date %}pill-warning{% else %}pill-neutral{% endif %} flex-shrink-0"
-                                  style="font-size: 0.72rem; padding: 3px 9px;">
-                                {{ child.next_maintenance_date|date:"d.m.y" }}
-                            </span>
-                            {% endif %}
-                        </a>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
 </div>
 
 {% if preview %}

@@ -1,0 +1,29 @@
+{% comment %}
+Поля формы создания пользователя. Возвращается тем же представлением при
+ошибках валидации, поэтому введённые значения и тексты ошибок сохраняются.
+{% endcomment %}
+{% if form.non_field_errors %}
+<div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3 mb-3 rounded-3 small">
+    <i class="bi bi-exclamation-circle-fill fs-5"></i>
+    <div>{{ form.non_field_errors|join:" " }}</div>
+</div>
+{% endif %}
+
+<p class="text-muted small mb-3">
+    Учётная запись создаётся локально в системе. Пароль проверяется теми же
+    правилами, что и при смене пароля.
+</p>
+
+{% for field in form %}
+<div class="field">
+    <label for="{{ field.id_for_label }}">
+        {{ field.label }}{% if field.field.required %}<span class="req">*</span>{% endif %}
+    </label>
+    {{ field }}
+    {% if field.errors %}
+    <span class="hint text-danger">{{ field.errors|join:" " }}</span>
+    {% elif field.name == 'username' %}
+    <span class="hint">Если не заполнить — подставим часть email до «@».</span>
+    {% endif %}
+</div>
+{% endfor %}

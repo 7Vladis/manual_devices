@@ -1,0 +1,106 @@
+{% comment %}
+Один комментарий ленты: режим просмотра или встроенного редактирования.
+Форма редактирования намеренно сделана без тега <form> — лента целиком лежит
+внутри формы массового удаления, вложенные формы недопустимы.
+{% endcomment %}
+{% load markdown_extras %}
+
+<div class="feed-item" id="comment-item-{{ comment.uuid }}">
+    {% if not request.user.is_junior and not editing %}
+    <input type="checkbox" name="comment_ids" value="{{ comment.uuid }}"
+           class="form-check-input mt-1 flex-shrink-0 shadow-none"
+           style="width: 17px; height: 17px; cursor: pointer;"
+           aria-label="Выбрать комментарий для удаления">
+    {% endif %}
+
+    <span class="feed-avatar">{{ comment.user.email|slice:":2"|default:"—" }}</span>
+
+    <div class="flex-grow-1" style="min-width: 0;">
+        <div class="feed-meta">
+            <span class="feed-author">{{ comment.user.username|default:comment.user.email|default:"Система" }}</span>
+            <span class="feed-time">{{ comment.created_at|date:"d.m.Y H:i" }}</span>
+            {% if comment.youtrack_id %}
+            <span class="feed-time" title="Комментарий синхронизирован с YouTrack">
+                <i class="bi bi-hdd-network"></i>
+            </span>
+            {% endif %}
+
+            {% if can_edit and not editing %}
+            <button type="button"
+                    class="btn btn-link p-0 border-0 text-secondary ms-auto"
+                    style="font-size: 0.75rem;"
+                    hx-get="{% url 'edit_comment' comment.uuid %}"
+                    hx-target="#comment-item-{{ comment.uuid }}"
+                    hx-swap="outerHTML"
+                    title="Редактировать комментарий">
+                <i class="bi bi-pencil"></i> Изменить
+            </button>
+            {% endif %}
+        </div>
+
+        {% if editing %}
+            <div class="form-feedback">{{ error_html }}</div>
+
+            <textarea id="comment-edit-{{ comment.uuid }}"
+                      name="text"
+                      rows="3"
+                      class="form-control mb-2"
+                      style="resize: vertical; font-size: 0.88rem;"
+                      autofocus>{{ comment.text }}</textarea>
+
+            {% if comment.youtrack_id %}
+            <div class="text-muted mb-2" style="font-size: 0.75rem;">
+                <i class="bi bi-info-circle me-1"></i>
+                Изменение уйдёт и в задачу YouTrack — иначе следующая синхронизация вернёт прежний текст.
+            </div>
+            {% endif %}
+
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-light border"
+                        hx-get="{% url 'edit_comment' comment.uuid %}?cancel=1"
+                        hx-target="#comment-item-{{ comment.uuid }}"
+                        hx-swap="outerHTML">Отмена</button>
+                <button type="button" class="btn btn-primary fw-semibold"
+                        hx-post="{% url 'edit_comment' comment.uuid %}"
+                        hx-include="#comment-edit-{{ comment.uuid }}"
+                        hx-target="#tab-pane-comments"
+                        hx-swap="innerHTML">
+                    <i class="bi bi-check-lg"></i>Сохранить
+                </button>
+            </div>
+        {% else %}
+            <div class="markdown-content">{{ comment.text|markdown }}</div>
+
+            {% if comment.attachments.all %}
+            <div class="d-flex flex-wrap gap-2 mt-2 pt-2 border-top">
+                {% for att in comment.attachments.all %}
+                    {% if att.is_image %}
+                        <span class="file-thumb" style="width: 60px; height: 60px; min-width: 60px;"
+                              data-bs-toggle="modal" data-bs-target="#imageModal-{{ att.uuid }}">
+                            <img src="{{ att.path.url }}" alt="{{ att.filename }}" title="Нажмите, чтобы увеличить">
+                        </span>
+
+                        <div class="modal fade" id="imageModal-{{ att.uuid }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered modal-xl">
+                                <div class="modal-content bg-transparent border-0 shadow-none">
+                                    <div class="modal-body text-center p-0 position-relative">
+                                        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 shadow-none" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                                        <img src="{{ att.path.url }}" alt="{{ att.filename }}" class="img-fluid rounded-3" style="max-height: 85vh; object-fit: contain;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <a href="{{ att.path.url }}" download
+                           class="btn btn-light border"
+                           style="font-size: 0.78rem; max-width: 220px;">
+                            <i class="bi bi-file-earmark-arrow-down text-primary"></i>
+                            <span class="text-truncate">{{ att.filename }}</span>
+                        </a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>

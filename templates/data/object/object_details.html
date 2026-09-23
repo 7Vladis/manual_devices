@@ -4,78 +4,26 @@
     <!-- ============ ШАПКА КАРТОЧКИ ============ -->
     <header class="detail-header">
 
-        <!-- Путь от корня до объекта -->
-        <nav class="obj-breadcrumb" aria-label="Расположение объекта">
-            {% if ancestors %}
-                {% for anc in ancestors %}
-                    <a href="{% url 'dict' %}?object={{ anc.uuid }}"
-                       hx-get="{% url 'object_detail' anc.uuid %}?sidebar=1"
-                       hx-target="#detail-container"
-                       title="Перейти к «{{ anc.name|default:anc.model.name }}»">{{ anc.name|default:anc.model.name }}</a>
-                    <i class="bi bi-chevron-right sep"></i>
-                {% endfor %}
-            {% else %}
-                <span class="current"><i class="bi bi-house-door me-1"></i>Корневой объект</span>
-                {% if obj.children.all %}<i class="bi bi-chevron-right sep"></i>{% endif %}
-            {% endif %}
-            {% if ancestors %}<span class="current">{{ obj.name|default:obj.model.name }}</span>{% endif %}
-        </nav>
-
         <!-- Заголовок, срок ТО и быстрые действия -->
         <div class="detail-title-row">
             <div class="detail-title-main">
                 {% include 'data/object/inline_name.html' with obj=obj editing=False %}
-                {% if obj.children.all %}
-                <span class="text-muted" style="font-size: 0.78rem;">
-                    <i class="bi bi-diagram-3 me-1"></i>Входящих компонентов: <strong>{{ obj.children.all|length }}</strong>
-                </span>
-                {% endif %}
             </div>
 
             <div class="detail-actions">
                 {% include 'data/object/maintenance_pill.html' with obj=obj today=today soon_date=soon_date oob=False %}
 
-                <button type="button"
-                        class="btn btn-primary"
-                        data-bs-toggle="modal"
-                        data-bs-target="#serviceModal"
-                        hx-get="{% url 'service_object' obj.uuid %}"
-                        hx-target="#service-modal-content"
-                        title="Зафиксировать выполненное обслуживание">
-                    <i class="bi bi-wrench-adjustable"></i>
-                    <span class="d-none d-lg-inline">Зафиксировать ТО</span>
-                </button>
-
                 {% if obj.youtrack_issue_id %}
-                <button type="button"
-                        class="btn btn-light border btn-icon"
-                        hx-post="{% url 'sync_youtrack' obj.uuid %}"
-                        hx-target="#detail-container"
-                        hx-swap="innerHTML"
-                        title="Синхронизировать данные с задачей {{ obj.youtrack_issue_id }} в YouTrack">
-                    <i class="bi bi-arrow-repeat"></i>
-                </button>
-                {% endif %}
-
-                {% if not request.user.is_junior %}
-                <button type="button"
-                        class="btn btn-light border btn-icon"
-                        data-bs-toggle="modal"
-                        data-bs-target="#cloneObjectModal"
-                        hx-get="{% url 'clone_object_modal' %}?active_object_id={{ obj.uuid }}"
-                        hx-target="#cloneObjectModal .modal-content"
-                        title="Создать копию объекта">
-                    <i class="bi bi-copy"></i>
-                </button>
-                <button type="button"
-                        class="btn btn-light border btn-icon text-danger"
-                        data-bs-toggle="modal"
-                        data-bs-target="#confirmModal"
-                        hx-get="{% url 'delete_object' obj.uuid %}"
-                        hx-target="#confirm-modal-content"
-                        title="Удалить объект">
-                    <i class="bi bi-trash3"></i>
-                </button>
+                <!-- Авто-синхронизация: карточка уже показана, данные подтягиваются фоном -->
+                <span id="yt-sync-status"
+                      class="pill pill-neutral"
+                      hx-post="{% url 'sync_youtrack' obj.uuid %}"
+                      hx-trigger="load"
+                      hx-swap="outerHTML"
+                      title="Синхронизация с задачей {{ obj.youtrack_issue_id }}">
+                    <span class="spinner-border spinner-border-sm" role="status" style="width: 0.85em; height: 0.85em;"></span>
+                    <span class="pill-label">YouTrack</span>
+                </span>
                 {% endif %}
             </div>
         </div>

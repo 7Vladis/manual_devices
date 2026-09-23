@@ -1,5 +1,6 @@
 <!-- templates/data/model/inline_model_name.html -->
 <div id="model-name-display-container" class="animate-fade">
+<div id="model-name-error"></div>
 {% if editing %}
     <form hx-post="{% url 'edit_model_name' model_obj.uuid %}"
           hx-target="#model-name-display-container"

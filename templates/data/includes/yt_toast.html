@@ -1,0 +1,16 @@
+{% comment %}
+Всплывающее уведомление о результате обращения к YouTrack.
+Возвращается OOB-свопом вместе с основным ответом, чтобы пользователь видел
+расхождение с внешней системой, а не считал операцию полностью успешной.
+{% endcomment %}
+<div id="toast-stack" hx-swap-oob="beforeend">
+    <div class="toast-item toast-{{ level|default:'warning' }}" role="status">
+        <i class="bi {% if level == 'success' %}bi-check-circle-fill{% elif level == 'danger' %}bi-x-octagon-fill{% else %}bi-exclamation-triangle-fill{% endif %} flex-shrink-0"></i>
+        <div class="flex-grow-1">
+            <b>YouTrack</b>
+            <span>{{ message }}</span>
+        </div>
+        <button type="button" class="btn-close flex-shrink-0" aria-label="Закрыть"
+                onclick="this.closest('.toast-item').remove()"></button>
+    </div>
+</div>

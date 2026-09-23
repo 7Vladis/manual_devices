@@ -73,14 +73,18 @@
                             {% if u == request.user %}
                             <span class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> Активен</span>
                             {% else %}
-                            <a href="{% url 'users:toggle_status' u.uuid %}" 
-                               class="text-decoration-none {% if u.is_active %}text-success{% else %}text-danger{% endif %} fw-semibold">
+                            <button type="button"
+                                    class="btn btn-link p-0 text-decoration-none {% if u.is_active %}text-success{% else %}text-danger{% endif %} fw-semibold"
+                                    hx-post="{% url 'users:toggle_status' u.uuid %}"
+                                    hx-swap="none"
+                                    hx-confirm="{% if u.is_active %}Заблокировать{% else %}Разблокировать{% endif %} учётную запись {{ u.email }}?"
+                                    title="Нажмите, чтобы {% if u.is_active %}заблокировать{% else %}разблокировать{% endif %} пользователя">
                                 {% if u.is_active %}
                                 <i class="bi bi-check-circle-fill"></i> Активен
                                 {% else %}
                                 <i class="bi bi-dash-circle-fill"></i> Заблокирован
                                 {% endif %}
-                            </a>
+                            </button>
                             {% endif %}
                         </td>
                         
@@ -120,22 +124,8 @@
             </div>
             <form hx-post="{% url 'users:create_user' %}" hx-swap="none">
                 {% csrf_token %}
-                <div class="modal-body py-3">
-                    <p class="text-muted small">
-                        Пользователь будет зарегистрирован локально в системе Django с автоматическим назначением роли <strong>Младший инженер</strong>.
-                    </p>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Email адрес *</label>
-                        <input type="email" name="email" class="form-control rounded-3" placeholder="engineer@company.com" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Имя пользователя</label>
-                        <input type="text" name="username" class="form-control rounded-3" placeholder="Иван Иванов">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Пароль *</label>
-                        <input type="password" name="password" class="form-control rounded-3" required placeholder="••••••••">
-                    </div>
+                <div class="modal-body py-3" id="create-user-form-body">
+                    {% include 'users/includes/create_user_form.html' with form=user_create_form %}
                 </div>
                 <div class="modal-footer border-0 pt-0">
                     <button type="button" class="btn btn-light rounded-3 btn-sm" data-bs-dismiss="modal">Отмена</button>

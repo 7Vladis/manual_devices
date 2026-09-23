@@ -12,14 +12,24 @@
         <div class="timeline">
             {% for event in history %}
             <div class="timeline-item">
-                <span class="timeline-dot {% if event.action_type == 'maintenance' %}is-maintenance{% elif event.action_type == 'create' %}is-create{% elif event.action_type == 'sync' %}is-sync{% elif event.action_type == 'rule_change' %}is-rule{% endif %}"
-                      title="{{ event.get_action_type_display }}"></span>
+                <span class="timeline-dot {% if event.action_type == 'maintenance' %}{% if event.maintenance_kind == 'unplanned' %}is-unplanned{% else %}is-maintenance{% endif %}{% elif event.action_type == 'create' %}is-create{% elif event.action_type == 'sync' %}is-sync{% elif event.action_type == 'rule_change' %}is-rule{% endif %}"
+                      title="{{ event.get_maintenance_kind_display|default:event.get_action_type_display }}"></span>
 
                 <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-1">
-                    <span class="badge rounded-pill {% if event.action_type == 'maintenance' %}bg-success-subtle text-success-emphasis{% elif event.action_type == 'create' %}bg-primary-subtle text-primary-emphasis{% elif event.action_type == 'sync' %}bg-info-subtle text-info-emphasis{% elif event.action_type == 'rule_change' %}bg-light text-purple{% else %}bg-light text-secondary{% endif %} border"
+                    <span class="badge rounded-pill {% if event.action_type == 'maintenance' %}{% if event.maintenance_kind == 'unplanned' %}bg-warning-subtle text-warning-emphasis{% else %}bg-success-subtle text-success-emphasis{% endif %}{% elif event.action_type == 'create' %}bg-primary-subtle text-primary-emphasis{% elif event.action_type == 'sync' %}bg-info-subtle text-info-emphasis{% elif event.action_type == 'rule_change' %}bg-light text-purple{% else %}bg-light text-secondary{% endif %} border"
                           style="font-size: 0.68rem;">
-                        {{ event.get_action_type_display }}
+                        {% if event.action_type == 'maintenance' and event.maintenance_kind %}
+                            {{ event.get_maintenance_kind_display }}
+                        {% else %}
+                            {{ event.get_action_type_display }}
+                        {% endif %}
                     </span>
+                    {% if event.planned_for %}
+                    <span class="badge rounded-pill bg-light text-secondary border" style="font-size: 0.68rem;"
+                          title="Эта работа закрыла плановое событие на указанную дату">
+                        <i class="bi bi-calendar-check"></i> план на {{ event.planned_for|date:"d.m.Y" }}
+                    </span>
+                    {% endif %}
                     <span class="text-muted ms-auto" style="font-size: 0.75rem;">{{ event.created_at|date:"d.m.Y H:i" }}</span>
                 </div>
 

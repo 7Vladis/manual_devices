@@ -16,6 +16,8 @@
 
     <div class="sheet-body">
 
+        <div class="form-feedback"></div>
+
         {% if effective_yt_id and not request.user.youtrack_token %}
         <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3 small animate-fade">
             <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>

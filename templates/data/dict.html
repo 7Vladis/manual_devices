@@ -2,10 +2,15 @@
 
 {% block content %}
 <div class="container-fluid px-0 flex-grow-1 d-flex flex-column" style="height: calc(100vh - 56px); overflow: hidden;">
-    <div class="row g-0 h-100 flex-grow-1">
+    <!--
+      На широком экране — две колонки. На узком показывается что-то одно:
+      класс show-detail на #dict-layout переключает список и карточку,
+      чтобы карточка не уезжала за пределы экрана (см. секцию 18 в style.css).
+    -->
+    <div class="row g-0 h-100 flex-grow-1" id="dict-layout">
         
         <!-- ЛЕВАЯ КОЛОНКА: Сайдбар (Дерево / Проводник) -->
-        <aside class="col-12 col-md-4 col-xl-3 bg-white border-end d-flex flex-column h-100" 
+        <aside class="col-12 col-md-4 col-xl-3 bg-white border-end d-flex flex-column h-100 dict-pane dict-pane-list" 
                id="sidebar-container"
                hx-get="{% url 'dict' %}?tab={{ active_tab }}&sidebar=1"
                hx-trigger="explorerModeChanged from:body">
@@ -13,7 +18,7 @@
         </aside>
 
         <!-- ПРАВАЯ КОЛОНКА: Детальная карточка -->
-        <main class="col-12 col-md-8 col-xl-9 d-flex flex-column h-100 bg-light" id="detail-container">
+        <main class="col-12 col-md-8 col-xl-9 d-flex flex-column h-100 bg-light dict-pane dict-pane-detail" id="detail-container">
             {% if active_object %}
                 <div hx-get="{% url 'object_detail' active_object.uuid %}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">
                     <div class="d-flex align-items-center justify-content-center h-100 p-5">
@@ -30,6 +35,11 @@
                 {% include 'data/includes/detail_placeholder.html' %}
             {% endif %}
         </main>
+
+        <!-- Возврат к списку на узком экране -->
+        <button type="button" class="dict-back-btn" onclick="window.mdShowDictList()">
+            <i class="bi bi-chevron-left"></i>К списку объектов
+        </button>
         
     </div>
 </div>

@@ -11,6 +11,9 @@ class MattermostSetting(models.Model):
         db_table = 'mattermost_setting'
         verbose_name = "Настройка Mattermost"
         verbose_name_plural = "Настройки Mattermost"
+        # Свежая конфигурация сверху: PK — UUID, поэтому без явного порядка
+        # «последняя» запись выбиралась произвольно.
+        ordering = ['-updated_at']
 
     def __str__(self):
         return f"Конфигурация {self.updated_at.strftime('%d.%m.%Y %H:%M')}"

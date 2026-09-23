@@ -28,8 +28,9 @@
                         <input type="text" name="name" id="new-model-name" class="form-control"
                                placeholder="Например: ВК-25" required
                                hx-get="{% url 'check_model_name' %}"
-                               hx-trigger="keyup changed delay:500ms"
+                               hx-trigger="keyup changed delay:500ms, checkModelName from:body"
                                hx-target="#model-name-check-container"
+                               hx-include="[name='object_type']"
                                autocomplete="off">
                         <div id="model-name-check-container"></div>
                     </div>
