@@ -1,71 +1,49 @@
+<!-- templates/data/includes/maintenance_table.html -->
 <div class="d-flex flex-column gap-2 animate-fade">
     {% for obj in objects %}
-    <a href="{% url 'dict' %}?object={{ obj.uuid }}" 
-       class="card p-3 shadow-sm clickable-card text-decoration-none {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}overdue-card{% else %}border-0 bg-white{% endif %}">
-        <div class="d-flex align-items-center justify-content-between">
-            
-            <!-- Левая часть: Иконка + Инфо -->
-            <div class="d-flex align-items-center min-w-0 me-3">
-                
-                <!-- Статусная иконка -->
-                <div class="rounded-3 d-flex align-items-center justify-content-center me-3 flex-shrink-0 {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}bg-light-danger text-danger{% else %}bg-light-primary text-primary{% endif %}" 
-                     style="width: 42px; height: 42px;">
-                    {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}
-                        <i class="bi bi-exclamation-octagon-fill fs-5"></i>
-                    {% else %}
-                        <i class="bi bi-wrench-adjustable fs-5"></i>
-                    {% endif %}
-                </div>
+    <a href="{% url 'dict' %}?object={{ obj.uuid }}"
+       class="file-row text-decoration-none {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}is-overdue{% endif %}">
 
-                <!-- Текстовый блок -->
-                <div class="text-truncate">
-                    <div class="fw-bold text-dark text-truncate" style="font-size: 0.95rem;">
-                        {{ obj.name|default:obj.model.name }}
-                    </div>
-                    
-                    <div class="d-flex flex-wrap align-items-center gap-2 text-muted small mt-0.5" style="font-size: 0.8rem;">
-                        <span class="badge bg-light text-secondary border fw-medium px-2 py-0.5 rounded">
-                            {{ obj.model.object_type.type }}
-                        </span>
-                        
-                        <span>
-                            <i class="bi bi-upc-scan me-1"></i>{{ obj.inventory_number|default:"Без инв. №" }}
-                        </span>
+        <span class="stat-icon {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}bg-light-danger text-danger{% else %}bg-light-primary text-primary{% endif %}"
+              style="width: 40px; height: 40px; min-width: 40px; font-size: 1.05rem;">
+            <i class="bi {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}bi-exclamation-octagon-fill{% else %}bi-wrench-adjustable{% endif %}"></i>
+        </span>
 
-                        {% if obj.next_maintenance_date %}
-                        <span>
-                            • <i class="bi bi-calendar3 ms-1 me-1"></i>{{ obj.next_maintenance_date|date:"d.m.Y" }}
-                        </span>
-                        {% endif %}
-                    </div>
-                </div>
+        <span class="flex-grow-1 text-truncate">
+            <span class="d-block fw-semibold text-dark text-truncate" style="font-size: 0.9rem;">
+                {{ obj.name|default:obj.model.name }}
+            </span>
+            <span class="d-block text-muted text-truncate" style="font-size: 0.78rem;">
+                {{ obj.model.object_type.type }} · {{ obj.model.name }}
+                · <i class="bi bi-upc-scan"></i> {{ obj.inventory_number|default:"без инв. №" }}
+                {% if obj.next_maintenance_date %} · <i class="bi bi-calendar3"></i> {{ obj.next_maintenance_date|date:"d.m.Y" }}{% endif %}
+            </span>
+        </span>
 
-            </div>
-
-            <!-- Правая часть: Статусный бейдж + Стрелка перехода -->
-            <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                {% if obj.next_maintenance_date %}
-                    {% if obj.next_maintenance_date < today %}
-                        <span class="badge bg-danger text-white px-2.5 py-1.5 rounded-pill fw-semibold" style="font-size: 0.75rem;">
-                            <i class="bi bi-clock-history me-1"></i> Просрочено
-                        </span>
-                    {% else %}
-                        <span class="badge bg-light text-primary border border-primary-subtle px-2.5 py-1.5 rounded-pill fw-semibold" style="font-size: 0.75rem;">
-                            <i class="bi bi-hourglass-split me-1"></i> Через {{ obj.next_maintenance_date|timeuntil }}
-                        </span>
-                    {% endif %}
+        <span class="d-flex align-items-center gap-2 flex-shrink-0">
+            {% if obj.next_maintenance_date %}
+                {% if obj.next_maintenance_date < today %}
+                <span class="pill pill-danger" style="font-size: 0.72rem; padding: 4px 10px;">
+                    <i class="bi bi-clock-history"></i>Просрочено
+                </span>
+                {% else %}
+                <span class="pill pill-neutral" style="font-size: 0.72rem; padding: 4px 10px;">
+                    <i class="bi bi-hourglass-split"></i>через {{ obj.next_maintenance_date|timeuntil }}
+                </span>
                 {% endif %}
-
-                <i class="bi bi-chevron-right text-muted fs-6 ms-1"></i>
-            </div>
-
-        </div>
+            {% else %}
+                <span class="pill pill-neutral" style="font-size: 0.72rem; padding: 4px 10px;">срок не назначен</span>
+            {% endif %}
+            <i class="bi bi-chevron-right text-muted"></i>
+        </span>
     </a>
     {% empty %}
-    <div class="card p-5 border-0 shadow-sm text-center text-muted bg-white">
-        <i class="bi bi-check2-circle fs-1 text-success mb-2"></i>
-        <div class="fw-bold text-dark">Все работы выполнены</div>
-        <small class="text-muted mt-1">По выбранному периоду нет запланированных технических обслуживаний.</small>
+    <div class="panel">
+        <div class="empty-state">
+            <span class="empty-icon text-success" style="background-color: var(--success-light);"><i class="bi bi-check2-circle"></i></span>
+            <span class="empty-title">Работ в этом периоде нет</span>
+            <span class="empty-hint">Все запланированные обслуживания выполнены.</span>
+        </div>
     </div>
     {% endfor %}
 </div>

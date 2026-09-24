@@ -1,111 +1,118 @@
-<div class="card border-0 shadow-sm rounded-4 animate-fade">
-    <div class="card-header bg-white border-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
-        <h5 class="fw-bold text-dark m-0">
-            <i class="bi bi-people-fill text-primary me-2"></i> Управление пользователями системы
-        </h5>
-        <button class="btn btn-primary btn-sm rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#createUserModal">
-            <i class="bi bi-person-plus-fill me-1"></i> Добавить пользователя
+<!-- templates/data/settings/tab_users.html -->
+<div class="animate-fade">
+    <div class="section-head">
+        <h2 class="section-title"><i class="bi bi-people-fill"></i>Пользователи системы</h2>
+        <button type="button" class="btn btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#createUserModal">
+            <i class="bi bi-person-plus-fill"></i>Добавить пользователя
         </button>
+        <p class="section-subtitle">
+            Роль определяет права: младший инженер только просматривает и комментирует,
+            старший — редактирует справочник, администратор — управляет настройками и учётными записями.
+        </p>
     </div>
-    
-    <div class="card-body px-4 py-4">
+
+    <div class="panel">
         <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead class="table-light text-muted small text-uppercase">
+            <table class="kv-table">
+                <thead>
                     <tr>
-                        <!-- Скорректировали ширину колонок для плотности -->
-                        <th style="width: 20%;">Email адрес</th>
-                        <th style="width: 15%;">Имя</th>
-                        <th style="width: 15%;">Авторизация</th>
-                        <th style="width: 25%;">Роль в системе</th>
-                        <th style="width: 15%;">Статус</th>
-                        <th style="width: 10%;" class="text-end">Действие</th>
+                        <th style="width: 26%;">Пользователь</th>
+                        <th style="width: 14%;">Авторизация</th>
+                        <th style="width: 26%;">Роль</th>
+                        <th style="width: 20%;">Статус</th>
+                        <th style="width: 14%;" class="text-end">Действие</th>
                     </tr>
                 </thead>
-                <tbody class="text-dark small">
+                <tbody>
                     {% for u in users_list %}
                     <tr id="user-row-{{ u.uuid }}">
-                        <!-- Email -->
-                        <td class="fw-bold">{{ u.email }}</td>
-                        
-                        <!-- Имя -->
-                        <td>{{ u.username|default:"—" }}</td>
-                        
-                        <!-- Источник авторизации -->
+                        <td>
+                            <span class="d-flex align-items-center gap-2">
+                                <span class="feed-avatar flex-shrink-0">{{ u.email|slice:":2" }}</span>
+                                <span class="text-truncate">
+                                    <span class="d-block fw-semibold text-dark text-truncate">{{ u.username|default:u.email }}</span>
+                                    <span class="d-block text-muted text-truncate" style="font-size: 0.76rem;">{{ u.email }}</span>
+                                </span>
+                            </span>
+                        </td>
+
                         <td>
                             {% if u.auth_source == 'ldap' %}
-                            <span class="badge bg-info-subtle text-info rounded-pill px-3 py-1">
-                                <i class="bi bi-shield-lock-fill me-1"></i> LDAP
+                            <span class="pill pill-info" style="font-size: 0.72rem; padding: 3px 10px;">
+                                <i class="bi bi-shield-lock-fill"></i>LDAP
                             </span>
                             {% else %}
-                            <span class="badge bg-secondary-subtle text-secondary rounded-pill px-3 py-1">
-                                <i class="bi bi-laptop me-1"></i> Система
+                            <span class="pill pill-neutral" style="font-size: 0.72rem; padding: 3px 10px;">
+                                <i class="bi bi-laptop"></i>Система
                             </span>
                             {% endif %}
                         </td>
-                        
-                        <!-- Выбор Роли через HTMX -->
+
                         <td>
                             {% if u == request.user %}
-                            <span class="badge bg-danger-subtle text-danger px-3 py-2 rounded-3">
-                                {{ u.get_role_display }} (Это вы)
+                            <span class="pill pill-info" style="font-size: 0.72rem; padding: 3px 10px;">
+                                {{ u.get_role_display }} · это вы
                             </span>
                             {% else %}
-                            <div class="d-flex align-items-center gap-2">
-                                <select class="form-select form-select-sm rounded-3 border-light-subtle bg-light-subtle"
-                                        style="max-width: 180px;"
+                            <span class="d-flex align-items-center gap-2">
+                                <select class="form-select form-select-sm" style="max-width: 190px;"
                                         name="role"
+                                        aria-label="Роль пользователя {{ u.email }}"
                                         hx-post="{% url 'users:update_role' u.uuid %}"
                                         hx-target="#role-status-{{ u.uuid }}"
                                         hx-trigger="change">
-                                    <option value="junior" {% if u.role == 'junior' %}selected{% endif %}>Младший инженер</option>
-                                    <option value="senior" {% if u.role == 'senior' %}selected{% endif %}>Старший инженер</option>
-                                    <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Администратор</option>
-                                    <option value="superuser" {% if u.role == 'superuser' %}selected{% endif %}>Суперпользователь</option>
+                                    {% for value, label in u.ROLE_CHOICES %}
+                                    <option value="{{ value }}" {% if u.role == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
                                 </select>
-                                <div id="role-status-{{ u.uuid }}" style="min-width: 80px;"></div>
-                            </div>
+                                <span id="role-status-{{ u.uuid }}" style="min-width: 76px;"></span>
+                            </span>
                             {% endif %}
                         </td>
-                        
-                        <!-- Статус учетной записи -->
+
                         <td>
                             {% if u == request.user %}
-                            <span class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> Активен</span>
+                            <span class="pill pill-success" style="font-size: 0.72rem; padding: 3px 10px;">
+                                <i class="bi bi-check-circle-fill"></i>Активен
+                            </span>
                             {% else %}
                             <button type="button"
-                                    class="btn btn-link p-0 text-decoration-none {% if u.is_active %}text-success{% else %}text-danger{% endif %} fw-semibold"
+                                    class="pill {% if u.is_active %}pill-success{% else %}pill-danger{% endif %} border-0"
+                                    style="font-size: 0.72rem; padding: 3px 10px; cursor: pointer;"
                                     hx-post="{% url 'users:toggle_status' u.uuid %}"
                                     hx-swap="none"
                                     hx-confirm="{% if u.is_active %}Заблокировать{% else %}Разблокировать{% endif %} учётную запись {{ u.email }}?"
-                                    title="Нажмите, чтобы {% if u.is_active %}заблокировать{% else %}разблокировать{% endif %} пользователя">
-                                {% if u.is_active %}
-                                <i class="bi bi-check-circle-fill"></i> Активен
-                                {% else %}
-                                <i class="bi bi-dash-circle-fill"></i> Заблокирован
-                                {% endif %}
+                                    title="Нажмите, чтобы {% if u.is_active %}заблокировать{% else %}разблокировать{% endif %}">
+                                <i class="bi {% if u.is_active %}bi-check-circle-fill{% else %}bi-dash-circle-fill{% endif %}"></i>
+                                {% if u.is_active %}Активен{% else %}Заблокирован{% endif %}
                             </button>
                             {% endif %}
                         </td>
-                        
-                        <!-- Действие -->
+
                         <td class="text-end">
-                            {% if u != request.user %}
-                            <button class="btn btn-outline-danger btn-sm rounded-3 border-0"
-                                    hx-delete="{% url 'users:delete_user' u.uuid %}"
-                                    hx-confirm="Вы уверены, что хотите безвозвратно удалить пользователя {{ u.email }} из системы?"
-                                    hx-target="#user-row-{{ u.uuid }}"
-                                    hx-swap="delete">
-                                <i class="bi bi-trash-fill"></i>
-                            </button>
+                            {% if u == request.user %}
+                            <span class="text-muted" style="font-size: 0.76rem;">ваша сессия</span>
                             {% else %}
-                            <span class="text-muted italic small">Ваша сессия</span>
+                            <button type="button" class="btn btn-light border btn-icon text-danger"
+                                    style="width: 30px; height: 30px;"
+                                    hx-delete="{% url 'users:delete_user' u.uuid %}"
+                                    hx-confirm="Безвозвратно удалить пользователя {{ u.email }}?"
+                                    hx-target="#user-row-{{ u.uuid }}"
+                                    hx-swap="delete"
+                                    title="Удалить пользователя">
+                                <i class="bi bi-trash3"></i>
+                            </button>
                             {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center py-4 text-muted">Пользователи не найдены.</td>
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <span class="empty-icon"><i class="bi bi-people"></i></span>
+                                <span class="empty-title">Пользователей нет</span>
+                            </div>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -114,24 +121,34 @@
     </div>
 </div>
 
-<!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ -->
-<div class="modal fade" id="createUserModal" tabindex="-1" aria-labelledby="createUserModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-4 border-0 shadow">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold" id="createUserModalLabel">Регистрация нового инженера</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- Модальное окно: новый пользователь -->
+<div class="modal fade" id="createUserModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);">
+
+            <div class="sheet-header">
+                <span class="sheet-icon bg-light-primary text-primary"><i class="bi bi-person-plus-fill"></i></span>
+                <div class="sheet-heading">
+                    <h5>Новый пользователь</h5>
+                    <p>Учётная запись создаётся с ролью «Младший инженер» — повысить можно в списке.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
             </div>
+
             <form hx-post="{% url 'users:create_user' %}" hx-swap="none">
                 {% csrf_token %}
-                <div class="modal-body py-3" id="create-user-form-body">
+                <div class="sheet-body" id="create-user-form-body">
                     {% include 'users/includes/create_user_form.html' with form=user_create_form %}
                 </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-light rounded-3 btn-sm" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-primary rounded-3 btn-sm px-4">Зарегистрировать</button>
+                <div class="sheet-footer">
+                    <span class="footer-note"><span class="req">*</span> — обязательные поля</span>
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                        <i class="bi bi-person-plus"></i>Создать
+                    </button>
                 </div>
             </form>
+
         </div>
     </div>
 </div>

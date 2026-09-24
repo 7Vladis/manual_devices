@@ -1,109 +1,114 @@
 <!-- templates/data/settings/tab_rules.html -->
 <div class="animate-fade">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h5 class="fw-bold text-dark m-0"><i class="bi bi-calendar-range text-primary me-2"></i>Правила расчета дат ТО</h5>
+    <div class="section-head">
+        <h2 class="section-title"><i class="bi bi-calendar-range"></i>Правила расчёта дат ТО</h2>
         {% if not request.user.is_junior %}
-        <button type="button" 
-                class="btn btn-primary btn-sm px-3 fw-bold d-flex align-items-center"
+        <button type="button" class="btn btn-primary fw-semibold"
                 hx-get="{% url 'create_rule_settings' %}"
                 hx-target="#create-rule-settings-modal-content"
                 data-bs-toggle="modal"
                 data-bs-target="#createRuleSettingsModal">
-            <i class="bi bi-plus-lg me-1"></i> Создать правило
+            <i class="bi bi-plus-lg"></i>Создать правило
         </button>
         {% endif %}
+        <p class="section-subtitle">
+            Правило определяет, на какую дату назначается следующее обслуживание после выполнения работ.
+        </p>
     </div>
 
     {% for item in rules %}
-    <div class="card border-0 shadow-sm mb-3 p-3 bg-white" style="border-radius: 10px;">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            
-            <div style="cursor: pointer;"
-                 data-bs-toggle="modal" 
-                 data-bs-target="#editRuleSettingsModal"
-                 hx-get="{% url 'edit_rule_settings' item.uuid %}"
-                 hx-target="#edit-rule-settings-modal-content"
-                 class="flex-grow-1">
-                <h6 class="fw-bold m-0 text-dark d-inline-block hover-text-primary transition-all">
-                    {{ item.name }} <i class="bi bi-pencil-square ms-1 text-muted" style="font-size: 0.75rem;"></i>
-                </h6>
-                <div class="mt-1">
-                    <small class="text-muted" style="font-size: 0.8rem;">
-                        {% if item.rule.strategy == 'relative' %}
-                            <i class="bi bi-arrow-repeat text-success me-1"></i> Относительный интервал: 
-                            каждые <strong>{{ item.rule.value.years }}г. {{ item.rule.value.months }}мес. {{ item.rule.value.days }}дн.</strong>
-                        {% else %}
-                            <i class="bi bi-calendar-event text-info me-1"></i> Сезонные даты: 
-                            <strong>{{ item.formatted_fixed_dates }}</strong>
-                        {% endif %}
-                    </small>
-                </div>
-            </div>
-            
-            <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-light btn-sm fw-bold border text-primary" 
-                        type="button" 
-                        data-bs-toggle="collapse" 
-                        data-bs-target="#collapse-objects-{{ item.uuid }}" 
-                        aria-expanded="false" 
-                        style="font-size: 0.8rem;">
-                    Подключено объектов: {{ item.objects_count }} шт. <i class="bi bi-chevron-down ms-1"></i>
+    <div class="entry-card">
+        <div class="entry-card-body">
+            <div class="entry-main">
+                <button type="button" class="entry-title"
+                        data-bs-toggle="modal"
+                        data-bs-target="#editRuleSettingsModal"
+                        hx-get="{% url 'edit_rule_settings' item.uuid %}"
+                        hx-target="#edit-rule-settings-modal-content"
+                        title="Изменить правило">
+                    {{ item.name }}<i class="bi bi-pencil-square edit-icon"></i>
                 </button>
-                
-                <div id="rule-error-{{ item.uuid }}" class="d-inline-block small text-danger me-2"></div>
+
+                <span class="entry-meta">
+                    {% if item.rule.strategy == 'relative' %}
+                        <i class="bi bi-arrow-repeat text-success me-1"></i>Интервал:
+                        <strong class="text-dark">{{ item.rule.value.years }} г. {{ item.rule.value.months }} мес. {{ item.rule.value.days }} дн.</strong>
+                    {% elif item.rule.strategy == 'fixed' and item.formatted_fixed_dates %}
+                        <i class="bi bi-calendar-event text-cyan me-1"></i>Сезонные даты:
+                        <strong class="text-dark">{{ item.formatted_fixed_dates }}</strong>
+                    {% else %}
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                        <span class="text-warning">Параметры не заданы — откройте правило и настройте расчёт.</span>
+                    {% endif %}
+                </span>
+            </div>
+
+            <div class="entry-actions">
+                <button class="btn btn-light border fw-semibold" type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapse-objects-{{ item.uuid }}"
+                        aria-expanded="false"
+                        aria-controls="collapse-objects-{{ item.uuid }}">
+                    Объектов: {{ item.objects_count }}<i class="bi bi-chevron-down ms-1"></i>
+                </button>
+
+                <div id="rule-error-{{ item.uuid }}" class="d-inline-block"></div>
+
                 {% if item.objects_count == 0 %}
-                <button type="button" class="btn btn-outline-danger btn-sm border-0"
+                <button type="button" class="btn btn-light border btn-icon text-danger"
                         hx-post="{% url 'delete_rule' item.uuid %}"
-                        hx-target-error="#rule-error-{{ item.uuid }}"
-                        hx-confirm="Вы уверены, что хотите удалить правило '{{ item.name }}'?"
-                        title="Удалить">
+                        hx-confirm="Удалить правило «{{ item.name }}»?"
+                        title="Удалить правило">
                     <i class="bi bi-trash3"></i>
                 </button>
                 {% else %}
-                <span class="text-muted small px-2" title="Нельзя удалить используемое правило"><i class="bi bi-lock-fill"></i></span>
+                <span class="lock-hint" title="Правило используется объектами — сначала отвяжите его">
+                    <i class="bi bi-lock-fill"></i>Используется
+                </span>
                 {% endif %}
             </div>
         </div>
 
         <div class="collapse" id="collapse-objects-{{ item.uuid }}">
-            <div class="mt-3 pt-3 border-top">
-                <h6 class="fw-bold text-muted small text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">Связанные объекты оборудования:</h6>
+            <div class="entry-detail border-top pt-3">
+                <span class="entry-detail-title">Объекты с этим правилом</span>
                 <div class="d-flex flex-wrap gap-2">
                     {% for obj in item.data_objects.all %}
-                    <a href="{% url 'dict' %}?object={{ obj.uuid }}" 
-                       class="badge bg-light text-dark border py-2 px-3 text-decoration-none rounded-3 d-inline-flex align-items-center hover-bg-light transition-all"
-                       style="font-size: 0.8rem;">
-                        <i class="bi bi-box-seam text-secondary me-2"></i>
-                        {{ obj.name|default:obj.model.name }}
-                        <i class="bi bi-arrow-right-short text-muted ms-1" style="font-size: 0.9rem;"></i>
+                    <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="chip-link">
+                        <i class="bi bi-box-seam text-secondary"></i>
+                        <span class="text-truncate">{{ obj.name|default:obj.model.name }}</span>
+                        <i class="bi bi-arrow-right-short chip-sub"></i>
                     </a>
                     {% empty %}
-                    <small class="text-muted py-2">Нет подключенных объектов в системе.</small>
+                    <span class="text-muted small">Правило ещё не используется.</span>
                     {% endfor %}
                 </div>
             </div>
         </div>
     </div>
     {% empty %}
-    <div class="card p-5 border-0 shadow-sm bg-white text-center text-muted" style="border-radius: 12px;">
-        <i class="bi bi-calendar-x fs-1 mb-2"></i>
-        Правила не найдены
+    <div class="panel">
+        <div class="empty-state">
+            <span class="empty-icon"><i class="bi bi-calendar-x"></i></span>
+            <span class="empty-title">Правила не созданы</span>
+            <span class="empty-hint">
+                {% if request.user.is_junior %}Правила настраивает инженер с правами на редактирование.{% else %}Создайте первое правило, чтобы система сама рассчитывала сроки ТО.{% endif %}
+            </span>
+        </div>
     </div>
     {% endfor %}
 </div>
 
-<!-- МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ (Ширина 680px) -->
-<div class="modal fade" id="editRuleSettingsModal" tabindex="-1" aria-hidden="true">
+<!-- Модальное окно: редактирование правила -->
+<div class="modal fade" id="editRuleSettingsModal" tabindex="-1" aria-hidden="true" data-md-reset>
     <div class="modal-dialog modal-dialog-centered" style="max-width: 680px;">
-        <div class="modal-content border-0 shadow-lg" id="edit-rule-settings-modal-content" style="border-radius: 12px;">
-        </div>
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);" id="edit-rule-settings-modal-content"></div>
     </div>
 </div>
 
-<!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ (Ширина 680px) -->
-<div class="modal fade" id="createRuleSettingsModal" tabindex="-1" aria-hidden="true">
+<!-- Модальное окно: создание правила -->
+<div class="modal fade" id="createRuleSettingsModal" tabindex="-1" aria-hidden="true" data-md-reset>
     <div class="modal-dialog modal-dialog-centered" style="max-width: 680px;">
-        <div class="modal-content border-0 shadow-lg" id="create-rule-settings-modal-content" style="border-radius: 12px;">
-        </div>
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);" id="create-rule-settings-modal-content"></div>
     </div>
 </div>

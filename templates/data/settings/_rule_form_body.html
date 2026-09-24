@@ -1,0 +1,55 @@
+{% comment %}
+Общее тело формы правила ТО для окон создания и редактирования.
+Контекст: mode ('create'|'edit'), error_id, strategy, anchor, years/months/days,
+fixed_dates, month_names.
+{% endcomment %}
+<div class="sheet-body">
+    <div id="{{ error_id }}"></div>
+
+    <div class="field">
+        <label for="rule-name-{{ mode }}">Название правила<span class="req">*</span></label>
+        <input type="text" name="name" id="rule-name-{{ mode }}" class="form-control"
+               value="{{ rule_obj.name|default:'' }}"
+               placeholder="Например: Раз в полгода" required autocomplete="off">
+    </div>
+
+    <div class="field">
+        <label>Как рассчитывать дату</label>
+        <input type="hidden" name="new_rule_strategy" id="strategy-input-{{ mode }}" value="{{ strategy|default:'relative' }}">
+
+        <div class="row g-2">
+            <div class="col-12 col-sm-6">
+                <button type="button" id="strategy-relative-{{ mode }}"
+                        class="option-card w-100 text-start {% if strategy != 'fixed' %}is-selected{% endif %}"
+                        hx-get="{% url 'rule_constructor' %}?new_rule_strategy=relative&mode={{ mode }}"
+                        hx-target="#constructor-fields-{{ mode }}"
+                        hx-swap="innerHTML"
+                        onclick="window.mdPickRuleStrategy('{{ mode }}', 'relative')">
+                    <span class="option-icon bg-light-primary text-primary"><i class="bi bi-arrow-repeat"></i></span>
+                    <span class="option-text">
+                        <b>Через интервал</b>
+                        <small>Например, каждые 6 месяцев</small>
+                    </span>
+                </button>
+            </div>
+            <div class="col-12 col-sm-6">
+                <button type="button" id="strategy-fixed-{{ mode }}"
+                        class="option-card w-100 text-start {% if strategy == 'fixed' %}is-selected{% endif %}"
+                        hx-get="{% url 'rule_constructor' %}?new_rule_strategy=fixed&mode={{ mode }}"
+                        hx-target="#constructor-fields-{{ mode }}"
+                        hx-swap="innerHTML"
+                        onclick="window.mdPickRuleStrategy('{{ mode }}', 'fixed')">
+                    <span class="option-icon bg-light-info text-cyan"><i class="bi bi-calendar-event"></i></span>
+                    <span class="option-text">
+                        <b>По датам в году</b>
+                        <small>Например, 1 мая и 1 ноября</small>
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="constructor-fields-{{ mode }}">
+        {% include 'data/includes/rule_constructor_fields.html' %}
+    </div>
+</div>

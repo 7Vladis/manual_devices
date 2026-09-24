@@ -9,11 +9,6 @@
 </div>
 {% endif %}
 
-<p class="text-muted small mb-3">
-    Учётная запись создаётся локально в системе. Пароль проверяется теми же
-    правилами, что и при смене пароля.
-</p>
-
 {% for field in form %}
 <div class="field">
     <label for="{{ field.id_for_label }}">

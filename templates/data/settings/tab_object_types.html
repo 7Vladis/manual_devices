@@ -1,150 +1,143 @@
 <!-- templates/data/settings/tab_object_types.html -->
 <div class="animate-fade">
-    <!-- Шапка вкладки -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h5 class="fw-bold text-dark m-0">
-            <i class="bi bi-tags text-primary me-2"></i>Типы оборудования
-        </h5>
+    <div class="section-head">
+        <h2 class="section-title"><i class="bi bi-tags"></i>Типы оборудования</h2>
         {% if not request.user.is_junior %}
-        <button type="button" class="btn btn-primary btn-sm px-3 fw-bold d-flex align-items-center" 
+        <button type="button" class="btn btn-primary fw-semibold"
                 data-bs-toggle="modal" data-bs-target="#addObjectTypeModal">
-            <i class="bi bi-plus-lg me-1"></i> Добавить тип
+            <i class="bi bi-plus-lg"></i>Добавить тип
         </button>
         {% endif %}
+        <p class="section-subtitle">
+            Тип — верхний уровень справочника: он объединяет модели оборудования, а модели — конкретные объекты.
+        </p>
     </div>
 
-    <!-- Карточки типов объектов -->
     {% for item in object_types %}
-    <div class="card border-0 shadow-sm mb-3 p-3 bg-white" style="border-radius: 10px;">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            
-            <!-- Левая колонка: Название типа и сводка -->
-            <div class="flex-grow-1">
-                <h6 class="fw-bold m-0 text-dark d-inline-block">
-                    <i class="bi bi-tag-fill text-muted me-1 small"></i> {{ item.type }}
-                </h6>
-                <div class="mt-1">
-                    <small class="text-muted" style="font-size: 0.8rem;">
-                        Моделей: <strong class="text-dark">{{ item.models_count }}</strong> | 
-                        Всего объектов: <strong class="text-dark">{{ item.objects_count }}</strong> шт.
-                    </small>
-                </div>
+    <div class="entry-card">
+        <div class="entry-card-body">
+            <div class="entry-main">
+                <span class="entry-title" style="cursor: default;">
+                    <i class="bi bi-tag-fill text-muted"></i>{{ item.type }}
+                </span>
+                <span class="entry-meta">
+                    Моделей: <strong class="text-dark">{{ item.models_count }}</strong> ·
+                    объектов: <strong class="text-dark">{{ item.objects_count }}</strong>
+                </span>
             </div>
-            
-            <!-- Правая колонка: Кнопка раскрытия и кнопка удаления -->
-            <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-light btn-sm fw-bold border text-primary" 
-                        type="button" 
-                        data-bs-toggle="collapse" 
-                        data-bs-target="#collapse-type-{{ item.uuid }}" 
-                        aria-expanded="false" 
-                        style="font-size: 0.8rem;">
-                    Подключено: {{ item.models_count }} мод. ({{ item.objects_count }} об.) <i class="bi bi-chevron-down ms-1"></i>
+
+            <div class="entry-actions">
+                <button class="btn btn-light border fw-semibold" type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapse-type-{{ item.uuid }}"
+                        aria-expanded="false"
+                        aria-controls="collapse-type-{{ item.uuid }}">
+                    Состав<i class="bi bi-chevron-down ms-1"></i>
                 </button>
-                
-                <div id="error-container-type-{{ item.uuid }}" class="d-inline-block small text-danger me-2"></div>
-                
+
+                <div id="error-container-type-{{ item.uuid }}" class="d-inline-block"></div>
+
                 {% if item.models_count == 0 %}
-                <button type="button" class="btn btn-outline-danger btn-sm border-0"
+                <button type="button" class="btn btn-light border btn-icon text-danger"
                         hx-post="{% url 'delete_object_type' item.uuid %}"
-                        hx-target-error="#error-container-type-{{ item.uuid }}"
-                        hx-confirm="Вы уверены, что хотите удалить тип оборудования '{{ item.type }}'?"
-                        title="Удалить">
+                        hx-confirm="Удалить тип оборудования «{{ item.type }}»?"
+                        title="Удалить тип">
                     <i class="bi bi-trash3"></i>
                 </button>
                 {% else %}
-                <span class="text-muted small px-2" title="Нельзя удалить: привязаны существующие модели"><i class="bi bi-lock-fill"></i></span>
+                <span class="lock-hint" title="К типу привязаны модели — сначала удалите или перенесите их">
+                    <i class="bi bi-lock-fill"></i>Используется
+                </span>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Раскрывающийся блок с моделями и объектами -->
         <div class="collapse" id="collapse-type-{{ item.uuid }}">
-            <div class="mt-3 pt-3 border-top">
-                
-                <!-- 1. Список моделей этого типа -->
-                <div class="mb-3">
-                    <h6 class="fw-bold text-muted small text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">
-                        <i class="bi bi-layers me-1 text-purple"></i> Модели оборудования ({{ item.models.all|length }}):
-                    </h6>
-                    <div class="d-flex flex-wrap gap-2">
-                        {% for model in item.models.all %}
-                        <a href="{% url 'dict' %}?model={{ model.uuid }}" 
-                           class="badge bg-light text-dark border py-2 px-3 text-decoration-none rounded-3 d-inline-flex align-items-center hover-bg-light transition-all"
-                           style="font-size: 0.8rem;">
-                            <i class="bi bi-layers text-purple me-1.5"></i>
-                            <strong>{{ model.name }}</strong>
-                            <small class="text-muted ms-1.5">({{ model.data_objects.all|length }} об.)</small>
-                            <i class="bi bi-arrow-right-short text-muted ms-1" style="font-size: 0.9rem;"></i>
-                        </a>
-                        {% empty %}
-                        <small class="text-muted py-1">Модели этого типа еще не созданы.</small>
-                        {% endfor %}
-                    </div>
+            <div class="entry-detail border-top pt-3">
+
+                <span class="entry-detail-title">
+                    <i class="bi bi-layers text-purple me-1"></i>Модели ({{ item.models_count }})
+                </span>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    {% for model in item.models.all %}
+                    <a href="{% url 'dict' %}?model={{ model.uuid }}" class="chip-link">
+                        <i class="bi bi-layers text-purple"></i>
+                        <span class="text-truncate fw-semibold">{{ model.name }}</span>
+                        <span class="chip-sub">{{ model.data_objects.all|length }} об.</span>
+                    </a>
+                    {% empty %}
+                    <span class="text-muted small">Модели этого типа ещё не созданы.</span>
+                    {% endfor %}
                 </div>
 
-                <!-- 2. Список конкретных объектов оборудования -->
-                <div>
-                    <h6 class="fw-bold text-muted small text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">
-                        <i class="bi bi-box-seam me-1 text-primary"></i> Объекты оборудования ({{ item.objects_count }}):
-                    </h6>
-                    <div class="d-flex flex-wrap gap-2">
-                        {% for model in item.models.all %}
-                            {% for obj in model.data_objects.all %}
-                            <a href="{% url 'dict' %}?object={{ obj.uuid }}" 
-                               class="badge bg-light text-dark border py-2 px-3 text-decoration-none rounded-3 d-inline-flex align-items-center hover-bg-light transition-all"
-                               style="font-size: 0.8rem;">
-                                <i class="bi bi-box-seam text-secondary me-2"></i>
-                                {{ obj.name|default:obj.model.name }}
-                                {% if obj.inventory_number %}
-                                    <small class="text-muted ms-1">| {{ obj.inventory_number }}</small>
-                                {% endif %}
-                                <i class="bi bi-arrow-right-short text-muted ms-1" style="font-size: 0.9rem;"></i>
-                            </a>
-                            {% endfor %}
-                        {% empty %}
-                            <small class="text-muted py-1">Нет зарегистрированных объектов в системе.</small>
+                <span class="entry-detail-title">
+                    <i class="bi bi-box-seam text-primary me-1"></i>Объекты ({{ item.objects_count }})
+                </span>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for model in item.models.all %}
+                        {% for obj in model.data_objects.all %}
+                        <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="chip-link">
+                            <i class="bi bi-box-seam text-secondary"></i>
+                            <span class="text-truncate">{{ obj.name|default:obj.model.name }}</span>
+                            {% if obj.inventory_number %}<span class="chip-sub">{{ obj.inventory_number }}</span>{% endif %}
+                        </a>
                         {% endfor %}
-                        
-                        {% if item.models_count > 0 and item.objects_count == 0 %}
-                            <small class="text-muted py-1">Нет зарегистрированных объектов для этих моделей.</small>
-                        {% endif %}
-                    </div>
+                    {% endfor %}
+                    {% if item.objects_count == 0 %}
+                    <span class="text-muted small">Объектов этого типа пока нет.</span>
+                    {% endif %}
                 </div>
 
             </div>
         </div>
     </div>
     {% empty %}
-    <div class="card p-5 border-0 shadow-sm bg-white text-center text-muted" style="border-radius: 12px;">
-        <i class="bi bi-tags fs-1 mb-2"></i>
-        Типы оборудования не найдены
+    <div class="panel">
+        <div class="empty-state">
+            <span class="empty-icon"><i class="bi bi-tags"></i></span>
+            <span class="empty-title">Типы оборудования не заданы</span>
+            <span class="empty-hint">
+                {% if request.user.is_junior %}Типы настраивает инженер с правами на редактирование.{% else %}Добавьте первый тип — например, «Насосное оборудование».{% endif %}
+            </span>
+        </div>
     </div>
     {% endfor %}
 </div>
 
-<!-- Модальное окно создания типа объекта -->
+<!-- Модальное окно: новый тип оборудования -->
 <div class="modal fade" id="addObjectTypeModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold">Новый тип объекта</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form hx-post="{% url 'create_object_type' %}" 
-                  hx-target="#settings-page-wrapper"
-                  hx-on::after-request="if (event.detail.elt === this) { bootstrap.Modal.getInstance(document.getElementById('addObjectTypeModal')).hide(); }">
-                {% csrf_token %}
-                <div class="modal-body py-4">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Название типа оборудования *</label>
-                    <input type="text" name="type" class="form-control bg-light border-0 py-2 shadow-none" 
-                           placeholder="Котлы, Насосы, Серверы..." required autocomplete="off" style="font-size: 0.9rem;">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);">
+
+            <div class="sheet-header">
+                <span class="sheet-icon bg-light-primary text-primary"><i class="bi bi-tag-fill"></i></span>
+                <div class="sheet-heading">
+                    <h5>Новый тип оборудования</h5>
+                    <p>Верхний уровень справочника — например, «Насосное оборудование».</p>
                 </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-primary px-4 fw-bold">Сохранить</button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+
+            <form hx-post="{% url 'create_object_type' %}"
+                  hx-target="#settings-page-wrapper"
+                  hx-on::before-request="if (event.detail.elt === this) { this.querySelector('.form-feedback').innerHTML = ''; }"
+                  hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('addObjectTypeModal')).hide(); }">
+                {% csrf_token %}
+                <div class="sheet-body">
+                    <div class="form-feedback"></div>
+                    <div class="field">
+                        <label for="new-object-type">Название типа<span class="req">*</span></label>
+                        <input type="text" name="type" id="new-object-type" class="form-control"
+                               placeholder="Насосное оборудование" required autocomplete="off">
+                        <span class="hint">Названия сравниваются без учёта регистра — дубликат создать не получится.</span>
+                    </div>
+                </div>
+                <div class="sheet-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="bi bi-plus-lg"></i>Создать</button>
                 </div>
             </form>
+
         </div>
     </div>
 </div>

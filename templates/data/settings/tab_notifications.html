@@ -1,55 +1,66 @@
 <!-- templates/data/settings/tab_notifications.html -->
-<div class="card border-0 shadow-sm p-4 bg-white animate-fade" style="border-radius: 12px;">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="fw-bold text-dark m-0"><i class="bi bi-bell-fill text-primary me-2"></i>Настройка уведомлений Mattermost</h5>
-        <button type="button" class="btn btn-primary btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addWebhookModal">
-            <i class="bi bi-plus-lg me-1"></i> Добавить вебхук
+<div class="animate-fade">
+    <div class="section-head">
+        <h2 class="section-title"><i class="bi bi-bell-fill"></i>Уведомления Mattermost</h2>
+        <button type="button" class="btn btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#addWebhookModal">
+            <i class="bi bi-plus-lg"></i>Добавить вебхук
         </button>
+        <p class="section-subtitle">
+            Ежедневно в 09:00 система отправляет сводку по объектам, у которых обслуживание сегодня, через 7 и через 30 дней.
+        </p>
     </div>
-    
-    <p class="text-muted small mb-4">Настройте адреса отправки ежедневных уведомлений о плановых и просроченных технических обслуживаниях.</p>
 
-    <!-- Используем существующий механизм из notifications/includes/webhook_list.html -->
     <form id="webhook-management-form">
         {% csrf_token %}
         <div id="webhook-list-container">
             {% include 'notifications/includes/webhook_list.html' %}
         </div>
-        
+
+        {% if settings %}
         <div class="mt-3">
-            <button type="button" class="btn btn-outline-danger btn-sm px-3 fw-bold" 
-                    hx-post="{% url 'delete_webhooks' %}" 
+            <button type="button" class="btn btn-light border text-danger fw-semibold"
+                    hx-post="{% url 'delete_webhooks' %}"
                     hx-target="#webhook-list-container"
                     hx-confirm="Удалить выбранные вебхуки?">
-                <i class="bi bi-trash me-1"></i> Удалить выбранные
+                <i class="bi bi-trash3"></i>Удалить выбранные
             </button>
         </div>
+        {% endif %}
     </form>
 </div>
 
-<!-- Модальное окно добавления вебхука -->
+<!-- Модальное окно: новый вебхук -->
 <div class="modal fade" id="addWebhookModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold">Новый вебхук Mattermost</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form hx-post="{% url 'add_webhook' %}" 
-                  hx-target="#webhook-list-container" 
-                  hx-on::after-request="bootstrap.Modal.getInstance(document.getElementById('addWebhookModal')).hide(); this.reset();">
-                {% csrf_token %}
-                <div class="modal-body py-4">
-                    <label class="form-label small fw-bold text-muted">URL ВЕБХУКА</label>
-                    <input type="url" name="webhook_url" class="form-control bg-light border-0 py-2 shadow-none" 
-                           placeholder="https://mattermost.example.com/hooks/..." required>
-                    <div class="form-text mt-2 small text-muted">Скопируйте URL из настроек интеграций Mattermost.</div>
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
+        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);">
+
+            <div class="sheet-header">
+                <span class="sheet-icon bg-light-info text-cyan"><i class="bi bi-bell-fill"></i></span>
+                <div class="sheet-heading">
+                    <h5>Новый вебхук Mattermost</h5>
+                    <p>Адрес входящего вебхука из настроек интеграций Mattermost.</p>
                 </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-primary px-4 fw-bold">Сохранить</button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+
+            <form hx-post="{% url 'add_webhook' %}"
+                  hx-target="#webhook-list-container"
+                  hx-on::after-request="if (event.detail.elt === this && event.detail.successful && !event.detail.xhr.responseText.includes('webhook-add-error')) { bootstrap.Modal.getInstance(document.getElementById('addWebhookModal')).hide(); this.reset(); }">
+                {% csrf_token %}
+                <div class="sheet-body">
+                    <div class="field">
+                        <label for="new-webhook-url">URL вебхука<span class="req">*</span></label>
+                        <input type="url" name="webhook_url" id="new-webhook-url" class="form-control"
+                               placeholder="https://mattermost.example.com/hooks/xxxxxxxx" required autocomplete="off">
+                        <span class="hint">Уведомления уходят во все активные вебхуки из списка.</span>
+                    </div>
+                </div>
+                <div class="sheet-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="bi bi-plus-lg"></i>Добавить</button>
                 </div>
             </form>
+
         </div>
     </div>
 </div>

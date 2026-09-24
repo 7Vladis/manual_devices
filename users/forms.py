@@ -10,12 +10,18 @@ class LoginForm(AuthenticationForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Добавляем классы Bootstrap для стилизации
+        self.fields['username'].label = "Email"
         self.fields['username'].widget.attrs.update({
-            'class': 'form-control', 'placeholder': 'Email address'
+            'class': 'form-control',
+            'placeholder': 'engineer@company.com',
+            'autocomplete': 'username',
+            'autofocus': True,
+            'inputmode': 'email',
         })
         self.fields['password'].widget.attrs.update({
-            'class': 'form-control', 'placeholder': 'Password'
+            'class': 'form-control',
+            'placeholder': 'Введите пароль',
+            'autocomplete': 'current-password',
         })
         self.fields['remember_me'].widget.attrs.update({
             'class': 'form-check-input'

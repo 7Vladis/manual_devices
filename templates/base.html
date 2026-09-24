@@ -38,51 +38,64 @@
 
     <!-- Глобальное модальное окно: Экспорт XLSX -->
     {% if request.user.is_admin_or_higher %}
-    <div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" style="max-width: 480px;">
-            <div class="modal-content border-0 shadow-lg rounded-3">
-                <div class="modal-header bg-dark text-white py-3 px-4">
-                    <h6 class="modal-title fw-bold m-0" id="exportModalLabel">
-                        <i class="bi bi-file-earmark-excel-fill text-success me-2 fs-5"></i> Экспорт данных в XLSX
-                    </h6>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+    <div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
+            <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);">
+
+                <div class="sheet-header">
+                    <span class="sheet-icon bg-light-success text-success"><i class="bi bi-file-earmark-excel-fill"></i></span>
+                    <div class="sheet-heading">
+                        <h5>Экспорт в XLSX</h5>
+                        <p>Выгрузка объектов с иерархией, описанием и характеристиками модели.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
                 </div>
+
                 <form action="{% url 'export_xlsx' %}" method="get">
-                    <div class="modal-body p-4 text-start">
-                        <p class="text-secondary small mb-3">
-                            Выберите режим выгрузки данных оборудования. Файл формируется в формате Microsoft Excel (.xlsx).
-                        </p>
-                        <div class="p-3 bg-light rounded-3 border">
-                            <div class="form-check mb-2.5">
-                                <input class="form-check-input" type="radio" name="export_mode" id="modeAll" value="all" checked>
-                                <label class="form-check-label small fw-semibold text-dark" for="modeAll" style="cursor: pointer;">
-                                    Все объекты системы (включая без инв. №)
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="export_mode" id="modeWithInv" value="with_inventory">
-                                <label class="form-check-label small fw-semibold text-dark" for="modeWithInv" style="cursor: pointer;">
-                                    Только с заполненным инвентарным номером
-                                </label>
-                            </div>
+                    <div class="sheet-body">
+                        <div class="field">
+                            <label>Какие объекты выгружать</label>
+
+                            <label class="option-card mb-2" for="export-mode-all">
+                                <span class="option-icon bg-light-primary text-primary"><i class="bi bi-collection"></i></span>
+                                <span class="option-text flex-grow-1">
+                                    <b>Все объекты системы</b>
+                                    <small>Включая те, у которых инвентарный номер не заполнен.</small>
+                                </span>
+                                <input class="form-check-input flex-shrink-0 mt-1 shadow-none" type="radio"
+                                       name="export_mode" id="export-mode-all" value="all" checked>
+                            </label>
+
+                            <label class="option-card" for="export-mode-inv">
+                                <span class="option-icon bg-light-info text-cyan"><i class="bi bi-upc-scan"></i></span>
+                                <span class="option-text flex-grow-1">
+                                    <b>Только с инвентарным номером</b>
+                                    <small>Подходит для сверки с бухгалтерским учётом.</small>
+                                </span>
+                                <input class="form-check-input flex-shrink-0 mt-1 shadow-none" type="radio"
+                                       name="export_mode" id="export-mode-inv" value="with_inventory">
+                            </label>
                         </div>
                     </div>
-                    <div class="modal-footer bg-light px-4 py-2.5 border-top">
-                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Отмена</button>
-                        <button type="submit" class="btn btn-success px-3 fw-bold" onclick="bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();">
-                            <i class="bi bi-download me-1"></i> Скачать XLSX
+
+                    <div class="sheet-footer">
+                        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-success px-4 fw-semibold"
+                                onclick="bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();">
+                            <i class="bi bi-download"></i>Скачать
                         </button>
                     </div>
                 </form>
+
             </div>
         </div>
     </div>
     {% endif %}
 
     <!-- Глобальное модальное окно: YouTrack Token -->
-    <div class="modal fade" id="userTokenModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" style="max-width: 480px;">
-            <div class="modal-content border-0 shadow-lg rounded-3" id="user-token-modal-content">
+    <div class="modal fade" id="userTokenModal" tabindex="-1" aria-hidden="true" data-md-reset>
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
+            <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);" id="user-token-modal-content">
                 <!-- Контент подгружается по HTMX -->
             </div>
         </div>
@@ -166,6 +179,54 @@
             if (detail === event.target || detail.contains(event.target)) {
                 layout.classList.add('show-detail');
             }
+        });
+
+        /**
+         * Выбор стратегии и точки отсчёта в конструкторе правил ТО.
+         * Значение хранится в скрытом поле, а плитки показывают выбор —
+         * так же, как в окне создания объекта.
+         */
+        window.mdPickRuleStrategy = function (mode, value) {
+            const input = document.getElementById('strategy-input-' + mode);
+            if (input) input.value = value;
+            ['relative', 'fixed'].forEach((name) => {
+                const card = document.getElementById('strategy-' + name + '-' + mode);
+                if (card) card.classList.toggle('is-selected', name === value);
+            });
+        };
+
+        window.mdPickRuleAnchor = function (mode, value) {
+            const input = document.getElementById('anchor-input-' + mode);
+            if (input) input.value = value;
+            ['actual', 'scheduled'].forEach((name) => {
+                const card = document.getElementById('anchor-' + name + '-' + mode);
+                if (card) card.classList.toggle('is-selected', name === value);
+            });
+        };
+
+        /**
+         * Содержимое модальных окон, подгружаемое по HTMX, очищается при закрытии.
+         *
+         * Иначе в DOM одновременно живут несколько загруженных окон с одинаковыми
+         * id (например, окна создания и редактирования правила ТО используют один
+         * контейнер полей), и HTMX подставляет ответ в первое совпадение — то есть
+         * в скрытое окно. Снаружи это выглядит как «кнопка ничего не делает».
+         */
+        document.addEventListener('hidden.bs.modal', (event) => {
+            const modal = event.target;
+
+            if (modal.hasAttribute('data-md-reset')) {
+                const holder = modal.querySelector('.modal-content');
+                if (holder) holder.innerHTML = '';
+                return;
+            }
+
+            // Окна со статичной разметкой: сбрасываем введённое и ошибки,
+            // чтобы при повторном открытии форма была чистой.
+            modal.querySelectorAll('form').forEach((form) => {
+                form.reset();
+                form.querySelectorAll('.form-feedback').forEach((box) => { box.innerHTML = ''; });
+            });
         });
 
         document.body.addEventListener('htmx:configRequest', (event) => {

@@ -34,6 +34,20 @@ class ObjectType(models.Model):
         db_table = 'object_type'
         verbose_name = 'Тип объекта'
         verbose_name_plural = 'Типы объектов'
+        constraints = [
+            # unique=True ловит только точное совпадение, поэтому «Насосы» и
+            # «насосы» создавались как два разных типа справочника.
+            models.UniqueConstraint(
+                Lower(Trim('type')),
+                name='unique_object_type_name',
+                violation_error_message='Тип оборудования с таким названием уже существует.',
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.type:
+            self.type = self.type.strip()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return self.type

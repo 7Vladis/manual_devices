@@ -18,7 +18,6 @@ urlpatterns = [
     path('settings/users/<uuid:pk>/toggle/', users.views.toggle_user_status_view, name='toggle_user_status'),
     
     # Дерево и проводник объектов
-    path('dict/objects/', views.object_tree_view, name='object_tree'),
     path('dict/objects/<uuid:parent_uuid>/children/', views.object_children_view, name='object_children'),
     path('dict/objects/<uuid:pk>/service/', views.service_object_view, name='service_object'),
     path('dict/objects/<uuid:pk>/delete/', views.delete_object_view, name='delete_object'),
@@ -27,7 +26,6 @@ urlpatterns = [
     path('dict/explorer/up/', views.explorer_up_view, name='explorer_up'),
 
     # Дерево моделей
-    path('dict/models/', views.model_tree_view, name='model_tree'),
     path('dict/models/<uuid:pk>/delete/', views.delete_model_view, name='delete_model'),
     
     # Создание моделей и объектов
@@ -76,5 +74,4 @@ urlpatterns = [
     path('dict/rules/dates-builder/', views.rules_dates_builder_view, name='rules_dates_builder'),
     path('dict/rules/toggle-mode/', views.toggle_scheduling_mode_view, name='toggle_scheduling_mode'),
     path('export/xlsx/', views.export_xlsx_view, name='export_xlsx'),
-    path('export/modal/', views.export_modal_view, name='export_modal'),
 ]

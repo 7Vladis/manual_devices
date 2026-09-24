@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.http import HttpResponse
@@ -7,11 +7,6 @@ from users.decorators import role_required
 from .forms import MattermostSettingForm
 from .models import MattermostSetting
 from .services import test_specific_webhook
-
-@login_required
-@role_required(['admin', 'superuser'])  # Доступ только Администраторам и Суперюзерам
-def notification_settings(request):
-    return redirect('/settings/?tab=notifications')
 
 @login_required
 @role_required(['admin', 'superuser'])

@@ -1,87 +1,71 @@
 <!-- templates/users/includes/youtrack_token_modal_body.html -->
-<div class="modal-header border-0 pb-0">
-    <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
-        <i class="bi bi-hdd-network-fill {% if request.user.youtrack_token %}text-success{% else %}text-danger{% endif %} me-2"></i> Персональный токен YouTrack
-    </h5>
-    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="sheet-header">
+    <span class="sheet-icon {% if request.user.youtrack_token %}bg-light-success text-success{% else %}bg-light-danger text-danger{% endif %}">
+        <i class="bi bi-hdd-network-fill"></i>
+    </span>
+    <div class="sheet-heading">
+        <h5>Персональный токен YouTrack</h5>
+        <p>Комментарии, файлы и списания времени публикуются в YouTrack от вашего имени.</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
 </div>
 
-<form hx-post="{% url 'users:profile_youtrack_token' %}" 
+<form hx-post="{% url 'users:profile_youtrack_token' %}"
       hx-target="#user-token-modal-content"
       hx-swap="innerHTML">
     {% csrf_token %}
-    <div class="modal-body py-3">
+    <div class="sheet-body">
+
         {% if saved %}
-        <div class="alert alert-success py-2 px-3 mb-3 rounded-3 small animate-fade">
-            <i class="bi bi-check-circle-fill me-1"></i> Настройки токена успешно сохранены!
+        <div class="alert alert-success d-flex align-items-center gap-2 py-2 px-3 mb-3 rounded-3 small animate-fade" role="status">
+            <i class="bi bi-check-circle-fill fs-5"></i>
+            <div>Токен сохранён.</div>
         </div>
         {% endif %}
 
-        <p class="text-secondary small mb-3">
-            Укажите ваш персональный <strong>Permanent Token</strong> из YouTrack. Все комментарии, файлы и списания времени будут публиковаться от вашего имени.
-        </p>
-
-        <div class="mb-3">
-            <label class="form-label small fw-bold text-muted text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.5px;">
-                Permanent Token
-            </label>
+        <div class="field">
+            <label for="youtrack-token-input">Permanent Token</label>
             <div class="input-group">
-                <input type="password" 
+                <input type="password"
                        id="youtrack-token-input"
-                       name="youtrack_token" 
-                       value="{{ request.user.youtrack_token|default:'' }}" 
-                       class="form-control bg-light border-0 py-2 shadow-none" 
-                       placeholder="perm:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx..."
+                       name="youtrack_token"
+                       class="form-control"
+                       value="{{ request.user.youtrack_token|default:'' }}"
+                       placeholder="perm:xxxxxxxxxxxxxxxx"
                        autocomplete="off"
-                       style="font-size: 0.85rem;">
-                
-                <!-- Кнопка быстрой очистки/удаления токена -->
-                {% if request.user.youtrack_token %}
-                <button type="button" 
-                        class="btn btn-outline-danger btn-sm border-0" 
-                        onclick="document.getElementById('youtrack-token-input').value=''; this.form.dispatchEvent(new Event('submit'));"
-                        title="Удалить токен">
-                    <i class="bi bi-trash3"></i>
+                       spellcheck="false">
+                <button type="button" class="btn btn-light border" tabindex="-1"
+                        title="Показать или скрыть токен"
+                        onclick="const i = document.getElementById('youtrack-token-input'); const on = i.type === 'password'; i.type = on ? 'text' : 'password'; this.querySelector('i').className = on ? 'bi bi-eye-slash' : 'bi bi-eye';">
+                    <i class="bi bi-eye"></i>
                 </button>
-                {% endif %}
             </div>
-            <div class="form-text small text-muted mt-1">Очистите поле и сохраните, чтобы отключить интеграцию.</div>
+            <span class="hint">
+                YouTrack → профиль → Account Security → Permanent Tokens. Пустое поле отключает интеграцию для вашей учётной записи.
+            </span>
         </div>
 
-        <!-- Статусный бейдж -->
-        <div class="p-2.5 rounded-2 d-flex align-items-center gap-2 {% if request.user.youtrack_token %}bg-light-success text-success border border-success-subtle{% else %}bg-light-danger text-danger border border-danger-subtle{% endif %} small">
-            {% if request.user.youtrack_token %}
-                <i class="bi bi-check-circle-fill fs-5"></i>
-                <div>
-                    <strong class="d-block">Соединение активно</strong>
-                    <span class="opacity-75" style="font-size: 0.75rem;">Все действия синхронизируются с YouTrack</span>
-                </div>
-            {% else %}
-                <i class="bi bi-exclamation-octagon-fill fs-5"></i>
-                <div>
-                    <strong class="d-block">Токен отсутствует</strong>
-                    <span class="opacity-75" style="font-size: 0.75rem;">Синхронизация с YouTrack приостановлена</span>
-                </div>
-            {% endif %}
+        <div class="option-card {% if request.user.youtrack_token %}is-selected{% endif %}" style="cursor: default;">
+            <span class="option-icon {% if request.user.youtrack_token %}bg-light-success text-success{% else %}bg-light-danger text-danger{% endif %}">
+                <i class="bi {% if request.user.youtrack_token %}bi-check-circle-fill{% else %}bi-exclamation-octagon-fill{% endif %}"></i>
+            </span>
+            <span class="option-text">
+                {% if request.user.youtrack_token %}
+                    <b>Токен указан</b>
+                    <small>Синхронизация работает от вашего имени.</small>
+                {% else %}
+                    <b>Токен не указан</b>
+                    <small>Синхронизация с YouTrack для вас приостановлена.</small>
+                {% endif %}
+            </span>
         </div>
+
     </div>
 
-    <div class="modal-footer border-0 pt-0">
-        <button type="button" class="btn btn-light btn-sm px-3" data-bs-dismiss="modal">Закрыть</button>
-        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Сохранить</button>
+    <div class="sheet-footer">
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Закрыть</button>
+        <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="bi bi-check-lg"></i>Сохранить</button>
     </div>
 </form>
 
-<!-- OOB-ОБНОВЛЕНИЕ ИКОНКИ В ШАПКЕ В РЕАЛЬНОМ ВРЕМЕНИ -->
-<button type="button" 
-        id="youtrack-header-btn"
-        class="header-nav-btn"
-        style="width: 34px; height: 34px; border-radius: 8px; background-color: rgba(255, 255, 255, 0.06);"
-        data-bs-toggle="modal"
-        data-bs-target="#userTokenModal"
-        hx-get="{% url 'users:profile_youtrack_token' %}"
-        hx-target="#user-token-modal-content"
-        title="{% if request.user.youtrack_token %}YouTrack: Соединение активно (нажмите для настройки){% else %}YouTrack: Токен не настроен! (нажмите для ввода){% endif %}"
-        hx-swap-oob="outerHTML">
-    <i class="bi bi-hdd-network-fill {% if request.user.youtrack_token %}text-success{% else %}text-danger{% endif %} fs-6" style="line-height: 1;"></i>
-</button>
+{% include 'includes/youtrack_header_btn.html' with oob=True %}

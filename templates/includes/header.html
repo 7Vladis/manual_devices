@@ -36,7 +36,7 @@
                    hx-target="#search-results" 
                    autocomplete="off"
                    onkeydown="if(event.key==='Escape'){ this.value=''; document.getElementById('search-results').innerHTML=''; }">
-            <div id="search-results" class="position-absolute w-100 shadow-lg bg-white rounded-3 mt-1 overflow-hidden" style="z-index: 1060;"></div>
+            <div id="search-results" class="position-absolute w-100 mt-1" style="z-index: 1060;"></div>
         </div>
 
         <!-- ПРАВАЯ ЧАСТЬ: Тулбар (заканчивается ровно по оси сетки) -->
@@ -58,29 +58,10 @@
             {% endif %}
 
             <!-- 2. Кнопка переключения режима справочника -->
-            <button type="button"
-                    id="explorer-toggle-btn"
-                    class="header-nav-btn"
-                    hx-post="{% url 'toggle_explorer_mode' %}"
-                    hx-target="#explorer-toggle-btn"
-                    hx-swap="outerHTML"
-                    style="width: 34px; height: 34px; border-radius: 8px; background-color: rgba(255, 255, 255, 0.06);"
-                    title="Режим справочника: {% if request.session.explorer_mode == 'flat' %}Проводник (кликните для перехода в Дерево){% else %}Дерево (кликните для перехода в Проводник){% endif %}">
-                <i class="bi {% if request.session.explorer_mode == 'flat' %}bi-folder2-open text-warning{% else %}bi-diagram-3-fill text-info{% endif %} fs-6" style="line-height: 1;"></i>
-            </button>
+            {% include 'includes/explorer_toggle_btn.html' with explorer_mode=request.session.explorer_mode %}
 
             <!-- 3. Индикатор YouTrack -->
-            <button type="button" 
-                    id="youtrack-header-btn"
-                    class="header-nav-btn"
-                    style="width: 34px; height: 34px; border-radius: 8px; background-color: rgba(255, 255, 255, 0.06);"
-                    data-bs-toggle="modal"
-                    data-bs-target="#userTokenModal"
-                    hx-get="{% url 'users:profile_youtrack_token' %}"
-                    hx-target="#user-token-modal-content"
-                    title="{% if request.user.youtrack_token %}YouTrack: Соединение активно (нажмите для настройки){% else %}YouTrack: Токен не настроен! (нажмите для ввода){% endif %}">
-                <i class="bi bi-hdd-network-fill {% if request.user.youtrack_token %}text-success{% else %}text-danger{% endif %} fs-6" style="line-height: 1;"></i>
-            </button>
+            {% include 'includes/youtrack_header_btn.html' %}
 
             <!-- 4. Логин пользователя -->
             <span class="small fw-semibold text-light d-none d-md-inline text-truncate ms-1" style="max-width: 140px; font-size: 0.85rem;">

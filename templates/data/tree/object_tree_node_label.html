@@ -1,17 +1,15 @@
-<div id="node-label-{{ node.uuid }}" 
-     class="d-flex align-items-center text-truncate flex-grow-1 py-0.5" 
-     hx-get="{% url 'object_detail' node.uuid %}" 
-     hx-target="#detail-container"
-     style="cursor: pointer; user-select: none;"
-     {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
-    
-    {% if node.children.all %}
-        <i class="bi bi-folder-fill text-warning me-2 fs-5 flex-shrink-0"></i>
-    {% else %}
-        <i class="bi bi-hdd-fill {% if is_active or active_object and active_object.uuid == node.uuid %}text-primary{% else %}text-secondary{% endif %} me-2 fs-5 flex-shrink-0"></i>
-    {% endif %}
-    
-    <span class="text-truncate small {% if is_active or active_object and active_object.uuid == node.uuid %}fw-bold text-primary{% else %}text-dark{% endif %}" title="{{ node.name|default:node.model.name }}">
-        {{ node.name|default:node.model.name }}
-    </span>
-</div>
+{% comment %}
+Кликабельная строка объекта. Используется и деревом, и проводником — id должен
+совпадать в обоих режимах, иначе OOB-обновление подсветки из карточки объекта
+уходит в никуда (так и было в режиме проводника).
+{% endcomment %}
+<button type="button"
+        id="node-label-{{ node.uuid }}"
+        class="tree-label {% if is_active or active_object and active_object.uuid == node.uuid %}is-active{% endif %}"
+        hx-get="{% url 'object_detail' node.uuid %}"
+        hx-target="#detail-container"
+        title="{{ node.name|default:node.model.name }}"
+        {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+    <i class="bi {% if node.children.all %}bi-folder-fill text-warning{% else %}bi-hdd-fill text-secondary{% endif %} tree-label-icon"></i>
+    <span class="text-truncate">{{ node.name|default:node.model.name }}</span>
+</button>

@@ -770,6 +770,8 @@ a:hover {
     transition: var(--transition-fast);
 }
 .file-row:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.file-row.is-overdue { border-color: rgba(239, 68, 68, 0.35); background-color: #fffbfa; }
+.file-row.is-overdue:hover { border-color: var(--danger); }
 .file-thumb {
     display: flex;
     align-items: center;
@@ -938,10 +940,15 @@ a:hover {
     transition: var(--transition-fast);
 }
 .option-card:hover { border-color: var(--border-strong); background-color: var(--surface-hover); }
-.option-card.is-selected {
+.option-card.is-selected,
+.option-card:has(input:checked) {
     border-color: var(--primary);
     background-color: var(--primary-light);
     box-shadow: 0 0 0 1px var(--primary) inset;
+}
+.option-card:has(input:focus-visible) {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
 .option-card .option-icon {
     display: flex;
@@ -1025,6 +1032,7 @@ a:hover {
 .spec-item .spec-val { flex: 1 1 60%; min-width: 0; font-weight: 600; color: var(--text-primary); }
 
 /* Выпадающий список подсказок */
+/* Выпадающий список подсказок и результатов поиска */
 .suggest-menu {
     position: absolute;
     top: calc(100% + 4px);
@@ -1040,6 +1048,12 @@ a:hover {
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
 }
+.suggest-menu-static {
+    position: static;
+    max-height: 380px;
+    box-shadow: var(--shadow-lg);
+}
+
 .suggest-item {
     display: flex;
     align-items: center;
@@ -1207,3 +1221,271 @@ a:hover {
     .detail-header { padding: 12px 14px 0; }
     .detail-body { padding: 14px 14px 72px; }
 }
+
+/* ==========================================================================
+   19. ЗАГОЛОВКИ РАЗДЕЛОВ И КАРТОЧКИ НАСТРОЕК
+   ========================================================================== */
+.section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.section-title i { color: var(--primary); font-size: 1.1rem; }
+.section-subtitle {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    flex-basis: 100%;
+}
+
+/* Карточка записи в настройках (правило, тип оборудования, webhook) */
+.entry-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 12px;
+    transition: var(--transition-fast);
+}
+.entry-card:hover { border-color: var(--border-strong); }
+.entry-card-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+}
+.entry-main { flex: 1 1 260px; min-width: 0; }
+.entry-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* Кликабельный заголовок записи: настоящая кнопка, доступная с клавиатуры */
+.entry-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 6px;
+    margin: -2px -6px;
+    border: 0;
+    background: transparent;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+.entry-title:hover { background-color: var(--surface-hover); color: var(--primary); }
+.entry-title .edit-icon { opacity: 0; font-size: 0.8em; color: var(--text-muted); transition: var(--transition-fast); }
+.entry-title:hover .edit-icon { opacity: 0.9; }
+.entry-meta {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+.entry-detail { padding: 0 16px 14px; }
+.entry-detail-title {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+/* Ссылка-чип на объект или модель */
+.chip-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 5px 11px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background-color: var(--card-bg);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: var(--transition-fast);
+}
+.chip-link:hover {
+    border-color: var(--primary);
+    background-color: var(--primary-light);
+    color: var(--primary-active);
+}
+.chip-link .chip-sub { color: var(--text-muted); }
+
+/* Единый признак «заблокировано» вместо кнопки удаления */
+.lock-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-hover);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* ==========================================================================
+   20. ПЛИТКИ ДАШБОРДА
+   ========================================================================== */
+.stat-tile {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    height: 100%;
+    padding: 15px 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background-color: var(--card-bg);
+    box-shadow: var(--shadow-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: var(--transition-base);
+}
+.stat-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+    border-color: rgba(37, 99, 235, 0.35);
+}
+.stat-tile:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+.stat-tile.is-active {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary) inset, var(--shadow-sm);
+}
+.stat-tile.is-alert { border-color: rgba(239, 68, 68, 0.35); background-color: #fffbfa; }
+.stat-tile.is-alert.is-active { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger) inset, var(--shadow-sm); }
+
+.stat-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: var(--radius-md);
+    font-size: 1.25rem;
+}
+.stat-body { flex-grow: 1; min-width: 0; }
+.stat-label {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.stat-value { font-size: 1.45rem; font-weight: 700; line-height: 1.1; margin-top: 3px; }
+.stat-value.is-danger { color: var(--danger); }
+.stat-progress {
+    height: 6px;
+    border-radius: 999px;
+    background-color: var(--surface-active);
+    overflow: hidden;
+    margin-top: 7px;
+}
+.stat-progress > span { display: block; height: 100%; border-radius: 999px; background-color: var(--primary); }
+.stat-progress.is-success > span { background-color: var(--success); }
+
+/* ==========================================================================
+   21. ФОКУС-СОСТОЯНИЯ ДЛЯ КЛАВИАТУРЫ
+   ========================================================================== */
+.editable-trigger:focus-visible,
+.entry-title:focus-visible,
+.seg-tab:focus-visible,
+.chip-link:focus-visible,
+.suggest-item:focus-visible,
+.option-card:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+.editable-trigger:focus-visible .edit-icon,
+.entry-title:focus-visible .edit-icon { opacity: 0.9; }
+
+/* ==========================================================================
+   22. СТРОКА ОБЪЕКТА В ДЕРЕВЕ И ПРОВОДНИКЕ
+   ========================================================================== */
+.tree-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-grow: 1;
+    min-width: 0;
+    padding: 4px 8px;
+    /* Прозрачная рамка держит место: у активной строки она становится видимой,
+       и содержимое не сдвигается на два пикселя. */
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+    transition: var(--transition-fast);
+}
+.tree-label:hover { background-color: var(--surface-hover); }
+.tree-label:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.tree-label.is-active {
+    background-color: var(--primary-light);
+    border-color: rgba(37, 99, 235, 0.35);
+    color: var(--primary-active);
+    font-weight: 600;
+}
+.tree-label-icon { font-size: 1.05rem; flex-shrink: 0; }
+.tree-label.is-active .tree-label-icon { color: var(--primary) !important; }
+
+/* Кнопки навигации проводника */
+.explorer-crumb {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+.explorer-crumb:hover { background-color: var(--surface-hover); color: var(--primary); }
+.explorer-crumb:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.explorer-crumb.is-root { color: var(--primary); font-weight: 700; }
+
+.explorer-up {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-hover);
+    color: var(--primary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+.explorer-up:hover { background-color: var(--surface-active); }
+.explorer-up:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }

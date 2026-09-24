@@ -148,9 +148,21 @@ def settings_page(request):
 def create_object_type_view(request):
     """Создание нового типа оборудования из настроек"""
     name = request.POST.get('type', '').strip()
-    if name:
-        ObjectType.objects.get_or_create(type=name)
-            
+    if not name:
+        return htmx_error("Укажите название типа оборудования.",
+                          retarget='#addObjectTypeModal .form-feedback')
+
+    if ObjectType.objects.filter(type__iexact=name).exists():
+        return htmx_error(f"Тип оборудования «{name}» уже существует.",
+                          status=409, retarget='#addObjectTypeModal .form-feedback')
+
+    try:
+        with transaction.atomic():
+            ObjectType.objects.create(type=name)
+    except IntegrityError:
+        return htmx_error(f"Тип оборудования «{name}» уже существует.",
+                          status=409, retarget='#addObjectTypeModal .form-feedback')
+
     response = HttpResponse()
     response['HX-Redirect'] = '/settings/?tab=object_types'
     return response
@@ -221,9 +233,12 @@ def edit_rule_settings_view(request, pk):
 
         rule_obj = form.save()
 
-        # Пересчитываем даты для объектов с этим правилом
+        # Правило изменилось — прежние даты рассчитаны по старым параметрам,
+        # поэтому считаем заново от сегодняшнего дня, а не от старого срока.
         for obj in rule_obj.data_objects.all():
-            obj.next_maintenance_date = calculate_next_maintenance_date(obj, base_date=timezone.localdate())
+            obj.next_maintenance_date = calculate_next_maintenance_date(
+                obj, base_date=timezone.localdate(), use_anchor=False
+            )
             obj.save(update_fields=['next_maintenance_date'])
 
         response = HttpResponse()
@@ -242,6 +257,7 @@ def edit_rule_settings_view(request, pk):
 
     return render(request, 'data/settings/edit_rule_modal.html', {
         'rule_obj': rule_obj,
+        'rule_error_id': f'rule-error-{rule_obj.uuid}',
         'strategy': strategy,
         'anchor': anchor,
         'years': years,
@@ -271,13 +287,6 @@ def delete_rule_view(request, pk):
 
 
 # --- ЭКСПОРТ ДАННЫХ ---
-
-@login_required
-@role_required(['admin', 'superuser'])
-def export_modal_view(request):
-    """Модальное окно выбора опции экспорта данных в XLSX"""
-    return render(request, 'data/export_modal.html')
-
 
 @login_required
 @role_required(['admin', 'superuser'])
@@ -622,21 +631,8 @@ def toggle_explorer_mode_view(request):
 
         request.session.modified = True
         
-        icon_class = "bi-folder2-open text-warning" if new_mode == 'flat' else "bi-diagram-3-fill text-info"
-        title_text = "Проводник (кликните для перехода в Дерево)" if new_mode == 'flat' else "Дерево (кликните для перехода в Проводник)"
-        
-        html = f"""
-        <button type="button"
-                id="explorer-toggle-btn"
-                class="header-nav-btn"
-                hx-post="/dict/toggle-explorer-mode/"
-                hx-target="#explorer-toggle-btn"
-                hx-swap="outerHTML"
-                style="width: 34px; height: 34px; border-radius: 8px; background-color: rgba(255, 255, 255, 0.06);"
-                title="Режим справочника: {title_text}">
-            <i class="bi {icon_class} fs-6" style="line-height: 1;"></i>
-        </button>
-        """
+        html = render_to_string('includes/explorer_toggle_btn.html',
+                                {'explorer_mode': new_mode}, request=request)
         
         response = HttpResponse(html)
         response['HX-Trigger'] = 'explorerModeChanged'
@@ -679,12 +675,6 @@ def explorer_up_view(request):
 
 
 @login_required
-def object_tree_view(request):
-    roots = DataObject.objects.filter(parent__isnull=True).prefetch_related('children').order_by('name')
-    return render(request, 'data/tree/object_tree_list.html', {'objects': roots})
-
-
-@login_required
 def object_children_view(request, parent_uuid):
     parent = get_object_or_404(DataObject, pk=parent_uuid)
     children = parent.children.all().prefetch_related('children').order_by('name')
@@ -706,14 +696,6 @@ def object_children_view(request, parent_uuid):
         'active_object': active_object,
         'parent_uuids': parent_uuids,
     })
-
-
-@login_required
-def model_tree_view(request):
-    object_types = ObjectType.objects.prefetch_related(
-        Prefetch('models', queryset=ObjectModel.objects.all().order_by('name'))
-    ).order_by('type')
-    return render(request, 'data/tree/model_tree_list.html', {'object_types': object_types})
 
 
 # --- ОБСЛУЖИВАНИЕ ОБЪЕКТА ---
@@ -942,7 +924,9 @@ def create_object_view(request):
 
         scheduling_mode = request.POST.get('maintenance_scheduling_mode', 'manual')
         if scheduling_mode == 'auto' and selected_rule:
-            first_date = calculate_next_maintenance_date(new_obj, base_date=timezone.localdate())
+            first_date = calculate_next_maintenance_date(
+                new_obj, base_date=timezone.localdate(), use_anchor=False
+            )
             new_obj.next_maintenance_date = first_date
             new_obj.save(update_fields=['next_maintenance_date'])
             
@@ -2114,18 +2098,24 @@ def reset_suggestion_view(request):
 
 
 @login_required
-@require_POST
+@require_http_methods(["GET", "POST"])
 def specs_builder_view(request):
-    keys = request.POST.getlist('spec_keys')
-    values = request.POST.getlist('spec_values')
+    """
+    Конструктор характеристик модели. Ничего не сохраняет: собирает состояние
+    из переданных полей и возвращает разметку, поэтому GET здесь безопасен —
+    именно им модальное окно загружает пустой конструктор при открытии.
+    """
+    data = request.POST if request.method == 'POST' else request.GET
+    keys = data.getlist('spec_keys')
+    values = data.getlist('spec_values')
     specs = dict(zip(keys, values))
     
-    new_key = request.POST.get('new_key', '').strip()
-    new_value = request.POST.get('new_value', '').strip()
+    new_key = data.get('new_key', '').strip()
+    new_value = data.get('new_value', '').strip()
     if new_key and new_value:
         specs[new_key] = new_value
         
-    remove_key = request.POST.get('remove_key')
+    remove_key = data.get('remove_key')
     if remove_key:
         specs.pop(remove_key, None)
         
@@ -2136,8 +2126,15 @@ def specs_builder_view(request):
 
 # --- КОНСТРУКТОР ПРАВИЛ И РАСЧЕТ СРОКОВ ТО ---
 
-def calculate_next_maintenance_date(data_object, base_date=None):
-    """Рассчитывает следующую дату ТО типа datetime.date"""
+def calculate_next_maintenance_date(data_object, base_date=None, use_anchor=True):
+    """
+    Рассчитывает следующую дату ТО (datetime.date).
+
+    use_anchor=False отключает привязку к прежнему плановому сроку. Это нужно,
+    когда правило меняют или только что привязывают к объекту: прежняя дата
+    рассчитана по другому правилу, и отталкиваться от неё некорректно —
+    срок считается заново от base_date.
+    """
     if not data_object.date_update_rule:
         return None
         
@@ -2151,7 +2148,7 @@ def calculate_next_maintenance_date(data_object, base_date=None):
     elif isinstance(base_date, datetime):
         base_date = base_date.date()
         
-    if anchor_type == 'scheduled' and data_object.next_maintenance_date:
+    if use_anchor and anchor_type == 'scheduled' and data_object.next_maintenance_date:
         base_date = data_object.next_maintenance_date
 
     if strategy == 'relative':
@@ -2231,7 +2228,8 @@ def rules_dates_builder_view(request):
     
     return render(request, 'data/includes/rules_dates_builder.html', {
         'dates': dates,
-        'month_names': MONTH_NAMES
+        'month_names': MONTH_NAMES,
+        'mode': 'edit' if request.POST.get('mode') == 'edit' else 'create',
     })
 
 
@@ -2243,6 +2241,9 @@ def rule_constructor_view(request):
     context = {
         'strategy': strategy,
         'anchor': anchor,
+        # Окна создания и редактирования правила живут на одной странице,
+        # поэтому идентификаторы полей разделяются по режиму.
+        'mode': 'edit' if request.GET.get('mode') == 'edit' else 'create',
         'years': 0,
         'months': 6,
         'days': 0,
@@ -2309,7 +2310,10 @@ def edit_rule_view(request, pk):
                 
             if selected_rule:
                 obj.date_update_rule = selected_rule
-                obj.next_maintenance_date = calculate_next_maintenance_date(obj, base_date=timezone.localdate())
+                # Правило только что назначено — стартуем от сегодняшнего дня.
+                obj.next_maintenance_date = calculate_next_maintenance_date(
+                    obj, base_date=timezone.localdate(), use_anchor=False
+                )
                 obj.save(update_fields=['date_update_rule', 'next_maintenance_date'])
                 
         rule_name = obj.date_update_rule.name if obj.date_update_rule else 'ручной ввод'
@@ -2526,12 +2530,20 @@ def deep_clone_object(source_obj, new_root_name, new_parent=None, source_root_na
         description=source_obj.description
     )
     
-    # 3. Фиксируем создание в истории объекта
+    # 3. Фиксируем создание в истории объекта.
+    # Факт копирования намеренно не упоминаем: в истории объекта важно, что
+    # он появился в системе, а не каким способом его завели.
+    if new_parent:
+        parent_name = new_parent.name or new_parent.model.name
+        action_desc = f"Объект зарегистрирован в системе в составе родительского объекта '{parent_name}'."
+    else:
+        action_desc = "Объект зарегистрирован в системе как корневой объект."
+
     ActionHistory.objects.create(
         user=user,
         data_object=cloned_obj,
         action_type='create',
-        action=f"Объект создан копированием из '{source_obj.name or source_obj.model.name}'."
+        action=action_desc
     )
     
     # 4. Рекурсивно клонируем всех потомков

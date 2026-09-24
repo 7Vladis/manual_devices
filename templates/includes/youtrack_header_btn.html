@@ -1,0 +1,16 @@
+{% comment %}
+Индикатор состояния YouTrack в шапке. Отдельный фрагмент: модальное окно
+токена возвращает его же OOB-свопом, чтобы цвет менялся сразу после сохранения.
+{% endcomment %}
+<button type="button"
+        id="youtrack-header-btn"
+        class="header-nav-btn"
+        data-bs-toggle="modal"
+        data-bs-target="#userTokenModal"
+        hx-get="{% url 'users:profile_youtrack_token' %}"
+        hx-target="#user-token-modal-content"
+        title="{% if request.user.youtrack_token %}YouTrack: токен настроен — нажмите, чтобы изменить{% else %}YouTrack: токен не настроен — нажмите, чтобы указать{% endif %}"
+        aria-label="Персональный токен YouTrack"
+        {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+    <i class="bi bi-hdd-network-fill {% if request.user.youtrack_token %}text-success{% else %}text-danger{% endif %} fs-6"></i>
+</button>
