@@ -22,9 +22,15 @@ COPY . .
 EXPOSE 8000
 
 # Production-сервер. Dev-сервер (runserver) запускается вручную при отладке.
+# --no-control-socket: сокет управления gunicorn (появился в 25.1) по умолчанию
+# создаётся в $XDG_RUNTIME_DIR или $HOME/.gunicorn/. В compose контейнер работает
+# под user 1000:1000, которого нет в /etc/passwd, поэтому HOME оказывается «/» —
+# и gunicorn пишет в лог «Permission denied: /.gunicorn». Управлять сервисом через
+# gunicornc мы не собираемся, так что сокет просто не нужен.
 CMD ["gunicorn", "core.wsgi:application", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "3", \
      "--timeout", "60", \
      "--access-logfile", "-", \
-     "--error-logfile", "-"]
+     "--error-logfile", "-", \
+     "--no-control-socket"]
