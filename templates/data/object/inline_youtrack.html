@@ -51,17 +51,15 @@
 
         {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon"></i>{% endif %}
 
-        <!-- Индикатор результата последней синхронизации -->
-        {% if obj.youtrack_issue_id %}
-            {% if sync_status == 'success' %}
-                <i class="bi bi-check-circle-fill text-success ms-2 flex-shrink-0"
-                   style="cursor: help;"
-                   title="{{ sync_message|default:'Синхронизировано с YouTrack' }}"></i>
-            {% elif sync_status == 'error' %}
-                <i class="bi bi-exclamation-circle-fill text-danger ms-2 flex-shrink-0 animate-fade"
-                   style="cursor: help;"
-                   title="Ошибка синхронизации: {{ sync_message }}"></i>
-            {% endif %}
+        {% comment %}
+        Итог синхронизации показывает пилюля в шапке карточки: запрос в
+        YouTrack идёт из воркера, и к моменту ответа на правку поля он ещё
+        не выполнен. Здесь достаточно сказать, что данные запрошены.
+        {% endcomment %}
+        {% if sync_queued %}
+            <i class="bi bi-arrow-repeat text-muted ms-2 flex-shrink-0 animate-fade"
+               style="cursor: help;"
+               title="Данные из YouTrack запрошены — состояние видно на пилюле в шапке"></i>
         {% endif %}
     </span>
 {% endif %}

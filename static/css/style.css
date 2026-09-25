@@ -1,158 +1,259 @@
 /* ==========================================================================
-   1. ДИЗАЙН-ТОКЕНЫ И CSS-ПЕРЕМЕННЫЕ
+   ManDev — единая дизайн-система
+
+   Принцип: цвет означает только срок и состояние оборудования. Хром
+   интерфейса нейтрально-графитовый, чтобы красный «просрочено» был
+   единственным громким пятном на экране.
+
+   1.  Токены
+   2.  База и типографика
+   3.  Кнопки и элементы управления
+   4.  Поверхности: панель, строка, карточка
+   5.  Шапка приложения
+   6.  План ТО: фильтры и сгруппированный список
+   7.  Датовая рейка и статус-пилюли
+   8.  Дерево и проводник
+   9.  Карточка объекта: каркас, паспорт, вкладки
+   10. Ленты: комментарии, файлы, история
+   11. Формы и модальные окна
+   12. Подсказки и результаты поиска
+   13. Настройки: строки записей
+   14. Уведомления и индикаторы
+   15. Markdown
+   16. Совместимость с Bootstrap-утилитами
+   17. Фокус, движение, адаптивность
+   ========================================================================== */
+
+/* ==========================================================================
+   1. ТОКЕНЫ
    ========================================================================== */
 :root {
-    /* Фоновые поверхности */
-    --app-bg: #f8fafc;
-    --card-bg: #ffffff;
-    --surface-hover: #f1f5f9;
-    --surface-active: #e2e8f0;
+    /* Поверхности */
+    --ground: #eceff4;
+    --paper: #ffffff;
+    --surface-hover: #f1f4f8;
+    --surface-active: #e3e8ef;
+    --surface-sunken: #f6f8fa;
 
-    /* Текст */
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
-    --text-muted: #94a3b8;
+    /* Графит: текст и хром */
+    --ink: #16202b;
+    --ink-soft: #46535f;
+    --ink-faint: #76838f;
 
-    /* Границы */
-    --border-subtle: #e2e8f0;
-    --border-strong: #cbd5e1;
+    /* Линейки */
+    --line: #d6dce3;
+    --line-strong: #b6bfc9;
 
-    /* Акцентный цвет (CTA) */
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --primary-active: #1e40af;
-    --primary-light: #eff6ff;
+    /* Синий: действия, ссылки, выделение, фокус */
+    --steel: #0f6ecd;
+    --steel-hover: #0b57a4;
+    --steel-tint: #e8f1fd;
+    --steel-edge: #a5c8f1;
 
-    /* Статусные цвета */
-    --success: #10b981;
-    --success-light: #ecfdf5;
-    --danger: #ef4444;
-    --danger-light: #fef2f2;
-    --warning: #f59e0b;
-    --warning-light: #fffbeb;
-    --info: #06b6d4;
-    --info-light: #ecfeff;
-    --purple: #8b5cf6;
-    --purple-light: #f5f3ff;
+    /* Шкала срочности */
+    --overdue: #d92d20;
+    --overdue-tint: #fdecea;
+    --overdue-edge: #f4b5af;
+    --due: #dd7a01;
+    --due-tint: #fff4e3;
+    --due-edge: #f8cf96;
+    --done: #16874c;
+    --done-tint: #e7f6ed;
+    --done-edge: #a3dcbb;
 
-    /* Тени и радиусы */
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
-    --shadow-hover: 0 8px 20px -4px rgba(37, 99, 235, 0.12);
+    /* Совместимость со старыми именами (используются в шаблонах) */
+    --app-bg: var(--ground);
+    --card-bg: var(--paper);
+    --text-primary: var(--ink);
+    --text-secondary: var(--ink-soft);
+    --text-muted: var(--ink-faint);
+    --border-subtle: var(--line);
+    --border-strong: var(--line-strong);
+    --primary: var(--steel);
+    --primary-hover: var(--steel-hover);
+    --primary-active: var(--steel-hover);
+    --primary-light: var(--steel-tint);
+    --success: var(--done);
+    --success-light: var(--done-tint);
+    --danger: var(--overdue);
+    --danger-light: var(--overdue-tint);
+    --warning: var(--due);
+    --warning-light: var(--due-tint);
+    --info: var(--steel);
+    --info-light: var(--steel-tint);
+    --purple: #6d4bb8;
+    --purple-light: #f1ecfb;
 
-    /* Анимации */
-    --transition-fast: all 0.15s ease;
-    --transition-base: all 0.2s ease-in-out;
+    /* Геометрия */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+
+    /* Тень только у того, что действительно парит */
+    --shadow-sm: 0 1px 2px rgba(22, 32, 43, 0.06);
+    --shadow-md: 0 6px 16px -6px rgba(22, 32, 43, 0.18);
+    --shadow-lg: 0 18px 40px -12px rgba(22, 32, 43, 0.3);
+    --shadow-hover: var(--shadow-md);
+
+    --transition-fast: 0.12s ease;
+    --transition-base: 0.18s ease;
+
+    /* Ширина датовой рейки — общая для плана, дерева и карточки */
+    --rail: 66px;
+
+    /* Переопределение переменных Bootstrap: утилиты в шаблонах
+       подхватывают новую палитру без правки разметки. */
+    --bs-primary: var(--steel);
+    --bs-primary-rgb: 15, 110, 205;
+    --bs-secondary-rgb: 70, 83, 95;
+    --bs-success: var(--done);
+    --bs-success-rgb: 22, 135, 76;
+    --bs-danger: var(--overdue);
+    --bs-danger-rgb: 217, 45, 32;
+    --bs-warning: var(--due);
+    --bs-warning-rgb: 221, 122, 1;
+    --bs-info-rgb: 15, 110, 205;
+    --bs-dark-rgb: 22, 32, 43;
+    --bs-body-color: var(--ink);
+    --bs-body-bg: var(--ground);
+    --bs-border-color: var(--line);
+    --bs-link-color: var(--steel);
+    --bs-link-hover-color: var(--steel-hover);
+    --bs-border-radius: var(--radius-md);
+    --bs-font-sans-serif: "Golos Text", ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 /* ==========================================================================
-   2. БАЗОВЫЕ СТИЛИ И СБРОС
+   2. БАЗА И ТИПОГРАФИКА
    ========================================================================== */
-*, *::before, *::after {
-    box-sizing: border-box;
-}
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
-    background-color: var(--app-bg);
-    color: var(--text-primary);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 0.9rem;
-    line-height: 1.5;
+    background-color: var(--ground);
+    color: var(--ink);
+    font-family: "Golos Text", ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* Инвентарные номера, даты и счётчики выстраиваются в колонку */
+body { font-variant-numeric: tabular-nums; }
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
 }
 
 a {
-    color: var(--primary);
+    color: var(--steel);
     text-decoration: none;
-    transition: var(--transition-fast);
+    transition: color var(--transition-fast);
+}
+a:hover { color: var(--steel-hover); }
+
+small, .small { font-size: 0.86em; }
+
+/* Подпись поля: предложением, без прописных и трекинга */
+.label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-faint);
+    line-height: 1.3;
 }
 
-a:hover {
-    color: var(--primary-hover);
-}
-
-/* Аккуратный тонкий скроллбар */
-::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-::-webkit-scrollbar-track {
-    background: transparent;
-}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
+    background: var(--line-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
 }
-::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
+::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); background-clip: content-box; }
 
 /* ==========================================================================
    3. КНОПКИ И ЭЛЕМЕНТЫ УПРАВЛЕНИЯ
    ========================================================================== */
 .btn {
+    --bs-btn-focus-box-shadow: none;
     font-weight: 500;
-    font-size: 0.85rem;
-    border-radius: var(--radius-sm);
-    padding: 0.45rem 0.9rem;
+    font-size: 13px;
+    line-height: 1.3;
+    border-radius: var(--radius-md);
+    padding: 7px 13px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.35rem;
-    transition: var(--transition-fast);
+    gap: 6px;
+    border: 1px solid transparent;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
+.btn:active { transform: none; }
 
+/* Основное действие — синий. Шкала срочности остаётся только за сроками:
+   красным в интерфейсе подсвечивается просрочка, а не кнопки. */
 .btn-primary {
-    background-color: var(--primary);
-    border-color: var(--primary);
+    background-color: var(--steel);
+    border-color: var(--steel);
     color: #fff;
 }
-.btn-primary:hover {
-    background-color: var(--primary-hover);
-    border-color: var(--primary-hover);
+.btn-primary:hover,
+.btn-primary:focus-visible {
+    background-color: var(--steel-hover);
+    border-color: var(--steel-hover);
     color: #fff;
+}
+.btn-primary:disabled, .btn-primary.disabled {
+    background-color: var(--ink-faint);
+    border-color: var(--ink-faint);
+    opacity: 0.6;
 }
 
 .btn-success {
-    background-color: var(--success);
-    border-color: var(--success);
+    background-color: var(--done);
+    border-color: var(--done);
     color: #fff;
 }
-.btn-success:hover {
-    background-color: #059669;
-    border-color: #059669;
-    color: #fff;
-}
+.btn-success:hover { background-color: #275a3a; border-color: #275a3a; color: #fff; }
 
 .btn-danger {
-    background-color: var(--danger);
-    border-color: var(--danger);
+    background-color: var(--overdue);
+    border-color: var(--overdue);
     color: #fff;
 }
-.btn-danger:hover {
-    background-color: #dc2626;
-    border-color: #dc2626;
-    color: #fff;
+.btn-danger:hover { background-color: #b5231a; border-color: #b5231a; color: #fff; }
+
+.btn-light,
+.btn-outline-secondary {
+    background-color: var(--paper);
+    border-color: var(--line-strong);
+    color: var(--ink-soft);
+}
+.btn-light:hover,
+.btn-outline-secondary:hover {
+    background-color: var(--surface-hover);
+    border-color: var(--ink-faint);
+    color: var(--ink);
 }
 
-.btn-light {
-    background-color: #f1f5f9;
-    border-color: var(--border-subtle);
-    color: var(--text-secondary);
+.btn-link {
+    color: var(--steel);
+    text-decoration: none;
+    border: 0;
+    padding: 4px 6px;
 }
-.btn-light:hover {
-    background-color: var(--surface-active);
-    color: var(--text-primary);
-}
+.btn-link:hover { color: var(--steel-hover); background-color: var(--surface-hover); }
 
-/* Кнопки иконок */
+.btn-sm { font-size: 12px; padding: 5px 10px; }
+
+/* Квадратная кнопка-иконка */
 .btn-icon {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     padding: 0;
     border-radius: var(--radius-sm);
     display: inline-flex;
@@ -161,338 +262,874 @@ a:hover {
     line-height: 1;
 }
 
-/* ==========================================================================
-   4. КАРТОЧКИ И КОМПОНЕНТЫ СЕТКИ
-   ========================================================================== */
-.card {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-subtle);
+.form-control, .form-select {
+    font-size: 13px;
+    border-color: var(--line-strong);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-    transition: var(--transition-base);
+    color: var(--ink);
+    background-color: var(--paper);
 }
-
-.clickable-card {
-    cursor: pointer;
-    user-select: none;
+.form-control:focus, .form-select:focus {
+    border-color: var(--steel);
+    box-shadow: 0 0 0 3px rgba(31, 79, 120, 0.15);
 }
-.clickable-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-hover);
-    border-color: rgba(37, 99, 235, 0.3);
+.form-control::placeholder { color: var(--ink-faint); }
+
+.form-check-input:checked {
+    background-color: var(--steel);
+    border-color: var(--steel);
 }
+.form-check-input:focus { box-shadow: 0 0 0 3px rgba(31, 79, 120, 0.15); border-color: var(--steel); }
 
-/* Служебные цветовые плашки */
-.bg-light-primary { background-color: var(--primary-light) !important; }
-.bg-light-success { background-color: var(--success-light) !important; }
-.bg-light-danger  { background-color: var(--danger-light) !important; }
-.bg-light-warning { background-color: var(--warning-light) !important; }
-.bg-light-info    { background-color: var(--info-light) !important; }
-.bg-light-purple  { background-color: var(--purple-light) !important; }
-
-.text-purple { color: var(--purple) !important; }
-.text-cyan   { color: var(--info) !important; }
-
-.hover-bg-light:hover {
+.dropdown-menu {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 5px;
+    font-size: 13px;
+}
+.dropdown-item {
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    padding: 7px 10px;
+}
+.dropdown-item:hover, .dropdown-item:focus {
     background-color: var(--surface-hover);
+    color: var(--ink);
 }
-
-.overdue-card {
-    border: 1px solid rgba(239, 68, 68, 0.35) !important;
-    background-color: #fffbfa !important;
-}
-
-.overdue-card:hover {
-    border-color: var(--danger) !important;
-    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.12) !important;
-}
+.dropdown-divider { border-color: var(--line); opacity: 1; }
 
 /* ==========================================================================
-   5. ШАПКА И НАВИГАЦИЯ
+   4. ПОВЕРХНОСТИ
    ========================================================================== */
-.app-header {
-    background-color: #0f172a;
-    border-bottom: 1px solid #1e293b;
-    height: 56px;
-    min-height: 56px;
-    z-index: 1030;
+.panel,
+.card {
+    background-color: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: none;
 }
 
-.header-nav-btn {
-    width: 36px;
-    height: 36px;
-    padding: 0;
+.panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line);
+}
+.panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+}
+.panel-title i { color: var(--ink-faint); font-size: 15px; }
+.panel-body { padding: 14px; }
+
+.clickable-card { cursor: pointer; user-select: none; }
+.clickable-card:hover { border-color: var(--line-strong); background-color: var(--surface-hover); }
+
+/* Пустые состояния: приглашение к действию, а не настроение */
+.empty-state {
+    text-align: center;
+    padding: 34px 20px;
+    color: var(--ink-faint);
+}
+.empty-state .empty-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: #94a3b8;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    background-color: var(--surface-hover);
+    color: var(--ink-faint);
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+.empty-state .empty-title {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 3px;
+}
+.empty-state .empty-hint {
+    display: block;
+    font-size: 13px;
+    color: var(--ink-faint);
+    max-width: 46ch;
+    margin: 0 auto;
+}
+
+/* Заголовок раздела */
+.section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+}
+.section-title i { color: var(--ink-faint); font-size: 16px; }
+.section-subtitle {
+    margin: 3px 0 0;
+    font-size: 13px;
+    color: var(--ink-faint);
+    flex-basis: 100%;
+    max-width: 78ch;
+}
+
+/* ==========================================================================
+   5. ШАПКА ПРИЛОЖЕНИЯ
+   ========================================================================== */
+.app-header {
+    background-color: var(--ink);
+    height: 52px;
+    min-height: 52px;
+    z-index: 1030;
+    color: #e6e9ec;
+}
+
+.header-nav { display: flex; align-items: center; gap: 2px; }
+
+.header-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 32px;
+    padding: 0 11px;
+    color: #a7b0ba;
     background: transparent;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    transition: var(--transition-fast);
+    border: 0;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
 }
-.header-nav-btn:hover {
-    color: #ffffff;
-    background-color: rgba(255, 255, 255, 0.1);
-}
+.header-nav-btn i { font-size: 14px; }
+.header-nav-btn:hover { color: #fff; background-color: rgba(255, 255, 255, 0.08); }
 .header-nav-btn.active {
-    color: #ffffff;
-    background-color: var(--primary);
-    border-color: var(--primary);
-    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.14);
+    font-weight: 600;
 }
 
 .header-search {
-    width: 100%;
-    max-width: 440px;
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 460px;
 }
 .header-search .form-control {
-    background-color: #1e293b;
-    border: 1px solid #334155;
-    color: #f8fafc;
-    font-size: 0.85rem;
-    height: 36px;
-    border-radius: var(--radius-sm);
-    padding-left: 2.2rem;
+    background-color: #242c34;
+    border: 1px solid #333c46;
+    color: #eef1f4;
+    font-size: 13px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    padding-left: 32px;
 }
 .header-search .form-control:focus {
-    background-color: #0f172a;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
-    color: #ffffff;
+    background-color: #1f262d;
+    border-color: #55626e;
+    box-shadow: none;
+    color: #fff;
 }
-.header-search .form-control::placeholder {
-    color: #64748b;
-}
+.header-search .form-control::placeholder { color: #7d8792; }
 .header-search-icon {
     position: absolute;
     left: 10px;
     top: 50%;
     transform: translateY(-50%);
-    color: #64748b;
+    color: #7d8792;
+    font-size: 13px;
     pointer-events: none;
     z-index: 4;
 }
 
-/* ==========================================================================
-   6. ИНЛАЙН-РЕДАКТИРОВАНИЕ БЕЗ СДВИГОВ ВЕРСТКИ
-   ========================================================================== */
-.editable-trigger {
+/* Правый тулбар */
+.header-tool {
     display: inline-flex;
     align-items: center;
-    padding: 2px 6px;
-    margin: -2px -6px;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #ccd3da;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.header-tool:hover { background-color: rgba(255, 255, 255, 0.16); color: #fff; }
+.header-tool i { font-size: 14px; }
+.header-tool.is-square { width: 32px; padding: 0; justify-content: center; }
+/* Состояние интеграции показывает цвет иконки, а не заливка кнопки:
+   заливка спорила бы с красным «просрочено» в списке работ. */
+.header-tool.is-alert i { color: #e2736b; }
+.header-tool.is-ok i { color: #7fbf99; }
+
+/* Кто вошёл: подпись, а не меню — внутри было бы только то,
+   что и так лежит рядом в тулбаре. */
+.header-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 4px 0 2px;
+    color: #ccd3da;
+    font-size: 13px;
+    white-space: nowrap;
+}
+.header-user .avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
     border-radius: var(--radius-sm);
+    background-color: #3b4650;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+}
+/* ==========================================================================
+   6. ПЛАН ТО: ФИЛЬТРЫ И СГРУППИРОВАННЫЙ СПИСОК
+   ========================================================================== */
+.plan-page {
+    width: 100%;
+    max-width: 1180px;
+    /* Страница — flex-элемент main; без min-width: 0 она растягивалась бы
+       до min-content содержимого и уезжала за край на узком экране. */
+    min-width: 0;
+    margin: 0 auto;
+    padding: 20px 20px 40px;
+}
+
+.plan-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.plan-head h1 {
+    margin: 0;
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+.plan-head .plan-today { font-size: 13px; color: var(--ink-faint); }
+
+/* Полоса фильтров: показатель и фильтр в одном элементе */
+.plan-filters {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    background-color: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 22px;
+}
+
+.stat-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-start;
+    min-width: 0;
+    padding: 12px 15px 13px;
+    border: 0;
+    border-left: 1px solid var(--line);
+    border-bottom: 2px solid transparent;
+    background-color: transparent;
+    text-align: left;
     cursor: pointer;
-    transition: var(--transition-fast);
+    transition: background-color var(--transition-fast);
 }
-.editable-trigger:hover {
-    background-color: #e2e8f0;
+.stat-tile:first-child { border-left: 0; }
+.stat-tile:hover { background-color: var(--surface-hover); }
+.stat-tile.is-active {
+    background-color: var(--surface-sunken);
+    border-bottom-color: var(--steel);
 }
-.editable-trigger .edit-icon {
-    opacity: 0;
-    margin-left: 6px;
-    font-size: 0.8em;
-    color: var(--text-muted);
-    transition: var(--transition-fast);
+
+/* Просрочка — единственная цифра, которая требует действия сегодня.
+   Она окрашена всегда, а не только когда плитка выбрана. */
+.stat-tile.is-alert {
+    background-color: var(--overdue-tint);
+    box-shadow: inset 4px 0 0 var(--overdue);
 }
-.editable-trigger:hover .edit-icon {
-    opacity: 0.8;
+.stat-tile.is-alert:hover { background-color: #fbe2df; }
+.stat-tile.is-alert .stat-label { color: var(--overdue); font-weight: 600; }
+.stat-tile.is-alert .stat-note { color: var(--overdue); }
+.stat-tile.is-alert.is-active { border-bottom-color: var(--overdue); }
+
+.stat-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-faint);
+    text-transform: none;
+    letter-spacing: 0;
 }
-.editable-trigger .edit-icon:hover {
-    opacity: 1;
-    color: var(--primary);
+.stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+}
+.stat-value.is-danger { color: var(--overdue); font-size: 30px; }
+.stat-value .stat-of {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink-faint);
+    letter-spacing: 0;
+}
+.stat-note { font-size: 12px; color: var(--ink-faint); text-align: left; }
+
+.stat-progress {
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    background-color: var(--surface-active);
+    overflow: hidden;
+}
+/* Полоса показывает выполнение плана, поэтому она всегда зелёная:
+   у недели и месяца это одна и та же величина. */
+.stat-progress > span {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background-color: var(--done);
+}
+
+/* Группа списка */
+.plan-group + .plan-group { margin-top: 24px; }
+.plan-group-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding-bottom: 7px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--line-strong);
+}
+.plan-group-head h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+}
+.plan-group-head .group-count {
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-left: auto;
+}
+.plan-group.is-overdue .plan-group-head { border-bottom-color: var(--overdue-edge); }
+.plan-group.is-overdue .plan-group-head h2 { color: var(--overdue); }
+
+/* Строка плана */
+.plan-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.plan-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: 0;
+    background-color: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+.plan-row:hover { border-color: var(--line-strong); }
+.plan-row:focus-within { border-color: var(--steel); }
+
+.plan-row-main {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 9px 12px;
+    color: inherit;
+    text-decoration: none;
+}
+.plan-row-main:hover { color: inherit; background-color: var(--surface-hover); }
+
+.plan-names { flex: 1 1 auto; min-width: 0; }
+.plan-name {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.plan-sub {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+}
+.plan-inv {
+    flex: 0 0 auto;
+    width: 108px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.plan-inv.is-empty { color: var(--ink-faint); }
+
+.plan-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 10px 0 4px;
+    border-left: 1px solid var(--line);
+    background-color: var(--surface-sunken);
 }
 
 /* ==========================================================================
-   7. HTMX: АНИМАЦИИ И ИНДИКАТОРЫ ЗАГРУЗКИ
+   7. ДАТОВАЯ РЕЙКА И СТАТУС-ПИЛЮЛИ
    ========================================================================== */
-#global-progress-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 0%;
-    height: 3px;
-    background: linear-gradient(90deg, #3b82f6, #60a5fa);
-    z-index: 99999;
-    transition: width 0.3s ease, opacity 0.3s ease;
-    opacity: 0;
-    pointer-events: none;
+.rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: var(--rail);
+    align-self: stretch;
+    padding: 6px 4px;
+    border-right: 1px solid var(--line);
+    border-left: 3px solid var(--line-strong);
+    background-color: var(--surface-sunken);
+    line-height: 1.15;
 }
-.htmx-request#global-progress-bar,
-.htmx-request #global-progress-bar {
-    opacity: 1;
-    width: 80%;
+.rail .rail-date {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
 }
+.rail .rail-delta {
+    font-size: 11px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+    white-space: nowrap;
+}
+.rail.is-overdue { border-left-color: var(--overdue); background-color: var(--overdue-tint); }
+.rail.is-overdue .rail-date,
+.rail.is-overdue .rail-delta { color: var(--overdue); }
+.rail.is-due { border-left-color: var(--due); background-color: var(--due-tint); }
+.rail.is-due .rail-date,
+.rail.is-due .rail-delta { color: var(--due); }
+.rail.is-none { border-left-color: var(--line-strong); }
+.rail.is-none .rail-date { color: var(--ink-faint); font-weight: 500; font-size: 12px; }
 
-.animate-fade {
-    animation: fadeIn 0.2s ease-out;
+/* Пилюля состояния */
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    line-height: 1.25;
 }
+.pill i { font-size: 12px; }
+.pill .pill-label { color: inherit; opacity: 0.75; }
+.pill-danger  { background-color: var(--overdue-tint); color: var(--overdue); border-color: var(--overdue-edge); }
+.pill-warning { background-color: var(--due-tint);     color: var(--due);     border-color: var(--due-edge); }
+.pill-success { background-color: var(--done-tint);    color: var(--done);    border-color: var(--done-edge); }
+.pill-info    { background-color: var(--steel-tint);   color: var(--steel);   border-color: var(--steel-edge); }
+.pill-neutral { background-color: var(--surface-hover); color: var(--ink-soft); border-color: var(--line); }
 
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(3px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+/* Ссылка-чип на объект или модель */
+.chip-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background-color: var(--paper);
+    font-size: 12px;
+    color: var(--ink);
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
+.chip-link:hover {
+    border-color: var(--steel-edge);
+    background-color: var(--steel-tint);
+    color: var(--steel);
+}
+.chip-link .chip-sub { color: var(--ink-faint); }
 
-/* ==========================================================================
-   8. MARKDOWN КОНТЕНТ (КОММЕНТАРИИ И ОПИСАНИЯ)
-   ========================================================================== */
-.markdown-content {
-    font-size: 0.88rem;
-    line-height: 1.6;
-    color: var(--text-primary);
-    word-break: break-word;
-}
-.markdown-content p:last-child {
-    margin-bottom: 0;
-}
-.markdown-content code {
-    background-color: #f1f5f9;
-    padding: 2px 5px;
-    border-radius: 4px;
-    color: #e11d48;
-    font-size: 0.82em;
-}
-.markdown-content pre {
-    background-color: #0f172a;
-    color: #f8fafc;
-    padding: 10px 14px;
+.lock-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
     border-radius: var(--radius-sm);
-    overflow-x: auto;
-    font-size: 0.82em;
-}
-.markdown-content blockquote {
-    border-left: 3px solid var(--primary);
-    padding-left: 12px;
-    color: var(--text-secondary);
-    margin: 6px 0;
-    font-style: italic;
+    background-color: var(--surface-hover);
+    color: var(--ink-faint);
+    font-size: 12px;
 }
 
 /* ==========================================================================
-   9. ДЕРЕВО: АНИМАЦИЯ СТРЕЛОЧЕК РАСКРЫТИЯ
+   8. ДЕРЕВО И ПРОВОДНИК
    ========================================================================== */
+.dict-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--paper);
+}
+.dict-sidebar-top {
+    padding: 10px 10px 9px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Тихая кнопка-иконка внутри панелей */
+.ghost-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 29px;
+    height: 29px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background-color: var(--paper);
+    color: var(--ink-soft);
+    font-size: 14px;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.ghost-btn:hover { background-color: var(--surface-hover); border-color: var(--line-strong); color: var(--ink); }
+.ghost-btn:focus-visible { outline: 2px solid var(--steel); outline-offset: 1px; }
+
+/* Переключатель «Объекты / Модели» */
+.switcher {
+    display: flex;
+    padding: 2px;
+    background-color: var(--surface-sunken);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+}
+.switcher button {
+    flex: 1 1 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--ink-faint);
+    font-size: 13px;
+    font-weight: 500;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.switcher button:hover { color: var(--ink); }
+.switcher button.is-active {
+    background-color: var(--paper);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+}
+
+.tree-scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 6px 6px 18px;
+}
+
+.tree-item { position: relative; }
+
+.tree-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border-radius: var(--radius-sm);
+}
+.tree-row:hover { background-color: var(--surface-hover); }
+
 .tree-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 20px;
+    height: 26px;
+    color: var(--ink-faint);
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    background: none;
+    border: 0;
+}
+.tree-arrow:hover { color: var(--ink); }
+.tree-arrow-spacer { display: inline-flex; flex-shrink: 0; width: 20px; height: 26px; }
+.tree-arrow .arrow-icon {
+    display: inline-block;
+    transition: transform var(--transition-base);
+}
+.tree-arrow[aria-expanded="true"] .arrow-icon { transform: rotate(90deg); }
+
+.tree-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-grow: 1;
+    min-width: 0;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: 13px;
+    color: var(--ink);
+    text-align: left;
     cursor: pointer;
     user-select: none;
 }
+.tree-label.is-active {
+    background-color: var(--steel-tint);
+    color: var(--steel);
+    font-weight: 600;
+}
+.tree-label > span:not(.tree-dot) { flex: 1 1 auto; min-width: 0; }
+.tree-label-icon { font-size: 14px; flex-shrink: 0; color: var(--ink-faint); }
+.tree-label.is-active .tree-label-icon { color: var(--steel) !important; }
 
-.tree-arrow .arrow-icon {
-    display: inline-block;
-    transition: transform 0.2s ease-in-out;
-    transform-origin: center;
+/* Точка срока ТО в строке дерева */
+.tree-dot {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: transparent;
+}
+.tree-dot.is-overdue { background-color: var(--overdue); }
+.tree-dot.is-due { background-color: var(--due); }
+
+/* Действия видны всегда: иначе неочевидно, что со строкой вообще
+   можно что-то сделать. В покое они приглушены, цвет берут по наведению. */
+.tree-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+}
+.tree-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--ink-faint);
+    font-size: 12px;
+}
+.tree-actions button { color: var(--ink-faint); }
+.tree-actions button:hover { background-color: var(--steel-tint); color: var(--steel); }
+.tree-actions button.is-danger:hover { background-color: var(--overdue-tint); color: var(--overdue); }
+
+.tree-children {
+    margin-left: 16px;
+    padding-left: 4px;
+    border-left: 1px solid var(--line);
 }
 
-/* Когда ветка открыта — поворачиваем стрелочку строго вниз (на 90 градусов) */
-.tree-arrow[aria-expanded="true"] .arrow-icon {
-    transform: rotate(90deg);
-    color: var(--primary); /* Делаем стрелочку раскрытой папки синей для наглядности */
+/* Группа моделей по типу оборудования */
+.tree-group + .tree-group { margin-top: 14px; }
+.tree-group-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 6px 5px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
 }
+.tree-group-count { margin-left: auto; color: var(--ink-faint); font-weight: 400; }
+
+/* Кнопки навигации проводника */
+.explorer-crumb {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 5px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 12px;
+    cursor: pointer;
+}
+.explorer-crumb:hover { background-color: var(--surface-hover); color: var(--steel); }
+.explorer-crumb.is-root { color: var(--steel); font-weight: 600; }
+
+.explorer-up {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-hover);
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+}
+.explorer-up:hover { background-color: var(--surface-active); color: var(--ink); }
+
 /* ==========================================================================
-   10. КАРТОЧКА ОБЪЕКТА / МОДЕЛИ: КАРКАС
+   9. КАРТОЧКА ОБЪЕКТА
    ========================================================================== */
 .detail-view {
     display: flex;
     flex-direction: column;
     height: 100%;
-    background-color: var(--card-bg);
+    background-color: var(--paper);
 }
 
 .detail-header {
-    padding: 14px 24px 0;
-    background-color: var(--card-bg);
-    border-bottom: 1px solid var(--border-subtle);
+    padding: 14px 22px 0;
+    background-color: var(--paper);
+    border-bottom: 1px solid var(--line);
     flex-shrink: 0;
 }
 
 .detail-body {
     flex-grow: 1;
     overflow-y: auto;
-    padding: 20px 24px 28px;
-    background-color: var(--app-bg);
+    padding: 18px 22px 28px;
+    background-color: var(--ground);
 }
 
-/* Хлебные крошки: путь от корня до объекта */
 .obj-breadcrumb {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 4px;
-    font-size: 0.78rem;
-    color: var(--text-muted);
-    margin-bottom: 6px;
-    min-height: 18px;
+    gap: 3px;
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-bottom: 5px;
+    min-height: 17px;
 }
 .obj-breadcrumb a {
-    color: var(--text-secondary);
-    padding: 1px 5px;
-    border-radius: 4px;
-    transition: var(--transition-fast);
+    color: var(--ink-soft);
+    padding: 1px 4px;
+    border-radius: 3px;
 }
-.obj-breadcrumb a:hover {
-    background-color: var(--surface-hover);
-    color: var(--primary);
-}
-.obj-breadcrumb .sep {
-    opacity: 0.55;
-    font-size: 0.7rem;
-}
-.obj-breadcrumb .current {
-    color: var(--text-secondary);
-    font-weight: 600;
-    padding: 1px 5px;
-}
+.obj-breadcrumb a:hover { background-color: var(--surface-hover); color: var(--steel); }
+.obj-breadcrumb .sep { opacity: 0.5; font-size: 10px; }
+.obj-breadcrumb .current { color: var(--ink-soft); font-weight: 500; padding: 1px 4px; }
 
-/* Строка заголовка: имя слева, статус и действия справа */
 .detail-title-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
     flex-wrap: wrap;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 .detail-title-main {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
+}
+.detail-title-main h1,
+.detail-title-main h2 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
 }
 .detail-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     flex-shrink: 0;
     flex-wrap: wrap;
 }
 
-/* ==========================================================================
-   11. СЕТКА ОСНОВНОЙ ИНФОРМАЦИИ (МЕТА-ПОЛЯ)
-   ========================================================================== */
+/* Паспорт объекта: таблица «параметр сверху — значение снизу».
+   overflow остаётся видимым: внутри ячейки «Модель» раскрывается список
+   подсказок, и обрезка по контейнеру съела бы его. */
 .meta-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 1px;
-    background-color: var(--border-subtle);
-    border: 1px solid var(--border-subtle);
+    grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+    background-color: var(--paper);
+    border: 1px solid var(--line);
     border-radius: var(--radius-md);
     overflow: visible;
     margin-bottom: 14px;
 }
 
 .meta-cell {
-    background-color: var(--card-bg);
-    padding: 9px 12px;
-    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 3px;
+    min-width: 0;
+    padding: 8px 12px 9px;
+    background-color: var(--paper);
+    /* Линейки рисуются тенью, а не фоном сетки: при нечётном числе полей
+       пустая ячейка последнего ряда иначе оказывалась серой. Тень крайних
+       ячеек ложится ровно на рамку контейнера и не видна. */
+    box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line);
 }
 .meta-cell:first-child { border-top-left-radius: var(--radius-md); border-bottom-left-radius: var(--radius-md); }
 .meta-cell:last-child  { border-top-right-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md); }
@@ -501,63 +1138,55 @@ a:hover {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    line-height: 1.2;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-faint);
+    line-height: 1.3;
 }
+.meta-label i { font-size: 12px; opacity: 0.8; }
 .meta-value {
-    font-size: 0.87rem;
-    color: var(--text-primary);
+    font-size: 13px;
+    color: var(--ink);
     font-weight: 600;
-    min-height: 24px;
+    min-height: 22px;
     display: flex;
     align-items: center;
     min-width: 0;
 }
-.meta-value .text-empty {
-    color: var(--text-muted);
-    font-weight: 400;
-    font-style: italic;
-}
+.meta-value .text-empty { color: var(--ink-faint); font-weight: 400; font-style: normal; }
 
-/* ==========================================================================
-   12. СТАТУС-ПИЛЮЛИ (СРОК ТО И ПРОЧИЕ СОСТОЯНИЯ)
-   ========================================================================== */
-.pill {
+/* Инлайн-редактирование без сдвигов вёрстки */
+.editable-trigger {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border: 1px solid transparent;
-    white-space: nowrap;
-    line-height: 1.2;
+    max-width: 100%;
+    padding: 2px 5px;
+    margin: -2px -5px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
 }
-.pill .pill-label {
-    font-weight: 500;
-    opacity: 0.8;
+.editable-trigger:hover { background-color: var(--surface-active); }
+.editable-trigger .edit-icon {
+    opacity: 0;
+    margin-left: 6px;
+    font-size: 0.85em;
+    color: var(--ink-faint);
+    transition: opacity var(--transition-fast);
 }
-.pill-danger  { background-color: var(--danger-light);  color: #b91c1c; border-color: rgba(239, 68, 68, 0.28); }
-.pill-warning { background-color: var(--warning-light); color: #b45309; border-color: rgba(245, 158, 11, 0.3); }
-.pill-success { background-color: var(--success-light); color: #047857; border-color: rgba(16, 185, 129, 0.28); }
-.pill-info    { background-color: var(--primary-light); color: var(--primary-active); border-color: rgba(37, 99, 235, 0.25); }
-.pill-neutral { background-color: var(--surface-hover); color: var(--text-secondary); border-color: var(--border-subtle); }
+.editable-trigger:hover .edit-icon { opacity: 0.85; }
+.editable-trigger .edit-icon:hover { opacity: 1; color: var(--steel); }
 
-/* ==========================================================================
-   13. ВКЛАДКИ: СЕГМЕНТИРОВАННЫЙ ПЕРЕКЛЮЧАТЕЛЬ
-   ========================================================================== */
+/* Вкладки */
 .seg-tabs {
     display: flex;
     align-items: center;
-    gap: 2px;
-    padding: 0 24px;
-    background-color: var(--card-bg);
-    border-bottom: 1px solid var(--border-subtle);
+    gap: 0;
+    padding: 0 22px;
+    background-color: var(--paper);
+    border-bottom: 1px solid var(--line);
     overflow-x: auto;
     scrollbar-width: none;
     flex-shrink: 0;
@@ -567,154 +1196,100 @@ a:hover {
 .seg-tab {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 10px 14px;
+    gap: 6px;
+    padding: 9px 12px;
     border: 0;
     background: transparent;
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    font-weight: 600;
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 500;
     white-space: nowrap;
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
-    transition: var(--transition-fast);
+    transition: color var(--transition-fast), border-color var(--transition-fast);
     cursor: pointer;
 }
-.seg-tab:hover {
-    color: var(--text-primary);
-    background-color: var(--surface-hover);
-}
+.seg-tab:hover { color: var(--ink); }
 .seg-tab.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
-    background-color: transparent;
+    color: var(--steel);
+    font-weight: 600;
+    border-bottom-color: var(--steel);
 }
-.seg-tab i { font-size: 0.95rem; }
+.seg-tab i { font-size: 14px; color: var(--ink-faint); }
+.seg-tab.active i { color: var(--steel); }
 
 .tab-count {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 20px;
-    height: 18px;
-    padding: 0 6px;
+    min-width: 18px;
+    height: 17px;
+    padding: 0 5px;
     border-radius: 999px;
     background-color: var(--surface-active);
-    color: var(--text-secondary);
-    font-size: 0.68rem;
-    font-weight: 700;
+    color: var(--ink-soft);
+    font-size: 11px;
+    font-weight: 600;
 }
-.seg-tab.active .tab-count {
-    background-color: var(--primary);
-    color: #fff;
-}
+.seg-tab.active .tab-count { background-color: var(--steel); color: #fff; }
 
-/* ==========================================================================
-   14. ПАНЕЛИ КОНТЕНТА ВКЛАДОК
-   ========================================================================== */
-.panel {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-}
-.panel-head {
+/* Навигация по страницам длинной ленты */
+.pager {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--border-subtle);
-}
-.panel-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    font-size: 0.92rem;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-.panel-title i { color: var(--text-muted); }
-.panel-body { padding: 18px; }
-
-/* Пустые состояния */
-.empty-state {
-    text-align: center;
-    padding: 38px 20px;
-    color: var(--text-muted);
-}
-.empty-state .empty-icon {
-    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background-color: var(--surface-hover);
-    color: var(--text-muted);
-    font-size: 1.4rem;
-    margin-bottom: 10px;
+    gap: 12px;
+    padding: 12px 0 2px;
 }
-.empty-state .empty-title {
-    display: block;
-    font-size: 0.88rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 3px;
+.pager-state {
+    font-size: 12px;
+    color: var(--ink-faint);
+    white-space: nowrap;
 }
-.empty-state .empty-hint {
-    display: block;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
+.pager .btn:disabled { opacity: 0.45; }
 
 /* Таблица «ключ — значение» */
 .kv-table {
     width: 100%;
-    font-size: 0.87rem;
+    font-size: 13px;
     border-collapse: collapse;
 }
 .kv-table th {
     text-align: left;
-    padding: 8px 12px;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border-subtle);
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--line);
 }
 .kv-table td {
-    padding: 9px 12px;
-    border-bottom: 1px solid var(--border-subtle);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
     vertical-align: middle;
 }
 .kv-table tbody tr:last-child td { border-bottom: 0; }
 .kv-table tbody tr:hover { background-color: var(--surface-hover); }
-.kv-table .kv-key { color: var(--text-secondary); width: 42%; }
-.kv-table .kv-val { color: var(--text-primary); font-weight: 600; }
+.kv-table .kv-key { color: var(--ink-faint); width: 42%; font-weight: 400; }
+.kv-table .kv-val { color: var(--ink); font-weight: 500; }
 
-/* Зона загрузки превью */
+/* Зона превью */
 .preview-box {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    min-height: 210px;
+    gap: 9px;
+    min-height: 200px;
     padding: 14px;
-    border: 1px dashed var(--border-strong);
+    border: 1px dashed var(--line-strong);
     border-radius: var(--radius-md);
-    background-color: var(--app-bg);
-    transition: var(--transition-fast);
+    background-color: var(--surface-sunken);
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
-.preview-box:hover {
-    border-color: var(--primary);
-    background-color: var(--primary-light);
-}
+.preview-box:hover { border-color: var(--steel-edge); background-color: var(--steel-tint); }
 .preview-box img {
     max-height: 190px;
     max-width: 100%;
@@ -723,29 +1298,30 @@ a:hover {
     cursor: zoom-in;
 }
 
-/* Лента комментариев */
+/* ==========================================================================
+   10. ЛЕНТЫ: КОММЕНТАРИИ, ФАЙЛЫ, ИСТОРИЯ
+   ========================================================================== */
 .feed-item {
     display: flex;
-    gap: 12px;
-    padding: 14px 16px;
-    border: 1px solid var(--border-subtle);
+    gap: 11px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
     border-radius: var(--radius-md);
-    background-color: var(--card-bg);
-    transition: var(--transition-fast);
+    background-color: var(--paper);
 }
-.feed-item:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.feed-item:hover { border-color: var(--line-strong); }
 .feed-avatar {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    border-radius: 50%;
-    background-color: var(--primary-light);
-    color: var(--primary);
-    font-size: 0.72rem;
-    font-weight: 700;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-active);
+    color: var(--ink-soft);
+    font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
 }
 .feed-meta {
@@ -753,104 +1329,113 @@ a:hover {
     align-items: baseline;
     gap: 8px;
     flex-wrap: wrap;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
 }
-.feed-author { font-size: 0.85rem; font-weight: 700; color: var(--text-primary); }
-.feed-time { font-size: 0.75rem; color: var(--text-muted); }
+.feed-author { font-size: 13px; font-weight: 600; color: var(--ink); }
+.feed-time { font-size: 12px; color: var(--ink-faint); }
 
-/* Строка файла */
 .file-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    border: 1px solid var(--border-subtle);
+    gap: 11px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
     border-radius: var(--radius-md);
-    background-color: var(--card-bg);
-    transition: var(--transition-fast);
+    background-color: var(--paper);
+    transition: border-color var(--transition-fast);
 }
-.file-row:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
-.file-row.is-overdue { border-color: rgba(239, 68, 68, 0.35); background-color: #fffbfa; }
-.file-row.is-overdue:hover { border-color: var(--danger); }
+.file-row:hover { border-color: var(--line-strong); }
+.file-row.is-overdue { border-color: var(--overdue-edge); background-color: var(--overdue-tint); }
 .file-thumb {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
     border-radius: var(--radius-sm);
     background-color: var(--surface-hover);
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--line);
+    color: var(--ink-faint);
     overflow: hidden;
 }
 .file-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; }
 
 /* Таймлайн истории */
-.timeline { position: relative; padding-left: 22px; }
+.timeline { position: relative; padding-left: 20px; }
 .timeline::before {
     content: '';
     position: absolute;
-    left: 5px;
-    top: 4px;
-    bottom: 4px;
-    width: 2px;
-    background-color: var(--border-subtle);
+    left: 4px;
+    top: 5px;
+    bottom: 5px;
+    width: 1px;
+    background-color: var(--line);
 }
-.timeline-item { position: relative; padding-bottom: 18px; }
+.timeline-item { position: relative; padding-bottom: 16px; }
 .timeline-item:last-child { padding-bottom: 0; }
 .timeline-dot {
     position: absolute;
-    left: -22px;
-    top: 4px;
-    width: 12px;
-    height: 12px;
+    left: -20px;
+    top: 5px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
-    border: 2px solid var(--card-bg);
-    background-color: var(--text-muted);
+    border: 2px solid var(--paper);
+    background-color: var(--ink-faint);
 }
-.timeline-dot.is-maintenance { background-color: var(--success); }
-.timeline-dot.is-create      { background-color: var(--primary); }
-.timeline-dot.is-sync        { background-color: var(--info); }
+.timeline-dot.is-maintenance { background-color: var(--done); }
+.timeline-dot.is-create      { background-color: var(--steel); }
+.timeline-dot.is-sync        { background-color: var(--ink-faint); }
 .timeline-dot.is-rule        { background-color: var(--purple); }
-.timeline-dot.is-unplanned   { background-color: var(--warning); }
+.timeline-dot.is-unplanned   { background-color: var(--due); }
 
 /* ==========================================================================
-   15. МОДАЛЬНЫЕ ОКНА СОЗДАНИЯ: ЕДИНАЯ ФОРМА
+   11. ФОРМЫ И МОДАЛЬНЫЕ ОКНА
    ========================================================================== */
+.modal-content {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+.modal-backdrop.show { opacity: 0.45; }
+
 .sheet-header {
     display: flex;
     align-items: flex-start;
-    gap: 14px;
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid var(--border-subtle);
+    gap: 12px;
+    padding: 17px 20px 14px;
+    border-bottom: 1px solid var(--line);
 }
 .sheet-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 42px;
-    height: 42px;
-    min-width: 42px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
     border-radius: var(--radius-md);
-    font-size: 1.15rem;
+    background-color: var(--surface-hover) !important;
+    color: var(--ink-soft) !important;
+    font-size: 16px;
 }
 .sheet-heading { flex-grow: 1; min-width: 0; }
 .sheet-heading h5 {
     margin: 0 0 2px;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
 }
 .sheet-heading p {
     margin: 0;
-    font-size: 0.8rem;
-    color: var(--text-muted);
+    font-size: 13px;
+    color: var(--ink-faint);
     line-height: 1.35;
 }
 
 .sheet-body {
-    padding: 18px 24px;
+    padding: 16px 20px;
     max-height: min(68vh, 640px);
     overflow-y: auto;
 }
@@ -858,122 +1443,122 @@ a:hover {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
-    padding: 14px 24px;
-    border-top: 1px solid var(--border-subtle);
-    background-color: var(--app-bg);
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--line);
+    background-color: var(--surface-sunken);
     border-bottom-left-radius: var(--radius-lg);
     border-bottom-right-radius: var(--radius-lg);
 }
 .sheet-footer .footer-note {
     margin-right: auto;
-    font-size: 0.75rem;
-    color: var(--text-muted);
+    font-size: 12px;
+    color: var(--ink-faint);
 }
 
-/* Секция формы */
 .form-section + .form-section {
-    margin-top: 18px;
-    padding-top: 18px;
-    border-top: 1px solid var(--border-subtle);
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
 }
 .form-section-title {
     display: flex;
     align-items: center;
-    gap: 7px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 12px;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-faint);
+    margin-bottom: 10px;
 }
-.form-section-title i { font-size: 0.85rem; }
+.form-section-title i { font-size: 13px; }
 
-/* Поле формы */
-.field { margin-bottom: 14px; }
+.field { margin-bottom: 13px; }
 .field:last-child { margin-bottom: 0; }
 .field > label:not(.switch-row):not(.option-card) {
     display: block;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 5px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
 }
-.field .req { color: var(--danger); margin-left: 2px; }
+.field .req { color: var(--overdue); margin-left: 2px; }
 .field .hint {
     display: block;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-top: 5px;
-    line-height: 1.35;
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-top: 4px;
+    line-height: 1.4;
+    max-width: 62ch;
 }
 
 .field .form-control,
 .field .form-select {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    font-size: 0.87rem;
-    padding: 0.5rem 0.7rem;
-    color: var(--text-primary);
-    transition: var(--transition-fast);
+    background-color: var(--paper);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    padding: 7px 10px;
+    color: var(--ink);
     box-shadow: none;
 }
 .field .form-control:focus,
 .field .form-select:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+    border-color: var(--steel);
+    box-shadow: 0 0 0 3px rgba(31, 79, 120, 0.15);
 }
-.field .form-control::placeholder { color: var(--text-muted); }
 
-/* Переключатель-карточка (радио/чекбокс в виде плитки) */
+/* Плитка выбора */
 .option-card {
     display: flex;
     align-items: flex-start;
-    gap: 11px;
-    padding: 11px 13px;
-    border: 1px solid var(--border-subtle);
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
     border-radius: var(--radius-md);
-    background-color: var(--card-bg);
+    background-color: var(--paper);
     cursor: pointer;
-    transition: var(--transition-fast);
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
-.option-card:hover { border-color: var(--border-strong); background-color: var(--surface-hover); }
+.option-card:hover { border-color: var(--line-strong); background-color: var(--surface-hover); }
 .option-card.is-selected,
 .option-card:has(input:checked) {
-    border-color: var(--primary);
-    background-color: var(--primary-light);
-    box-shadow: 0 0 0 1px var(--primary) inset;
-}
-.option-card:has(input:focus-visible) {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
+    border-color: var(--steel);
+    background-color: var(--steel-tint);
+    box-shadow: none;
 }
 .option-card .option-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
     border-radius: var(--radius-sm);
-    font-size: 0.95rem;
+    background-color: var(--surface-hover) !important;
+    color: var(--ink-soft) !important;
+    font-size: 14px;
+}
+.option-card.is-selected .option-icon,
+.option-card:has(input:checked) .option-icon {
+    background-color: var(--paper) !important;
+    color: var(--steel) !important;
 }
 .option-card .option-text { min-width: 0; }
 .option-card .option-text b {
     display: block;
-    font-size: 0.84rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    line-height: 1.25;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.3;
 }
 .option-card .option-text small {
     display: block;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    line-height: 1.3;
-    margin-top: 2px;
+    font-size: 12px;
+    color: var(--ink-faint);
+    line-height: 1.35;
+    margin-top: 1px;
 }
 
 /* Тумблер с описанием */
@@ -982,38 +1567,34 @@ a:hover {
     align-items: flex-start;
     justify-content: space-between;
     gap: 14px;
-    padding: 12px 14px;
-    border: 1px solid var(--border-subtle);
+    padding: 11px 12px;
+    border: 1px solid var(--line);
     border-radius: var(--radius-md);
-    background-color: var(--card-bg);
+    background-color: var(--paper);
 }
-.switch-row + .switch-row { margin-top: 8px; }
+.switch-row + .switch-row { margin-top: 7px; }
 .switch-row .switch-text b {
     display: block;
-    font-size: 0.84rem;
-    font-weight: 700;
-    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
 }
 .switch-row .switch-text small {
     display: block;
-    font-size: 0.75rem;
-    color: var(--text-muted);
+    font-size: 12px;
+    color: var(--ink-faint);
     line-height: 1.35;
-    margin-top: 2px;
+    margin-top: 1px;
 }
-.switch-row .form-check { font-size: 0.95rem; padding-left: 2.5em; min-height: auto; }
+.switch-row .form-check { font-size: 15px; padding-left: 2.5em; min-height: auto; }
 .switch-row .form-check-input { cursor: pointer; margin-top: 0.15em; }
-.switch-row .form-check-input:checked {
-    background-color: var(--primary);
-    border-color: var(--primary);
-}
 
 /* Конструктор характеристик */
 .spec-list {
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--line);
     border-radius: var(--radius-md);
     overflow: hidden;
-    margin-bottom: 10px;
+    margin-bottom: 9px;
     max-height: 208px;
     overflow-y: auto;
 }
@@ -1021,31 +1602,44 @@ a:hover {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 12px;
-    font-size: 0.85rem;
-    border-bottom: 1px solid var(--border-subtle);
-    background-color: var(--card-bg);
+    padding: 7px 11px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--line);
+    background-color: var(--paper);
 }
 .spec-item:last-child { border-bottom: 0; }
 .spec-item:hover { background-color: var(--surface-hover); }
-.spec-item .spec-key { flex: 1 1 40%; min-width: 0; color: var(--text-secondary); }
-.spec-item .spec-val { flex: 1 1 60%; min-width: 0; font-weight: 600; color: var(--text-primary); }
+.spec-item .spec-key { flex: 1 1 40%; min-width: 0; color: var(--ink-faint); }
+.spec-item .spec-val { flex: 1 1 60%; min-width: 0; font-weight: 500; color: var(--ink); }
 
-/* Выпадающий список подсказок */
-/* Выпадающий список подсказок и результатов поиска */
+/* Сообщения формы */
+.alert {
+    border-radius: var(--radius-md);
+    border-width: 1px;
+    font-size: 13px;
+}
+.alert-danger  { background-color: var(--overdue-tint); border-color: var(--overdue-edge); color: var(--overdue); }
+.alert-warning { background-color: var(--due-tint);     border-color: var(--due-edge);     color: var(--due); }
+.alert-success { background-color: var(--done-tint);    border-color: var(--done-edge);    color: var(--done); }
+.alert-info    { background-color: var(--steel-tint);   border-color: var(--steel-edge);   color: var(--steel); }
+.alert .alert-link { color: inherit; text-decoration: underline; }
+
+/* ==========================================================================
+   12. ПОДСКАЗКИ И РЕЗУЛЬТАТЫ ПОИСКА
+   ========================================================================== */
 .suggest-menu {
     position: absolute;
     top: calc(100% + 4px);
     left: 0;
     width: 100%;
     min-width: 240px;
-    max-height: 240px;
+    max-height: 260px;
     overflow-y: auto;
     z-index: 1250;
-    padding: 5px;
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
+    padding: 4px;
+    background-color: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
 }
 .suggest-menu-static {
@@ -1064,89 +1658,148 @@ a:hover {
     border-radius: var(--radius-sm);
     background: transparent;
     text-align: left;
-    font-size: 0.85rem;
-    color: var(--text-primary);
+    font-size: 13px;
+    color: var(--ink);
     cursor: pointer;
-    transition: var(--transition-fast);
 }
 .suggest-item:hover { background-color: var(--surface-hover); }
-.suggest-item .s-name { font-weight: 600; min-width: 0; }
-.suggest-item .s-sub { color: var(--text-muted); font-weight: 400; font-size: 0.78rem; min-width: 0; }
+.suggest-item .s-name { font-weight: 500; min-width: 0; }
+.suggest-item .s-sub { color: var(--ink-faint); font-weight: 400; font-size: 12px; min-width: 0; }
 
-/* Выбранное значение подсказки */
 .suggest-chosen {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 0.45rem 0.7rem;
-    border: 1px solid var(--primary);
+    padding: 7px 10px;
+    border: 1px solid var(--steel-edge);
+    border-radius: var(--radius-md);
+    background-color: var(--steel-tint);
+    font-size: 13px;
+}
+
+/* ==========================================================================
+   13. НАСТРОЙКИ: СТРОКИ ЗАПИСЕЙ
+   ========================================================================== */
+.settings-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 48px;
+    min-height: 48px;
+    padding: 0 20px;
+    background-color: var(--paper);
+    border-bottom: 1px solid var(--line);
+}
+.settings-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 48px;
+    padding: 0 3px;
+    margin-right: 16px;
+    border-bottom: 2px solid transparent;
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.settings-tab:hover { color: var(--ink); }
+.settings-tab.is-active {
+    color: var(--steel);
+    font-weight: 600;
+    border-bottom-color: var(--steel);
+}
+.settings-tab i { font-size: 14px; color: var(--ink-faint); }
+.settings-tab.is-active i { color: var(--steel); }
+
+.settings-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 22px 20px 40px;
+}
+.settings-inner { max-width: 940px; margin: 0 auto; }
+
+.entry-card {
+    background-color: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    box-shadow: none;
+    transition: border-color var(--transition-fast);
+}
+.entry-card:hover { border-color: var(--line-strong); }
+.entry-card-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 11px 14px;
+}
+.entry-main { flex: 1 1 260px; min-width: 0; }
+.entry-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.entry-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 5px;
+    margin: -2px -5px;
+    border: 0;
+    background: transparent;
     border-radius: var(--radius-sm);
-    background-color: var(--primary-light);
-    font-size: 0.87rem;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+}
+.entry-title:hover { background-color: var(--surface-hover); color: var(--steel); }
+.entry-title .edit-icon { opacity: 0; font-size: 0.85em; color: var(--ink-faint); transition: opacity var(--transition-fast); }
+.entry-title:hover .edit-icon { opacity: 0.85; }
+.entry-meta {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--ink-faint);
+}
+.entry-detail { padding: 0 14px 12px; }
+.entry-detail-title {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-faint);
+    margin-bottom: 7px;
 }
 
 /* ==========================================================================
-   16. АДАПТИВНОСТЬ
+   14. УВЕДОМЛЕНИЯ И ИНДИКАТОРЫ
    ========================================================================== */
-@media (max-width: 768px) {
-    .detail-header { padding: 12px 14px 0; }
-    .detail-body   { padding: 14px; }
-    .seg-tabs      { padding: 0 10px; }
-    .sheet-header, .sheet-body, .sheet-footer { padding-left: 16px; padding-right: 16px; }
-    .meta-grid     { grid-template-columns: 1fr; }
-    .meta-cell:first-child, .meta-cell:last-child { border-radius: 0; }
+#global-progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0%;
+    height: 2px;
+    background-color: var(--steel);
+    z-index: 99999;
+    transition: width 0.25s ease, opacity 0.25s ease;
+    opacity: 0;
+    pointer-events: none;
 }
 
-/* Заголовки внутри Markdown не должны спорить с заголовком карточки */
-.markdown-content h1,
-.markdown-content h2,
-.markdown-content h3,
-.markdown-content h4,
-.markdown-content h5,
-.markdown-content h6 {
-    font-weight: 700;
-    color: var(--text-primary);
-    line-height: 1.3;
-    margin: 14px 0 6px;
-}
-.markdown-content > :first-child { margin-top: 0; }
-.markdown-content h1 { font-size: 1.15rem; }
-.markdown-content h2 { font-size: 1.05rem; }
-.markdown-content h3 { font-size: 0.97rem; }
-.markdown-content h4,
-.markdown-content h5,
-.markdown-content h6 { font-size: 0.9rem; }
-.markdown-content ul,
-.markdown-content ol { padding-left: 20px; margin-bottom: 8px; }
-.markdown-content li { margin-bottom: 2px; }
-.markdown-content table {
-    width: 100%;
-    margin-bottom: 10px;
-    font-size: 0.85rem;
-    border-collapse: collapse;
-}
-.markdown-content th,
-.markdown-content td {
-    padding: 6px 10px;
-    border: 1px solid var(--border-subtle);
-}
-.markdown-content th { background-color: var(--surface-hover); text-align: left; }
-.markdown-content img { max-width: 100%; border-radius: var(--radius-sm); }
-.markdown-content hr { border-color: var(--border-subtle); opacity: 1; }
-
-/* ==========================================================================
-   17. СТЕК УВЕДОМЛЕНИЙ (результаты обращений к внешним системам)
-   ========================================================================== */
 #toast-stack {
     position: fixed;
-    right: 18px;
-    bottom: 18px;
+    right: 16px;
+    bottom: 16px;
     z-index: 2000;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-width: min(420px, calc(100vw - 36px));
+    max-width: min(420px, calc(100vw - 32px));
     pointer-events: none;
 }
 
@@ -1156,42 +1809,234 @@ a:hover {
     gap: 10px;
     padding: 11px 13px;
     border-radius: var(--radius-md);
-    border: 1px solid var(--border-subtle);
-    background-color: var(--card-bg);
+    border: 1px solid var(--line);
+    border-left-width: 3px;
+    background-color: var(--paper);
     box-shadow: var(--shadow-lg);
-    font-size: 0.83rem;
+    font-size: 13px;
     line-height: 1.4;
     pointer-events: auto;
-    animation: toastIn 0.2s ease-out;
+    animation: toastIn 0.18s ease-out;
 }
 .toast-item.is-leaving {
     opacity: 0;
     transform: translateY(6px);
-    transition: opacity 0.25s ease, transform 0.25s ease;
+    transition: opacity 0.22s ease, transform 0.22s ease;
 }
-.toast-item b { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.toast-item b {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-bottom: 1px;
+}
 .toast-item .btn-close { font-size: 0.65rem; margin-top: 2px; }
 
-.toast-warning { border-left: 3px solid var(--warning); }
-.toast-warning b { color: #b45309; }
-.toast-danger  { border-left: 3px solid var(--danger); }
-.toast-danger b { color: #b91c1c; }
-.toast-success { border-left: 3px solid var(--success); }
-.toast-success b { color: #047857; }
+.toast-warning { border-left-color: var(--due); }
+.toast-warning b { color: var(--due); }
+.toast-danger  { border-left-color: var(--overdue); }
+.toast-danger b { color: var(--overdue); }
+.toast-success { border-left-color: var(--done); }
+.toast-success b { color: var(--done); }
 
 @keyframes toastIn {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
 }
 
+.spinner-border { border-width: 2px; }
+
 /* ==========================================================================
-   18. СПРАВОЧНИК НА УЗКОМ ЭКРАНЕ: СПИСОК ↔ КАРТОЧКА
+   15. MARKDOWN
    ========================================================================== */
-.dict-back-btn { display: none; }
+.markdown-content {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ink);
+    word-break: break-word;
+    max-width: 78ch;
+}
+.markdown-content p:last-child { margin-bottom: 0; }
+.markdown-content code {
+    background-color: var(--surface-sunken);
+    border: 1px solid var(--line);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--ink);
+    font-size: 0.88em;
+}
+.markdown-content pre {
+    background-color: var(--ink);
+    color: #e6e9ec;
+    padding: 10px 13px;
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    font-size: 0.88em;
+}
+.markdown-content pre code { background: none; border: 0; color: inherit; }
+.markdown-content blockquote {
+    border-left: 2px solid var(--line-strong);
+    padding-left: 11px;
+    color: var(--ink-soft);
+    margin: 6px 0;
+    font-style: normal;
+}
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.3;
+    margin: 14px 0 5px;
+}
+.markdown-content > :first-child { margin-top: 0; }
+.markdown-content h1 { font-size: 16px; }
+.markdown-content h2 { font-size: 15px; }
+.markdown-content h3 { font-size: 14px; }
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 { font-size: 13px; }
+.markdown-content ul,
+.markdown-content ol { padding-left: 19px; margin-bottom: 8px; }
+.markdown-content li { margin-bottom: 2px; }
+.markdown-content table {
+    width: 100%;
+    margin-bottom: 10px;
+    font-size: 13px;
+    border-collapse: collapse;
+}
+.markdown-content th,
+.markdown-content td { padding: 6px 10px; border: 1px solid var(--line); }
+.markdown-content th { background-color: var(--surface-sunken); text-align: left; font-weight: 600; }
+.markdown-content img { max-width: 100%; border-radius: var(--radius-sm); }
+.markdown-content hr { border-color: var(--line); opacity: 1; }
+
+/* ==========================================================================
+   16. СОВМЕСТИМОСТЬ С BOOTSTRAP-УТИЛИТАМИ
+   Шаблонов много, и они опираются на служебные классы. Здесь утилиты
+   переводятся на новую палитру, чтобы разметку не пришлось переписывать.
+   ========================================================================== */
+.bg-light-primary { background-color: var(--steel-tint) !important; }
+.bg-light-success { background-color: var(--done-tint) !important; }
+.bg-light-danger  { background-color: var(--overdue-tint) !important; }
+.bg-light-warning { background-color: var(--due-tint) !important; }
+.bg-light-info    { background-color: var(--steel-tint) !important; }
+.bg-light-purple  { background-color: var(--purple-light) !important; }
+.bg-light         { background-color: var(--ground) !important; }
+.bg-white         { background-color: var(--paper) !important; }
+
+.text-primary   { color: var(--steel) !important; }
+.text-secondary { color: var(--ink-soft) !important; }
+.text-muted     { color: var(--ink-faint) !important; }
+.text-dark      { color: var(--ink) !important; }
+.text-success, .text-success-emphasis { color: var(--done) !important; }
+.text-danger  { color: var(--overdue) !important; }
+.text-warning, .text-warning-emphasis { color: var(--due) !important; }
+.text-info, .text-info-emphasis, .text-cyan, .text-primary-emphasis { color: var(--steel) !important; }
+.text-purple  { color: var(--purple) !important; }
+
+.border, .border-top, .border-bottom, .border-start, .border-end { border-color: var(--line) !important; }
+.border-light { border-color: var(--line) !important; }
+.border-primary-subtle { border-color: var(--steel-edge) !important; }
+.bg-primary-subtle { background-color: var(--steel-tint) !important; }
+.bg-success-subtle { background-color: var(--done-tint) !important; }
+.bg-warning-subtle { background-color: var(--due-tint) !important; }
+.bg-info-subtle    { background-color: var(--steel-tint) !important; }
+.bg-primary        { background-color: var(--steel) !important; }
+
+.hover-bg-light:hover { background-color: var(--surface-hover); }
+
+.shadow-sm { box-shadow: var(--shadow-sm) !important; }
+.shadow, .shadow-lg { box-shadow: var(--shadow-lg) !important; }
+
+.badge { font-weight: 500; }
+
+/* Устаревшие классы карточек: остаются рабочими, но без «подпрыгивания» */
+.overdue-card {
+    border: 1px solid var(--overdue-edge) !important;
+    background-color: var(--overdue-tint) !important;
+}
+.overdue-card:hover { border-color: var(--overdue) !important; box-shadow: none !important; }
+
+/* ==========================================================================
+   17. ФОКУС, ДВИЖЕНИЕ, АДАПТИВНОСТЬ
+   ========================================================================== */
+.editable-trigger:focus-visible,
+.entry-title:focus-visible,
+.seg-tab:focus-visible,
+.settings-tab:focus-visible,
+.chip-link:focus-visible,
+.suggest-item:focus-visible,
+.option-card:focus-visible,
+.option-card:has(input:focus-visible),
+.stat-tile:focus-visible,
+.tree-label:focus-visible,
+.tree-arrow:focus-visible,
+.explorer-crumb:focus-visible,
+.explorer-up:focus-visible,
+.header-nav-btn:focus-visible,
+.header-tool:focus-visible,
+.switcher button:focus-visible,
+.plan-row-main:focus-visible,
+.tree-actions button:focus-visible,
+.btn:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--steel);
+    outline-offset: 1px;
+}
+.header-nav-btn:focus-visible,
+.header-tool:focus-visible {
+    outline-color: #8fb3d0;
+}
+.editable-trigger:focus-visible .edit-icon,
+.entry-title:focus-visible .edit-icon { opacity: 0.9; }
+
+/* Появление подгруженного фрагмента: только проявление, без сдвига */
+.animate-fade { animation: fadeIn 0.15s ease-out; }
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .plan-filters { grid-template-columns: repeat(2, 1fr); }
+    .stat-tile:nth-child(3) { border-left: 0; }
+    .stat-tile:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
 
 @media (max-width: 767.98px) {
-    /* Видна только одна панель: обе занимают всю высоту, и без переключения
-       карточка оказывалась бы ниже экрана под списком. */
+    .app-header .container-fluid { gap: 8px !important; padding-left: 10px !important; padding-right: 10px !important; }
+    .header-nav-btn { padding: 0 8px; }
+    .header-tool { padding: 0 8px; }
+    .header-user { padding: 0 2px; gap: 5px; }
+
+    .plan-page { padding: 14px 12px 40px; }
+    .plan-head h1 { font-size: 19px; }
+    .stat-note { display: none; }
+    .plan-filters { grid-template-columns: repeat(2, 1fr); }
+    .plan-inv { display: none; }
+    .detail-header { padding: 12px 14px 0; }
+    .detail-body   { padding: 14px 14px 72px; }
+    .seg-tabs      { padding: 0 10px; }
+    .settings-bar  { padding: 0 12px; overflow-x: auto; scrollbar-width: none; }
+    .settings-content { padding: 16px 12px 40px; }
+    .sheet-header, .sheet-body, .sheet-footer { padding-left: 15px; padding-right: 15px; }
+    .meta-grid { grid-template-columns: 1fr; gap: 0; }
+    .meta-label { width: 86px; }
+
+    /* Справочник: видна одна панель — список или карточка */
     #dict-layout .dict-pane-detail { display: none !important; }
     #dict-layout.show-detail .dict-pane-list { display: none !important; }
     #dict-layout.show-detail .dict-pane-detail { display: flex !important; }
@@ -1204,288 +2049,17 @@ a:hover {
         left: 12px;
         bottom: 12px;
         z-index: 1040;
-        padding: 9px 16px;
-        border: 1px solid var(--border-strong);
+        padding: 8px 15px;
+        border: 1px solid var(--line-strong);
         border-radius: 999px;
-        background-color: var(--card-bg);
-        color: var(--text-primary);
-        font-size: 0.85rem;
-        font-weight: 600;
+        background-color: var(--paper);
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 500;
         box-shadow: var(--shadow-lg);
     }
-    #dict-layout.show-detail .dict-back-btn:active {
-        background-color: var(--surface-hover);
-    }
+    #dict-layout.show-detail .dict-back-btn:active { background-color: var(--surface-hover); }
 
-    /* На узком экране карточке нужен весь доступный простор */
-    .detail-header { padding: 12px 14px 0; }
-    .detail-body { padding: 14px 14px 72px; }
 }
 
-/* ==========================================================================
-   19. ЗАГОЛОВКИ РАЗДЕЛОВ И КАРТОЧКИ НАСТРОЕК
-   ========================================================================== */
-.section-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 18px;
-}
-.section-title {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    margin: 0;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-.section-title i { color: var(--primary); font-size: 1.1rem; }
-.section-subtitle {
-    margin: 4px 0 0;
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    flex-basis: 100%;
-}
-
-/* Карточка записи в настройках (правило, тип оборудования, webhook) */
-.entry-card {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-    margin-bottom: 12px;
-    transition: var(--transition-fast);
-}
-.entry-card:hover { border-color: var(--border-strong); }
-.entry-card-body {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    padding: 14px 16px;
-}
-.entry-main { flex: 1 1 260px; min-width: 0; }
-.entry-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-
-/* Кликабельный заголовок записи: настоящая кнопка, доступная с клавиатуры */
-.entry-title {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 2px 6px;
-    margin: -2px -6px;
-    border: 0;
-    background: transparent;
-    border-radius: var(--radius-sm);
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    text-align: left;
-    cursor: pointer;
-    transition: var(--transition-fast);
-}
-.entry-title:hover { background-color: var(--surface-hover); color: var(--primary); }
-.entry-title .edit-icon { opacity: 0; font-size: 0.8em; color: var(--text-muted); transition: var(--transition-fast); }
-.entry-title:hover .edit-icon { opacity: 0.9; }
-.entry-meta {
-    display: block;
-    margin-top: 4px;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-}
-.entry-detail { padding: 0 16px 14px; }
-.entry-detail-title {
-    display: block;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-}
-
-/* Ссылка-чип на объект или модель */
-.chip-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    max-width: 100%;
-    padding: 5px 11px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 999px;
-    background-color: var(--card-bg);
-    font-size: 0.8rem;
-    color: var(--text-primary);
-    text-decoration: none;
-    transition: var(--transition-fast);
-}
-.chip-link:hover {
-    border-color: var(--primary);
-    background-color: var(--primary-light);
-    color: var(--primary-active);
-}
-.chip-link .chip-sub { color: var(--text-muted); }
-
-/* Единый признак «заблокировано» вместо кнопки удаления */
-.lock-hint {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 10px;
-    border-radius: var(--radius-sm);
-    background-color: var(--surface-hover);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-}
-
-/* ==========================================================================
-   20. ПЛИТКИ ДАШБОРДА
-   ========================================================================== */
-.stat-tile {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    width: 100%;
-    height: 100%;
-    padding: 15px 16px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background-color: var(--card-bg);
-    box-shadow: var(--shadow-sm);
-    text-align: left;
-    cursor: pointer;
-    transition: var(--transition-base);
-}
-.stat-tile:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-hover);
-    border-color: rgba(37, 99, 235, 0.35);
-}
-.stat-tile:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-}
-.stat-tile.is-active {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 1px var(--primary) inset, var(--shadow-sm);
-}
-.stat-tile.is-alert { border-color: rgba(239, 68, 68, 0.35); background-color: #fffbfa; }
-.stat-tile.is-alert.is-active { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger) inset, var(--shadow-sm); }
-
-.stat-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 46px;
-    height: 46px;
-    min-width: 46px;
-    border-radius: var(--radius-md);
-    font-size: 1.25rem;
-}
-.stat-body { flex-grow: 1; min-width: 0; }
-.stat-label {
-    display: block;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-}
-.stat-value { font-size: 1.45rem; font-weight: 700; line-height: 1.1; margin-top: 3px; }
-.stat-value.is-danger { color: var(--danger); }
-.stat-progress {
-    height: 6px;
-    border-radius: 999px;
-    background-color: var(--surface-active);
-    overflow: hidden;
-    margin-top: 7px;
-}
-.stat-progress > span { display: block; height: 100%; border-radius: 999px; background-color: var(--primary); }
-.stat-progress.is-success > span { background-color: var(--success); }
-
-/* ==========================================================================
-   21. ФОКУС-СОСТОЯНИЯ ДЛЯ КЛАВИАТУРЫ
-   ========================================================================== */
-.editable-trigger:focus-visible,
-.entry-title:focus-visible,
-.seg-tab:focus-visible,
-.chip-link:focus-visible,
-.suggest-item:focus-visible,
-.option-card:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-}
-.editable-trigger:focus-visible .edit-icon,
-.entry-title:focus-visible .edit-icon { opacity: 0.9; }
-
-/* ==========================================================================
-   22. СТРОКА ОБЪЕКТА В ДЕРЕВЕ И ПРОВОДНИКЕ
-   ========================================================================== */
-.tree-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-grow: 1;
-    min-width: 0;
-    padding: 4px 8px;
-    /* Прозрачная рамка держит место: у активной строки она становится видимой,
-       и содержимое не сдвигается на два пикселя. */
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    font-size: 0.85rem;
-    color: var(--text-primary);
-    text-align: left;
-    cursor: pointer;
-    user-select: none;
-    transition: var(--transition-fast);
-}
-.tree-label:hover { background-color: var(--surface-hover); }
-.tree-label:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
-.tree-label.is-active {
-    background-color: var(--primary-light);
-    border-color: rgba(37, 99, 235, 0.35);
-    color: var(--primary-active);
-    font-weight: 600;
-}
-.tree-label-icon { font-size: 1.05rem; flex-shrink: 0; }
-.tree-label.is-active .tree-label-icon { color: var(--primary) !important; }
-
-/* Кнопки навигации проводника */
-.explorer-crumb {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 6px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: var(--transition-fast);
-}
-.explorer-crumb:hover { background-color: var(--surface-hover); color: var(--primary); }
-.explorer-crumb:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
-.explorer-crumb.is-root { color: var(--primary); font-weight: 700; }
-
-.explorer-up {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 5px 8px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background-color: var(--surface-hover);
-    color: var(--primary);
-    font-size: 0.82rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: var(--transition-fast);
-}
-.explorer-up:hover { background-color: var(--surface-active); }
-.explorer-up:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.dict-back-btn { display: none; }

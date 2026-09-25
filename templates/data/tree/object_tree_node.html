@@ -1,59 +1,59 @@
 <!-- templates/data/tree/object_tree_node.html -->
-<li class="tree-item position-relative mb-0.5" id="node-{{ node.uuid }}">
-    <div class="d-flex align-items-center justify-content-between p-1 rounded-2 hover-bg-light transition-all">
-        
+<li class="tree-item" id="node-{{ node.uuid }}">
+    <div class="tree-row">
+
         <!-- Стрелка раскрытия (поворачивается вниз при aria-expanded="true") -->
-        {% if node.children.all %}
-            <span class="tree-arrow text-secondary d-inline-flex align-items-center justify-content-center flex-shrink-0" 
-                  style="width: 24px; height: 24px; font-size: 0.75rem;"
-                  data-bs-toggle="collapse" 
-                  data-bs-target="#children-{{ node.uuid }}"
-                  aria-expanded="{% if node.uuid|stringformat:'s' in parent_uuids %}true{% else %}false{% endif %}">
+        {% if node.has_children %}
+            <button type="button"
+                    class="tree-arrow"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#children-{{ node.uuid }}"
+                    aria-expanded="{% if node.uuid|stringformat:'s' in parent_uuids %}true{% else %}false{% endif %}"
+                    aria-label="Раскрыть вложенные объекты">
                 <i class="bi bi-chevron-right arrow-icon"></i>
-            </span>
+            </button>
         {% else %}
-            <span class="d-inline-flex flex-shrink-0" style="width: 24px; height: 24px;"></span>
+            <span class="tree-arrow-spacer"></span>
         {% endif %}
-        
+
         <!-- Строка объекта: общий компонент дерева и проводника -->
         {% include 'data/tree/object_tree_node_label.html' with node=node %}
-        
-        <!-- Действия над узлом -->
-        <div class="tree-actions d-flex align-items-center gap-0.5 ms-1">
-            <button type="button" 
-                    class="btn btn-link text-secondary p-1 m-0 d-flex align-items-center" 
-                    data-bs-toggle="modal" 
+
+        <!-- Действия над узлом: появляются по наведению -->
+        <div class="tree-actions">
+            <button type="button"
+                    data-bs-toggle="modal"
                     data-bs-target="#serviceModal"
                     hx-get="{% url 'service_object' node.uuid %}"
                     hx-target="#service-modal-content"
-                    title="Зафиксировать ТО">
-                <i class="bi bi-wrench-adjustable" style="font-size: 0.85rem;"></i>
+                    title="Обслужить: зафиксировать выполненное ТО">
+                <i class="bi bi-wrench-adjustable"></i>
             </button>
-            
+
             {% if not request.user.is_junior %}
-            <button type="button" 
-                    class="btn btn-link text-danger p-1 m-0 d-flex align-items-center" 
+            <button type="button"
+                    class="is-danger"
                     data-bs-toggle="modal"
                     data-bs-target="#confirmModal"
                     hx-get="{% url 'delete_object' node.uuid %}"
                     hx-target="#confirm-modal-content"
-                    title="Удалить">
-                <i class="bi bi-trash3" style="font-size: 0.85rem;"></i>
+                    title="Удалить объект">
+                <i class="bi bi-trash3"></i>
             </button>
             {% endif %}
         </div>
     </div>
-    
+
     <!-- Вложенные узлы -->
-    {% if node.children.all %}
-    <div class="collapse {% if node.uuid|stringformat:'s' in parent_uuids %}show{% endif %}" 
-         id="children-{{ node.uuid }}" 
-         hx-get="{% url 'object_children' node.uuid %}{% if active_object %}?active_object={{ active_object.uuid }}{% endif %}" 
-         hx-trigger="{% if node.uuid|stringformat:'s' in parent_uuids %}load once{% else %}show.bs.collapse once{% endif %}" 
+    {% if node.has_children %}
+    <div class="collapse {% if node.uuid|stringformat:'s' in parent_uuids %}show{% endif %}"
+         id="children-{{ node.uuid }}"
+         hx-get="{% url 'object_children' node.uuid %}{% if active_object %}?active_object={{ active_object.uuid }}{% endif %}"
+         hx-trigger="{% if node.uuid|stringformat:'s' in parent_uuids %}load once{% else %}show.bs.collapse once{% endif %}"
          hx-target="#children-{{ node.uuid }}"
          hx-swap="innerHTML">
         <div class="py-1 text-center text-muted small">
-            <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+            <span class="spinner-border spinner-border-sm" role="status"></span>
         </div>
     </div>
     {% endif %}

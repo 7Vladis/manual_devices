@@ -1,65 +1,56 @@
 <!-- templates/data/settings/settings_layout_inner.html -->
-<div class="d-flex flex-column h-100 w-100 bg-light animate-fade">
-    
-    <!-- ГОРИЗОНТАЛЬНАЯ СТРОКА НАВИГАЦИИ СВЕРХУ -->
-    <div class="bg-white border-bottom px-4 py-2.5 d-flex align-items-center justify-content-between shadow-sm" style="height: 56px; min-height: 56px;">
-        <div class="d-flex align-items-center gap-4">
-            
-            <!-- Вкладки-ссылки -->
-            <div class="nav nav-pills gap-1" id="settings-tabs-row" style="font-size: 0.82rem; font-weight: 600;">
-                
-                <a href="?tab=rules" 
-                   class="nav-link px-3 py-1.5 rounded-2 d-flex align-items-center {% if active_tab == 'rules' %}active text-white shadow-sm{% else %}text-secondary hover-bg-light{% endif %}"
-                   hx-get="{% url 'settings_page' %}?tab=rules"
-                   hx-target="#settings-page-wrapper"
-                   hx-push-url="true">
-                    <i class="bi bi-calendar-range me-2"></i>Правила планирования
-                </a>
-                
-                <a href="?tab=object_types" 
-                   class="nav-link px-3 py-1.5 rounded-2 d-flex align-items-center {% if active_tab == 'object_types' %}active text-white shadow-sm{% else %}text-secondary hover-bg-light{% endif %}"
-                   hx-get="{% url 'settings_page' %}?tab=object_types"
-                   hx-target="#settings-page-wrapper"
-                   hx-push-url="true">
-                    <i class="bi bi-tags me-2"></i>Типы объектов
-                </a>
+<div class="d-flex flex-column h-100 w-100 animate-fade">
 
-                {% if request.user.is_admin_or_higher %}
-                <a href="?tab=notifications" 
-                   class="nav-link px-3 py-1.5 rounded-2 d-flex align-items-center {% if active_tab == 'notifications' %}active text-white shadow-sm{% else %}text-secondary hover-bg-light{% endif %}"
-                   hx-get="{% url 'settings_page' %}?tab=notifications"
-                   hx-target="#settings-page-wrapper"
-                   hx-push-url="true">
-                    <i class="bi bi-bell-fill me-2"></i>Уведомления
-                </a>
+    <!-- Разделы настроек -->
+    <nav class="settings-bar" id="settings-tabs-row" aria-label="Разделы настроек">
 
-                <a href="?tab=users" 
-                   class="nav-link px-3 py-1.5 rounded-2 d-flex align-items-center {% if active_tab == 'users' %}active text-white shadow-sm{% else %}text-secondary hover-bg-light{% endif %}"
-                   hx-get="{% url 'settings_page' %}?tab=users"
-                   hx-target="#settings-page-wrapper"
-                   hx-push-url="true">
-                    <i class="bi bi-people-fill me-2"></i>Пользователи
-                </a>
-                {% endif %}
-            </div>
-        </div>
-        
-        <div class="text-muted small d-none d-md-block" style="font-size: 0.75rem;">
-            Панель администрирования
-        </div>
-    </div>
+        <a href="?tab=rules"
+           class="settings-tab {% if active_tab == 'rules' %}is-active{% endif %}"
+           hx-get="{% url 'settings_page' %}?tab=rules"
+           hx-target="#settings-page-wrapper"
+           hx-push-url="true">
+            <i class="bi bi-calendar-range"></i>Правила планирования
+        </a>
 
-    <!-- КОНТЕНТНАЯ ОБЛАСТЬ -->
-    <div class="flex-grow-1 overflow-auto p-4" id="settings-detail-container">
-        {% if active_tab == 'rules' %}
-            {% include 'data/settings/tab_rules.html' %}
-        {% elif active_tab == 'object_types' %}
-            {% include 'data/settings/tab_object_types.html' %}
-        {% elif active_tab == 'notifications' and request.user.is_admin_or_higher %}
-            {% include 'data/settings/tab_notifications.html' %}
-        {% elif active_tab == 'users' and request.user.is_admin_or_higher %}
-            {% include 'data/settings/tab_users.html' %}
+        <a href="?tab=object_types"
+           class="settings-tab {% if active_tab == 'object_types' %}is-active{% endif %}"
+           hx-get="{% url 'settings_page' %}?tab=object_types"
+           hx-target="#settings-page-wrapper"
+           hx-push-url="true">
+            <i class="bi bi-tags"></i>Типы оборудования
+        </a>
+
+        {% if request.user.is_admin_or_higher %}
+        <a href="?tab=notifications"
+           class="settings-tab {% if active_tab == 'notifications' %}is-active{% endif %}"
+           hx-get="{% url 'settings_page' %}?tab=notifications"
+           hx-target="#settings-page-wrapper"
+           hx-push-url="true">
+            <i class="bi bi-bell"></i>Уведомления
+        </a>
+
+        <a href="?tab=users"
+           class="settings-tab {% if active_tab == 'users' %}is-active{% endif %}"
+           hx-get="{% url 'settings_page' %}?tab=users"
+           hx-target="#settings-page-wrapper"
+           hx-push-url="true">
+            <i class="bi bi-people"></i>Пользователи
+        </a>
         {% endif %}
+    </nav>
+
+    <div class="settings-content" id="settings-detail-container">
+        <div class="settings-inner">
+            {% if active_tab == 'rules' %}
+                {% include 'data/settings/tab_rules.html' %}
+            {% elif active_tab == 'object_types' %}
+                {% include 'data/settings/tab_object_types.html' %}
+            {% elif active_tab == 'notifications' and request.user.is_admin_or_higher %}
+                {% include 'data/settings/tab_notifications.html' %}
+            {% elif active_tab == 'users' and request.user.is_admin_or_higher %}
+                {% include 'data/settings/tab_users.html' %}
+            {% endif %}
+        </div>
     </div>
-    
+
 </div>

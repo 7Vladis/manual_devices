@@ -1,19 +1,74 @@
 {% comment %}
-Результат фоновой синхронизации с YouTrack. Заменяет спиннер в шапке карточки;
-вместе с ним OOB-свопами обновляются счётчики вкладок и описание объекта.
+Состояние обмена с YouTrack в шапке карточки.
+
+В YouTrack ходит воркер, поэтому пилюля сама опрашивает сервер, пока идут
+задания, и только после этого обновляет OOB-свопами счётчики вкладок и
+описание объекта. Она отвечает и за входящую синхронизацию, и за исходящие
+операции: человеку важно одно — дошло ли до задачи то, что он сделал.
+
+sync_state: pending — есть незавершённые задания; done — всё выполнено;
+failed — что-то не уехало (пилюля предлагает повторить); stalled — ответа
+нет слишком долго; idle/none — заданий нет или задача не привязана.
 {% endcomment %}
+{% if sync_state == 'pending' %}
 <span id="yt-sync-status"
-      class="pill {% if sync_status == 'success' %}pill-success{% else %}pill-danger{% endif %} animate-fade"
-      style="cursor: help;"
-      title="{{ sync_message }}">
-    <i class="bi {% if sync_status == 'success' %}bi-cloud-check-fill{% else %}bi-cloud-slash-fill{% endif %}"></i>
+      class="pill pill-neutral"
+      {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+      hx-get="{% url 'sync_status' obj.uuid %}?poll={{ poll|default:1 }}"
+      hx-trigger="load delay:2s"
+      hx-swap="outerHTML"
+      title="Обмен с YouTrack поставлен в очередь">
+    <span class="spinner-border spinner-border-sm" role="status" style="width: 0.85em; height: 0.85em;"></span>
     <span class="pill-label">YouTrack</span>
 </span>
 
+{% elif sync_state == 'done' %}
+<span id="yt-sync-status" class="pill pill-success animate-fade"
+      {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+      style="cursor: help;"
+      title="{{ sync_message|default:'Обмен с YouTrack выполнен' }}">
+    <i class="bi bi-cloud-check"></i>
+    <span class="pill-label">YouTrack</span>
+</span>
+
+{% if counts_ready %}
 <span id="tab-count-comments" class="tab-count" hx-swap-oob="true">{{ comments_count }}</span>
 <span id="tab-count-files" class="tab-count" hx-swap-oob="true">{{ files_count }}</span>
 <span id="tab-count-history" class="tab-count" hx-swap-oob="true">{{ history_count }}</span>
-
-{% if sync_status == 'success' %}
 {% include 'data/object/inline_description.html' with obj=obj editing=False oob=True %}
+{% endif %}
+
+{% elif sync_state == 'failed' %}
+{% comment %}
+Красная пилюля, которую нечем погасить, быстро перестаёт что-либо значить,
+поэтому она же и кнопка: нажатие возвращает задания в очередь.
+{% endcomment %}
+<button type="button"
+        id="yt-sync-status"
+        class="pill pill-danger animate-fade"
+        {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+        hx-post="{% url 'retry_youtrack' obj.uuid %}"
+        hx-swap="outerHTML"
+        title="{{ sync_message|default:'Обмен с YouTrack не удался' }} — нажмите, чтобы повторить">
+    <i class="bi bi-arrow-clockwise"></i>
+    <span class="pill-label">YouTrack</span>
+</button>
+
+{% elif sync_state == 'stalled' %}
+<span id="yt-sync-status" class="pill pill-warning animate-fade"
+      {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+      style="cursor: help;"
+      title="Задания всё ещё в очереди. Похоже, планировщик не запущен — данные могут быть устаревшими.">
+    <i class="bi bi-cloud-arrow-down"></i>
+    <span class="pill-label">YouTrack</span>
+</span>
+
+{% else %}
+<span id="yt-sync-status" class="pill pill-neutral"
+      {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+      style="cursor: help;"
+      title="{% if obj.youtrack_issue_id %}Обмен с YouTrack не выполнялся{% else %}Задача YouTrack не привязана к объекту{% endif %}">
+    <i class="bi bi-cloud"></i>
+    <span class="pill-label">YouTrack</span>
+</span>
 {% endif %}

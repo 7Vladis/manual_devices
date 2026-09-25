@@ -23,6 +23,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from data.models import DataObject, ObjectModel, ObjectType
+from data.services.youtrack_queue import process_jobs
 
 from .models import MattermostSetting
 from .services import send_mattermost_notification, test_specific_webhook
@@ -252,8 +253,9 @@ class SchedulerProcessTests(TestCase):
                 pass
 
             def add_job(self, func, **kwargs):
-                created['job'] = kwargs
-                created['func'] = func
+                # Планировщик держит несколько заданий, поэтому собираем их
+                # по идентификатору, а не перетираем последним.
+                created.setdefault('jobs', {})[kwargs['id']] = {'func': func, **kwargs}
 
             def start(self):
                 created['started'] = True
@@ -267,9 +269,19 @@ class SchedulerProcessTests(TestCase):
 
         self.assertEqual(created['timezone'], settings.TIME_ZONE)
         self.assertTrue(created['started'])
-        self.assertEqual(created['job']['max_instances'], 1)
-        self.assertTrue(created['job']['coalesce'])
-        self.assertEqual(created['func'], run_daily_maintenance_check)
+
+        digest = created['jobs']['maintenance_digest']
+        self.assertEqual(digest['func'], run_daily_maintenance_check)
+        self.assertEqual(digest['max_instances'], 1)
+        self.assertTrue(digest['coalesce'])
+
+        # Очередь YouTrack живёт в том же процессе и тоже не должна
+        # наслаиваться сама на себя.
+        queue = created['jobs']['youtrack_queue']
+        self.assertEqual(queue['func'], process_jobs)
+        self.assertEqual(queue['trigger'], 'interval')
+        self.assertEqual(queue['max_instances'], 1)
+        self.assertTrue(queue['coalesce'])
 
 
 class WebhookViewTests(TestCase):

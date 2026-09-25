@@ -1,19 +1,10 @@
 <!-- templates/data/object/object_tab_comments.html -->
 {% load markdown_extras %}
+{% url 'object_tab' obj.uuid 'comments' as comments_url %}
 
-<span id="tab-count-comments" class="tab-count" hx-swap-oob="true">{{ comments|length }}</span>
+<span id="tab-count-comments" class="tab-count" hx-swap-oob="true">{{ comments.paginator.count }}</span>
 
 <div class="animate-fade">
-
-    {% if yt_error %}
-    <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3 small animate-fade">
-        <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
-        <div>
-            <strong>YouTrack:</strong> {{ yt_error }}
-            <a href="#" data-bs-toggle="modal" data-bs-target="#userTokenModal" class="alert-link ms-1">Указать токен</a>
-        </div>
-    </div>
-    {% endif %}
 
     {% if form_error %}
     <div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3 mb-3 rounded-3 small animate-fade">
@@ -65,6 +56,9 @@
     <form hx-post="{% url 'delete_comments_bulk' %}" hx-target="#tab-pane-comments">
         {% csrf_token %}
         <input type="hidden" name="object_uuid" value="{{ obj.uuid }}">
+        <!-- Номер страницы возвращается вместе с формой: после удаления
+             пользователь остаётся там, где был, а не улетает в начало ленты. -->
+        <input type="hidden" name="page" value="{{ comments.number }}">
 
         <div class="d-flex justify-content-between align-items-center mb-2 px-1">
             <h6 class="panel-title mb-0"><i class="bi bi-chat-left-text"></i>Лента комментариев</h6>
@@ -89,5 +83,7 @@
             </div>
             {% endfor %}
         </div>
+
+        {% include 'data/includes/pagination.html' with page=comments base_url=comments_url target='#tab-pane-comments' %}
     </form>
 </div>

@@ -2,14 +2,16 @@
 Кнопка переключения режима справочника (дерево ↔ проводник).
 Отдельный фрагмент, потому что представление возвращает её же после
 переключения — разметка должна существовать в одном экземпляре.
+Живёт в шапке сайдбара справочника: режим относится к списку слева,
+а не ко всему приложению.
 {% endcomment %}
 <button type="button"
         id="explorer-toggle-btn"
-        class="header-nav-btn"
+        class="ghost-btn"
         hx-post="{% url 'toggle_explorer_mode' %}"
         hx-target="#explorer-toggle-btn"
         hx-swap="outerHTML"
-        title="Режим справочника: {% if explorer_mode == 'flat' %}проводник — нажмите, чтобы вернуться к дереву{% else %}дерево — нажмите, чтобы перейти к проводнику{% endif %}"
+        title="{% if explorer_mode == 'flat' %}Сейчас проводник — вернуться к дереву{% else %}Сейчас дерево — перейти к проводнику{% endif %}"
         aria-label="Переключить режим справочника">
-    <i class="bi {% if explorer_mode == 'flat' %}bi-folder2-open text-warning{% else %}bi-diagram-3-fill text-info{% endif %} fs-6"></i>
+    <i class="bi {% if explorer_mode == 'flat' %}bi-folder2-open{% else %}bi-diagram-3{% endif %}"></i>
 </button>

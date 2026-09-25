@@ -1,100 +1,45 @@
 {% extends 'base.html' %}
 
+{% block title %}План ТО — ManDev{% endblock %}
+
 {% block content %}
-<div class="container-fluid px-4 py-3">
+<div class="plan-page">
 
-    <!-- Сводные показатели. Каждая плитка — фильтр списка работ ниже. -->
-    <div class="row g-3 mb-4" role="group" aria-label="Фильтры плана обслуживания">
-
-        <div class="col-12 col-sm-6 col-xl-3">
-            <button type="button" class="stat-tile" data-period="all"
-                    hx-get="{% url 'maintenance_list' %}?period=all"
-                    hx-target="#maintenance-container">
-                <span class="stat-icon bg-light-primary text-primary"><i class="bi bi-box-seam-fill"></i></span>
-                <span class="stat-body">
-                    <span class="stat-label">Всего объектов</span>
-                    <span class="stat-value d-block text-dark">{{ total_objects }}</span>
-                </span>
-            </button>
-        </div>
-
-        <div class="col-12 col-sm-6 col-xl-3">
-            <button type="button" class="stat-tile {% if overdue_count %}is-alert{% endif %}" data-period="overdue"
-                    hx-get="{% url 'maintenance_list' %}?period=overdue"
-                    hx-target="#maintenance-container">
-                <span class="stat-icon bg-light-danger text-danger"><i class="bi bi-exclamation-triangle-fill"></i></span>
-                <span class="stat-body">
-                    <span class="stat-label">Просрочено</span>
-                    <span class="stat-value d-block {% if overdue_count %}is-danger{% else %}text-dark{% endif %}">{{ overdue_count }}</span>
-                </span>
-            </button>
-        </div>
-
-        <div class="col-12 col-sm-6 col-xl-3">
-            <button type="button" class="stat-tile is-active" data-period="week"
-                    hx-get="{% url 'maintenance_list' %}?period=week"
-                    hx-target="#maintenance-container">
-                <span class="stat-icon bg-light-info text-cyan"><i class="bi bi-calendar-week-fill"></i></span>
-                <span class="stat-body">
-                    <span class="d-flex align-items-center justify-content-between gap-2">
-                        <span class="stat-label">План на неделю</span>
-                        <span class="fw-bold text-dark" style="font-size: 0.85rem;">{{ week_done }}/{{ week_all }}</span>
-                    </span>
-                    <span class="stat-progress" role="progressbar"
-                          aria-label="Выполнение плана на неделю"
-                          aria-valuenow="{{ week_percent|floatformat:0 }}" aria-valuemin="0" aria-valuemax="100">
-                        <span style="width: {{ week_percent|floatformat:0 }}%"></span>
-                    </span>
-                </span>
-            </button>
-        </div>
-
-        <div class="col-12 col-sm-6 col-xl-3">
-            <button type="button" class="stat-tile" data-period="month"
-                    hx-get="{% url 'maintenance_list' %}?period=month"
-                    hx-target="#maintenance-container">
-                <span class="stat-icon bg-light-success text-success"><i class="bi bi-calendar-month-fill"></i></span>
-                <span class="stat-body">
-                    <span class="d-flex align-items-center justify-content-between gap-2">
-                        <span class="stat-label">План на месяц</span>
-                        <span class="fw-bold text-dark" style="font-size: 0.85rem;">{{ month_done }}/{{ month_all }}</span>
-                    </span>
-                    <span class="stat-progress is-success" role="progressbar"
-                          aria-label="Выполнение плана на месяц"
-                          aria-valuenow="{{ month_percent|floatformat:0 }}" aria-valuemin="0" aria-valuemax="100">
-                        <span style="width: {{ month_percent|floatformat:0 }}%"></span>
-                    </span>
-                </span>
-            </button>
-        </div>
-
+    <div class="plan-head">
+        <h1>План технического обслуживания</h1>
+        <span class="plan-today">Сегодня {{ today|date:"j E Y" }}</span>
     </div>
 
-    <div class="section-head mb-3">
-        <h2 class="section-title">
-            <i class="bi bi-list-check"></i>Список работ
-            <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle px-3" id="period-label">
-                План на неделю
-            </span>
-        </h2>
-    </div>
+    {% include 'data/includes/plan_filters.html' %}
 
     <div id="maintenance-container" hx-get="{% url 'maintenance_list' %}?period=week" hx-trigger="load once">
-        <div class="text-center py-5">
-            <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
-            <div class="text-muted small mt-2">Загрузка плана обслуживания…</div>
+        <div class="text-center py-5 text-muted">
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            <div class="small mt-2">Загружаем план обслуживания…</div>
         </div>
     </div>
 
 </div>
 
+<!-- Фиксация ТО прямо из плана: решение принимается здесь, здесь же и действие -->
+<div class="modal fade" id="serviceModal" tabindex="-1" aria-hidden="true" data-md-reset>
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
+        <div class="modal-content" id="service-modal-content"></div>
+    </div>
+</div>
+
 <script>
-    // Подсветка выбранной плитки: иначе после клика непонятно, что показано в списке.
-    document.querySelectorAll('.stat-tile').forEach((tile) => {
-        tile.addEventListener('click', () => {
-            document.querySelectorAll('.stat-tile').forEach((t) => t.classList.remove('is-active'));
-            tile.classList.add('is-active');
-        });
+    /**
+     * Подсветка выбранного фильтра сразу по клику: ответ сервера придёт
+     * через мгновение и перерисует полосу целиком, но пользователь должен
+     * видеть отклик немедленно. Делегирование — полоса пересоздаётся
+     * OOB-свопом после каждой загрузки списка.
+     */
+    document.addEventListener('click', (event) => {
+        const tile = event.target.closest('#plan-filters .stat-tile');
+        if (!tile) return;
+        document.querySelectorAll('#plan-filters .stat-tile').forEach((t) => t.classList.remove('is-active'));
+        tile.classList.add('is-active');
     });
 </script>
 {% endblock %}

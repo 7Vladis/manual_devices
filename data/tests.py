@@ -27,7 +27,9 @@ from .models import (
     DateUpdateRule,
     ObjectModel,
     ObjectType,
+    YouTrackJob,
 )
+from .services.youtrack_queue import process_jobs
 from .templatetags.markdown_extras import markdown_format
 from .views import calculate_next_maintenance_date, get_ancestors_chain
 
@@ -1093,6 +1095,21 @@ class YoutrackSyncTests(BaseDataTestCase):
             return FakeYtResponse(200, issue_payload)
         return fake_get
 
+    def _sync(self):
+        """
+        Ставит синхронизацию в очередь и тут же выполняет её воркером.
+
+        В бою эти два шага разнесены: веб только записывает задание, а в
+        YouTrack ходит процесс планировщика. В тесте разносить незачем.
+        """
+        response = self.client.post(reverse('sync_youtrack', args=[self.root.uuid]))
+        process_jobs()
+        return response
+
+    def _sync_status(self):
+        """Разметка пилюли состояния — то, что увидит пользователь."""
+        return self.client.get(reverse('sync_status', args=[self.root.uuid])).content.decode()
+
     def test_opening_card_does_not_call_youtrack(self):
         """BUG-006: GET карточки — чистый просмотр без обращений наружу."""
         self.login(self.senior)
@@ -1106,12 +1123,12 @@ class YoutrackSyncTests(BaseDataTestCase):
         """BUG-013: ручная синхронизация не дублируется рендером карточки."""
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get', side_effect=self._mock_get(self._issue_payload())) as mock_get:
-            response = self.client.post(reverse('sync_youtrack', args=[self.root.uuid]))
+            response = self._sync()
 
         self.assertEqual(response.status_code, 200)
         issue_calls = [c for c in mock_get.call_args_list if '/api/issues/MNT-1' == c.args[0].split('?')[0][-len('/api/issues/MNT-1'):]]
         self.assertEqual(len(issue_calls), 1)
-        body = response.content.decode()
+        body = self._sync_status()
         self.assertIn('pill-success', body)
         self.assertIn('id="tab-count-comments" class="tab-count" hx-swap-oob="true">1<', body)
         self.assertIn('id="description-container"', body)
@@ -1120,9 +1137,14 @@ class YoutrackSyncTests(BaseDataTestCase):
     def test_sync_error_is_shown_to_user(self):
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get', return_value=FakeYtResponse(404)):
-            response = self.client.post(reverse('sync_youtrack', args=[self.root.uuid]))
+            # 404 — ошибка сетевая по форме, поэтому задание отрабатывает
+            # все попытки, прежде чем признать себя неудачным.
+            self._sync()
+            for _ in range(YouTrackJob.MAX_ATTEMPTS):
+                YouTrackJob.objects.filter(status=YouTrackJob.QUEUED).update(run_after=timezone.now())
+                process_jobs()
 
-        body = response.content.decode()
+        body = self._sync_status()
         self.assertIn('pill-danger', body)
         self.assertIn('не найдена', body)
         self.assertNotIn('id="description-container"', body)  # при ошибке описание не трогаем
@@ -1135,7 +1157,7 @@ class YoutrackSyncTests(BaseDataTestCase):
 
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get', side_effect=self._mock_get(payload, work_items_status=500)):
-            self.client.post(reverse('sync_youtrack', args=[self.root.uuid]))
+            self._sync()
 
         self.assertTrue(Comment.objects.filter(youtrack_id='c-old').exists())
         self.assertTrue(ActionHistory.objects.filter(youtrack_id='w-old').exists())
@@ -1145,7 +1167,7 @@ class YoutrackSyncTests(BaseDataTestCase):
 
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get', side_effect=self._mock_get(self._issue_payload())):
-            self.client.post(reverse('sync_youtrack', args=[self.root.uuid]))
+            self._sync()
 
         self.assertFalse(Comment.objects.filter(youtrack_id='c-gone').exists())
         self.assertTrue(Comment.objects.filter(youtrack_id='c-1').exists())
@@ -1158,7 +1180,7 @@ class YoutrackSyncTests(BaseDataTestCase):
 
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get', side_effect=self._mock_get(self._issue_payload(), [page1, page2])):
-            self.client.post(reverse('sync_youtrack', args=[self.root.uuid]))
+            self._sync()
 
         self.assertTrue(ActionHistory.objects.filter(youtrack_id='w-150').exists())
         self.assertEqual(ActionHistory.objects.filter(data_object=self.root, youtrack_id__startswith='w-').count(), 101)
@@ -1170,7 +1192,7 @@ class YoutrackSyncTests(BaseDataTestCase):
 
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get', side_effect=self._mock_get(self._issue_payload(description=''))):
-            self.client.post(reverse('sync_youtrack', args=[self.root.uuid]))
+            self._sync()
 
         self.root.refresh_from_db()
         self.assertIsNone(self.root.description)
@@ -1181,7 +1203,7 @@ class YoutrackSyncTests(BaseDataTestCase):
 
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get', side_effect=self._mock_get(self._issue_payload())):
-            self.client.post(reverse('sync_youtrack', args=[self.root.uuid]))
+            self._sync()
 
         self.assertEqual(Comment.objects.get(youtrack_id='c-1').text, 'Комментарий из YT')
 
@@ -1191,10 +1213,14 @@ class YoutrackSyncTests(BaseDataTestCase):
 
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get') as mock_get:
-            response = self.client.post(reverse('sync_youtrack', args=[self.root.uuid]))
+            self._sync()
 
         mock_get.assert_not_called()
-        self.assertIn('токен', response.content.decode())
+        # Отсутствие токена повтором не лечится: задание закрывается сразу.
+        job = YouTrackJob.objects.get(data_object=self.root, kind=YouTrackJob.KIND_SYNC)
+        self.assertEqual(job.status, YouTrackJob.FAILED)
+        self.assertIn('токен', job.last_error)
+        self.assertIn('токен', self._sync_status())
 
 
 class AttachmentValidationTests(BaseDataTestCase):
@@ -1336,37 +1362,59 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
         self.senior.save(update_fields=['youtrack_token'])
         self.login(self.senior)
 
+    def _drain(self):
+        """
+        Прогоняет очередь до конца, включая повторы.
+
+        В бою между попытками проходят минуты; здесь достаточно сдвинуть
+        «не раньше» и позвать воркера снова.
+        """
+        for _ in range(YouTrackJob.MAX_ATTEMPTS):
+            YouTrackJob.objects.filter(status=YouTrackJob.QUEUED).update(run_after=timezone.now())
+            if not process_jobs():
+                break
+
+    def _pill(self, obj=None):
+        """Разметка пилюли состояния — там пользователь и видит итог обмена."""
+        target = obj or self.root
+        return self.client.get(reverse('sync_status', args=[target.uuid])).content.decode()
+
     def test_failed_work_item_is_reported_to_user(self):
-        with patch('data.views.add_work_item_to_youtrack', return_value=(False, 'нет прав')):
-            response = self.client.post(reverse('service_object', args=[self.root.uuid]), {
+        with patch('data.youtrack_services.add_work_item_to_youtrack', return_value=(False, 'нет прав')):
+            self.client.post(reverse('service_object', args=[self.root.uuid]), {
                 'maintenance_date': '2027-03-01',
                 'spent_time': '1h',
             })
+            self._drain()
 
-        body = response.content.decode()
-        self.assertIn('toast-item', body)
+        # Списание уходит в очередь, поэтому о неудаче сообщает пилюля
+        body = self._pill()
+        self.assertIn('pill-danger', body)
         self.assertIn('нет прав', body)
         # Локальная запись о ТО всё равно сохраняется — источник истины у нас
         self.assertTrue(ActionHistory.objects.filter(data_object=self.root, action_type='maintenance').exists())
 
     def test_successful_work_item_produces_no_warning(self):
-        with patch('data.views.add_work_item_to_youtrack', return_value=(True, 'w-1')):
+        with patch('data.youtrack_services.add_work_item_to_youtrack', return_value=(True, 'w-1')):
             response = self.client.post(reverse('service_object', args=[self.root.uuid]), {
                 'maintenance_date': '2027-03-01',
                 'spent_time': '1h',
             })
+            self._drain()
 
         self.assertNotIn('toast-item', response.content.decode())
+        self.assertNotIn('pill-danger', self._pill())
         self.assertEqual(ActionHistory.objects.get(data_object=self.root, action_type='maintenance').youtrack_id, 'w-1')
 
     def test_failed_description_update_is_reported(self):
-        with patch('data.views.update_issue_description_in_youtrack', return_value=(False, 'таймаут')):
-            response = self.client.post(reverse('edit_description', args=[self.root.uuid]), {
+        with patch('data.youtrack_services.update_issue_description_in_youtrack', return_value=(False, 'таймаут')):
+            self.client.post(reverse('edit_description', args=[self.root.uuid]), {
                 'description': 'новое описание',
             })
+            self._drain()
 
-        body = response.content.decode()
-        self.assertIn('toast-item', body)
+        body = self._pill()
+        self.assertIn('pill-danger', body)
         self.assertIn('таймаут', body)
         self.root.refresh_from_db()
         self.assertEqual(self.root.description, 'новое описание')
@@ -1377,7 +1425,7 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
             user=self.senior, data_object=self.root, text='важное', youtrack_id='c-1'
         )
 
-        with patch('data.views.delete_comment_from_youtrack', return_value=(False, 'сервер недоступен')):
+        with patch('data.youtrack_services.delete_comment_from_youtrack', return_value=(False, 'сервер недоступен')):
             response = self.client.post(reverse('delete_comments_bulk'), {
                 'object_uuid': str(self.root.uuid),
                 'comment_ids': [str(comment.uuid)],
@@ -1393,7 +1441,7 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
             user=self.senior, data_object=self.root, text='важное', youtrack_id='c-1'
         )
 
-        with patch('data.views.delete_comment_from_youtrack', return_value=(True, 'ok')):
+        with patch('data.youtrack_services.delete_comment_from_youtrack', return_value=(True, 'ok')):
             response = self.client.post(reverse('delete_comments_bulk'), {
                 'object_uuid': str(self.root.uuid),
                 'comment_ids': [str(comment.uuid)],
@@ -1405,7 +1453,7 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
     def test_local_only_comment_is_deleted_without_remote_call(self):
         comment = Comment.objects.create(user=self.senior, data_object=self.root, text='локальный')
 
-        with patch('data.views.delete_comment_from_youtrack') as mock_delete:
+        with patch('data.youtrack_services.delete_comment_from_youtrack') as mock_delete:
             self.client.post(reverse('delete_comments_bulk'), {
                 'object_uuid': str(self.root.uuid),
                 'comment_ids': [str(comment.uuid)],
@@ -1420,7 +1468,7 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
             path=SimpleUploadedFile('doc.pdf', b'data', content_type='application/pdf'),
         )
 
-        with patch('data.views.delete_attachment_from_youtrack', return_value=(False, '503')):
+        with patch('data.youtrack_services.delete_attachment_from_youtrack', return_value=(False, '503')):
             response = self.client.post(reverse('delete_attachments_bulk'), {
                 'object_uuid': str(self.root.uuid),
                 'file_ids': [str(att.uuid)],
@@ -1430,14 +1478,15 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
         self.assertIn('toast-item', response.content.decode())
 
     def test_failed_attachment_upload_is_reported(self):
-        with patch('data.views.upload_attachment_to_youtrack', return_value=(False, 'диск переполнен')):
-            response = self.client.post(reverse('add_attachment', args=[self.root.uuid]), {
+        with patch('data.youtrack_services.upload_attachment_to_youtrack', return_value=(False, 'диск переполнен')):
+            self.client.post(reverse('add_attachment', args=[self.root.uuid]), {
                 'file': SimpleUploadedFile('doc.pdf', b'data', content_type='application/pdf'),
                 'is_preview': 'false',
             })
+            self._drain()
 
-        body = response.content.decode()
-        self.assertIn('toast-item', body)
+        body = self._pill()
+        self.assertIn('pill-danger', body)
         self.assertIn('диск переполнен', body)
         # Файл сохранён локально — пользователь не теряет работу
         self.assertEqual(self.root.attachments.count(), 1)
@@ -1447,10 +1496,11 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
             user=self.senior, data_object=self.root, text='старое', youtrack_id='c-1'
         )
 
-        with patch('data.views.update_comment_in_youtrack', return_value=(False, 'конфликт версий')):
-            response = self.client.post(reverse('edit_comment', args=[comment.uuid]), {'text': 'новое'})
+        with patch('data.youtrack_services.update_comment_in_youtrack', return_value=(False, 'конфликт версий')):
+            self.client.post(reverse('edit_comment', args=[comment.uuid]), {'text': 'новое'})
+            self._drain()
 
-        self.assertIn('конфликт версий', response.content.decode())
+        self.assertIn('конфликт версий', self._pill())
         comment.refresh_from_db()
         self.assertEqual(comment.text, 'новое')
 

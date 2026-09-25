@@ -1,10 +1,11 @@
 <!-- templates/data/object/object_tab_history.html -->
-<span id="tab-count-history" class="tab-count" hx-swap-oob="true">{{ history|length }}</span>
+{% url 'object_tab' obj.uuid 'history' as history_url %}
+<span id="tab-count-history" class="tab-count" hx-swap-oob="true">{{ history.paginator.count }}</span>
 
 <div class="panel animate-fade">
     <div class="panel-head">
         <h6 class="panel-title"><i class="bi bi-clock-history"></i>История событий объекта</h6>
-        <span class="text-muted" style="font-size: 0.75rem;">Всего записей: {{ history|length }}</span>
+        <span class="text-muted" style="font-size: 0.75rem;">Всего записей: {{ history.paginator.count }}</span>
     </div>
 
     <div class="panel-body">
@@ -50,5 +51,7 @@
             <span class="empty-hint">Здесь появятся записи о ТО, изменениях и синхронизациях.</span>
         </div>
     {% endif %}
+
+    {% include 'data/includes/pagination.html' with page=history base_url=history_url target='#tab-pane-history' %}
     </div>
 </div>

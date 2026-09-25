@@ -122,6 +122,39 @@ class DataObject(models.Model):
     def __str__(self):
         return self.name or f"{self.model.name} ({self.inventory_number})"
 
+    @property
+    def has_children(self):
+        """
+        Есть ли вложенные объекты.
+
+        Строку дерева рисуют и списком (там выборка аннотирована
+        children_count), и поштучно — из карточки объекта или после фиксации
+        ТО. Во втором случае аннотации нет, и вопрос решается одним EXISTS,
+        а не выгрузкой всех потомков.
+        """
+        count = getattr(self, 'children_count', None)
+        if count is None:
+            return self.children.exists()
+        return bool(count)
+
+    @property
+    def maintenance_state(self):
+        """
+        Состояние срока ТО: 'overdue', 'due' (ближайшая неделя), 'ok' или None.
+
+        Считается здесь, а не передаётся в контексте: строку объекта рисуют
+        и дерево, и проводник, и результаты поиска — у каждого свой набор
+        переменных шаблона.
+        """
+        if not self.next_maintenance_date:
+            return None
+        delta = (self.next_maintenance_date - timezone.localdate()).days
+        if delta < 0:
+            return 'overdue'
+        if delta <= 7:
+            return 'due'
+        return 'ok'
+
     def get_effective_youtrack_issue(self):
         """
         Возвращает кортеж (youtrack_issue_id, target_object):
@@ -237,6 +270,113 @@ class ActionHistory(models.Model):
     @property
     def is_planned_maintenance(self):
         return self.action_type == 'maintenance' and self.maintenance_kind == 'planned'
+
+
+class YouTrackJob(models.Model):
+    """
+    Задание на обмен с YouTrack, выполняемое вне веб-запроса.
+
+    Веб только ставит задание в очередь, забирает его воркер в процессе
+    планировщика. Карточка объекта опрашивает состояние и показывает итог —
+    так обращение к внешней системе перестаёт держать HTTP-запрос.
+
+    Источник истины остаётся локальным: задание описывает, что нужно сделать
+    в YouTrack, а не хранит данные само.
+    """
+
+    KIND_SYNC = 'sync'
+    KIND_COMMENT = 'comment'
+    KIND_COMMENT_EDIT = 'comment_edit'
+    KIND_ATTACHMENT = 'attachment'
+    KIND_WORK_ITEM = 'work_item'
+    KIND_DESCRIPTION = 'description'
+
+    KIND_CHOICES = [
+        (KIND_SYNC, 'Синхронизация задачи'),
+        (KIND_COMMENT, 'Отправка комментария'),
+        (KIND_COMMENT_EDIT, 'Правка комментария'),
+        (KIND_ATTACHMENT, 'Загрузка вложения'),
+        (KIND_WORK_ITEM, 'Списание времени'),
+        (KIND_DESCRIPTION, 'Обновление описания'),
+    ]
+
+    QUEUED = 'queued'
+    RUNNING = 'running'
+    DONE = 'done'
+    FAILED = 'failed'
+    STATUS_CHOICES = [
+        (QUEUED, 'В очереди'),
+        (RUNNING, 'Выполняется'),
+        (DONE, 'Выполнено'),
+        (FAILED, 'Не удалось'),
+    ]
+
+    # Состояния, в которых задание ещё чего-то ждёт от YouTrack.
+    PENDING_STATUSES = (QUEUED, RUNNING)
+
+    # Виды, у которых незавершённое задание по объекту может быть только одно:
+    # они не накапливают изменения, а каждый раз отправляют текущее состояние.
+    # Удаление записей в очередь не ставится — оно остаётся синхронным, иначе
+    # пришлось бы держать на экране запись, которую пользователь уже удалил.
+    SINGLETON_KINDS = (KIND_SYNC, KIND_DESCRIPTION)
+
+    MAX_ATTEMPTS = 3
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    kind = models.CharField(max_length=30, choices=KIND_CHOICES, verbose_name="Что сделать")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=QUEUED, verbose_name="Состояние")
+
+    data_object = models.ForeignKey(
+        DataObject, on_delete=models.CASCADE, related_name='youtrack_jobs', verbose_name="Объект",
+    )
+    # Токен берётся из профиля пользователя, поэтому задание помнит, от чьего
+    # имени идти в YouTrack. Ушёл пользователь — задание больше не выполнить.
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='youtrack_jobs',
+        verbose_name="От чьего имени",
+    )
+    payload = models.JSONField(default=dict, blank=True, verbose_name="Параметры")
+
+    attempts = models.PositiveSmallIntegerField(default=0, verbose_name="Попыток сделано")
+    run_after = models.DateTimeField(default=timezone.now, db_index=True, verbose_name="Не раньше")
+    last_error = models.TextField(blank=True, default='', verbose_name="Последняя ошибка")
+    result = models.TextField(blank=True, default='', verbose_name="Итог")
+
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="Создано")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлено")
+
+    class Meta:
+        db_table = 'youtrack_job'
+        verbose_name = 'Задание YouTrack'
+        verbose_name_plural = 'Задания YouTrack'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['status', 'run_after'], name='ytjob_ready_idx'),
+            models.Index(fields=['data_object', 'kind', 'status'], name='ytjob_object_idx'),
+        ]
+        constraints = [
+            # Синхронизация и отправка описания не должны копиться: карточку
+            # открывают часто, а отправляется каждый раз текущее состояние.
+            models.UniqueConstraint(
+                fields=['data_object', 'kind'],
+                condition=models.Q(
+                    status__in=('queued', 'running'),
+                    kind__in=('sync', 'description'),
+                ),
+                name='unique_pending_singleton_job',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} — {self.get_status_display()}"
+
+    @property
+    def is_pending(self):
+        return self.status in self.PENDING_STATUSES
+
+    @property
+    def can_retry(self):
+        return self.attempts < self.MAX_ATTEMPTS
 
 
 class Comment(models.Model):

@@ -1,52 +1,81 @@
-<!-- templates/data/includes/maintenance_table.html -->
-<div class="d-flex flex-column gap-2 animate-fade">
-    {% for obj in objects %}
-    <a href="{% url 'dict' %}?object={{ obj.uuid }}"
-       class="file-row text-decoration-none {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}is-overdue{% endif %}">
+{% comment %}
+Список работ, сгруппированный по срочности. Группы приходят из
+group_by_urgency(): пустые не рендерятся.
 
-        <span class="stat-icon {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}bg-light-danger text-danger{% else %}bg-light-primary text-primary{% endif %}"
-              style="width: 40px; height: 40px; min-width: 40px; font-size: 1.05rem;">
-            <i class="bi {% if obj.next_maintenance_date and obj.next_maintenance_date < today %}bi-exclamation-octagon-fill{% else %}bi-wrench-adjustable{% endif %}"></i>
-        </span>
+Обёртка сама перезагружается по событию objectServiced — после фиксации ТО
+из этого же списка объект уезжает в другую группу.
+{% endcomment %}
+<div class="animate-fade"
+     hx-get="{% url 'maintenance_list' %}?period={{ period }}&page={{ page.number }}"
+     hx-trigger="objectServiced from:body"
+     hx-target="this"
+     hx-swap="outerHTML">
 
-        <span class="flex-grow-1 text-truncate">
-            <span class="d-block fw-semibold text-dark text-truncate" style="font-size: 0.9rem;">
-                {{ obj.name|default:obj.model.name }}
-            </span>
-            <span class="d-block text-muted text-truncate" style="font-size: 0.78rem;">
-                {{ obj.model.object_type.type }} · {{ obj.model.name }}
-                · <i class="bi bi-upc-scan"></i> {{ obj.inventory_number|default:"без инв. №" }}
-                {% if obj.next_maintenance_date %} · <i class="bi bi-calendar3"></i> {{ obj.next_maintenance_date|date:"d.m.Y" }}{% endif %}
-            </span>
-        </span>
+    {% for group in groups %}
+    <section class="plan-group {% if group.key == 'overdue' %}is-overdue{% endif %}">
+        <div class="plan-group-head">
+            <h2>{{ group.title }}</h2>
+            <span class="group-count">{{ group.objects|length }}</span>
+        </div>
 
-        <span class="d-flex align-items-center gap-2 flex-shrink-0">
-            {% if obj.next_maintenance_date %}
-                {% if obj.next_maintenance_date < today %}
-                <span class="pill pill-danger" style="font-size: 0.72rem; padding: 4px 10px;">
-                    <i class="bi bi-clock-history"></i>Просрочено
+        <div class="plan-list">
+            {% for obj in group.objects %}
+            <div class="plan-row">
+
+                <span class="rail {% if group.key == 'overdue' %}is-overdue{% elif group.key == 'today' or group.key == 'week' %}is-due{% elif group.key == 'none' %}is-none{% endif %}">
+                    {% if obj.next_maintenance_date %}
+                        <span class="rail-date">{{ obj.next_maintenance_date|date:"d.m" }}</span>
+                        <span class="rail-delta">{{ obj.days_label }}</span>
+                    {% else %}
+                        <span class="rail-date">—</span>
+                    {% endif %}
                 </span>
-                {% else %}
-                <span class="pill pill-neutral" style="font-size: 0.72rem; padding: 4px 10px;">
-                    <i class="bi bi-hourglass-split"></i>через {{ obj.next_maintenance_date|timeuntil }}
+
+                <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="plan-row-main">
+                    <span class="plan-names">
+                        <span class="plan-name">{{ obj.name|default:obj.model.name }}</span>
+                        <span class="plan-sub">{{ obj.model.object_type.type }} — {{ obj.model.name }}</span>
+                    </span>
+                    <span class="plan-inv {% if not obj.inventory_number %}is-empty{% endif %}">
+                        {{ obj.inventory_number|default:"без инв. №" }}
+                    </span>
+                </a>
+
+                <span class="plan-row-actions">
+                    <button type="button"
+                            class="btn btn-sm btn-light"
+                            data-bs-toggle="modal"
+                            data-bs-target="#serviceModal"
+                            hx-get="{% url 'service_object' obj.uuid %}?ctx=plan"
+                            hx-target="#service-modal-content"
+                            {% comment %}
+                            hx-swap задаётся явно: обёртка списка объявляет
+                            outerHTML для собственной перезагрузки, и кнопка
+                            унаследовала бы его — ответ снёс бы .modal-content.
+                            {% endcomment %}
+                            hx-swap="innerHTML"
+                            title="Зафиксировать выполненное обслуживание">
+                        <i class="bi bi-wrench-adjustable"></i>
+                        <span class="d-none d-md-inline">Обслужить</span>
+                    </button>
                 </span>
-                {% endif %}
-            {% else %}
-                <span class="pill pill-neutral" style="font-size: 0.72rem; padding: 4px 10px;">срок не назначен</span>
-            {% endif %}
-            <i class="bi bi-chevron-right text-muted"></i>
-        </span>
-    </a>
+
+            </div>
+            {% endfor %}
+        </div>
+    </section>
     {% empty %}
     <div class="panel">
         <div class="empty-state">
-            <span class="empty-icon text-success" style="background-color: var(--success-light);"><i class="bi bi-check2-circle"></i></span>
-            <span class="empty-title">Работ в этом периоде нет</span>
-            <span class="empty-hint">Все запланированные обслуживания выполнены.</span>
+            <span class="empty-icon"><i class="bi bi-calendar-check"></i></span>
+            <span class="empty-title">В этом периоде работ нет</span>
+            <span class="empty-hint">Выберите другой период сверху или откройте справочник, чтобы назначить объектам правило ТО.</span>
         </div>
     </div>
     {% endfor %}
+
+    {% url 'maintenance_list' as plan_url %}
+    {% include 'data/includes/pagination.html' with page=page base_url=plan_url|add:'?period='|add:period target='#maintenance-container' %}
 </div>
 
-<!-- OOB-обновление заголовка фильтра -->
-<span id="period-label" hx-swap-oob="innerHTML">{{ period_label }}</span>
+{% include 'data/includes/plan_filters.html' %}

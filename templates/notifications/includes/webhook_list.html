@@ -23,14 +23,14 @@
                    style="width: 17px; height: 17px; cursor: pointer;"
                    aria-label="Выбрать вебхук для удаления">
 
-            <span class="stat-icon {% if item.is_active %}bg-light-success text-success{% else %}bg-light-danger text-muted{% endif %}"
-                  style="width: 40px; height: 40px; min-width: 40px; font-size: 1rem;">
-                <i class="bi bi-hdd-network"></i>
-            </span>
-
             <span class="flex-grow-1 text-truncate">
-                <span class="d-block fw-semibold text-dark text-truncate" style="font-size: 0.87rem;" title="{{ item.webhook_url }}">
-                    {{ item.webhook_url }}
+                <span class="d-flex align-items-center gap-2">
+                    <span class="pill {% if item.is_active %}pill-success{% else %}pill-neutral{% endif %} flex-shrink-0">
+                        {% if item.is_active %}включён{% else %}выключен{% endif %}
+                    </span>
+                    <span class="fw-semibold text-truncate" title="{{ item.webhook_url }}">
+                        {{ item.webhook_url }}
+                    </span>
                 </span>
                 <span class="entry-meta">
                     <i class="bi bi-clock"></i> обновлён {{ item.updated_at|date:"d.m.Y H:i" }}

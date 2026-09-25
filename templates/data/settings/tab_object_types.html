@@ -21,8 +21,8 @@
                     <i class="bi bi-tag-fill text-muted"></i>{{ item.type }}
                 </span>
                 <span class="entry-meta">
-                    Моделей: <strong class="text-dark">{{ item.models_count }}</strong> ·
-                    объектов: <strong class="text-dark">{{ item.objects_count }}</strong>
+                    Моделей — <strong class="text-dark">{{ item.models_count }}</strong>,
+                    объектов — <strong class="text-dark">{{ item.objects_count }}</strong>
                 </span>
             </div>
 
@@ -107,7 +107,7 @@
 <!-- Модальное окно: новый тип оборудования -->
 <div class="modal fade" id="addObjectTypeModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
-        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);">
+        <div class="modal-content overflow-hidden">
 
             <div class="sheet-header">
                 <span class="sheet-icon bg-light-primary text-primary"><i class="bi bi-tag-fill"></i></span>

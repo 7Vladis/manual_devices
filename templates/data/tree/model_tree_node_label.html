@@ -1,9 +1,10 @@
-<div id="model-label-{{ model.uuid }}" 
-     class="d-flex align-items-center text-truncate flex-grow-1 py-1 px-2 rounded-2 {% if is_active or active_model and active_model.uuid == model.uuid %}bg-light-primary border border-primary-subtle fw-bold text-primary active-tree-node{% endif %}" 
-     style="cursor: pointer; user-select: none;" 
-     hx-get="{% url 'model_detail' model.uuid %}" 
-     hx-target="#detail-container"
-     {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
-    <i class="bi bi-layers text-secondary me-2 fs-6"></i>
-    <span class="text-dark small fw-semibold text-truncate" title="{{ model.name }}">{{ model.name }}</span>
-</div>
+<button type="button"
+        id="model-label-{{ model.uuid }}"
+        class="tree-label {% if is_active or active_model and active_model.uuid == model.uuid %}is-active{% endif %}"
+        hx-get="{% url 'model_detail' model.uuid %}"
+        hx-target="#detail-container"
+        title="{{ model.name }}"
+        {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+    <i class="bi bi-layers tree-label-icon"></i>
+    <span class="text-truncate">{{ model.name }}</span>
+</button>

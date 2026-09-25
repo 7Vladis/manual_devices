@@ -1,23 +1,26 @@
 <!-- templates/data/includes/search_results_list.html -->
 <div class="suggest-menu suggest-menu-static">
     {% for obj in results %}
-    <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="suggest-item text-decoration-none">
-        <i class="bi bi-box-seam text-primary flex-shrink-0"></i>
+    <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="suggest-item">
+        <i class="bi bi-hdd flex-shrink-0 text-muted"></i>
         <span class="flex-grow-1 text-truncate">
             <span class="s-name d-block text-truncate">{{ obj.name|default:obj.model.name }}</span>
             <span class="s-sub d-block text-truncate">
-                {{ obj.model.name }}{% if obj.inventory_number %} · {{ obj.inventory_number }}{% endif %}
-                {% if obj.youtrack_issue_id %} · <i class="bi bi-hdd-network"></i> {{ obj.youtrack_issue_id }}{% endif %}
+                {{ obj.model.name }}{% if obj.inventory_number %} — {{ obj.inventory_number }}{% endif %}{% if obj.youtrack_issue_id %} — {{ obj.youtrack_issue_id }}{% endif %}
             </span>
         </span>
-        <span class="pill pill-neutral flex-shrink-0" style="font-size: 0.7rem; padding: 3px 9px;">
-            {{ obj.next_maintenance_date|date:"d.m.y"|default:"—" }}
+
+        {% with state=obj.maintenance_state %}
+        <span class="pill flex-shrink-0 {% if state == 'overdue' %}pill-danger{% elif state == 'due' %}pill-warning{% else %}pill-neutral{% endif %}"
+              title="{% if obj.next_maintenance_date %}Следующее ТО{% else %}Срок ТО не назначен{% endif %}">
+            {{ obj.next_maintenance_date|date:"d.m.y"|default:"без срока" }}
         </span>
+        {% endwith %}
     </a>
     {% empty %}
-    <div class="text-center text-muted py-3" style="font-size: 0.82rem;">
-        <i class="bi bi-search d-block mb-1 opacity-50"></i>
-        Ничего не найдено
+    <div class="empty-state" style="padding: 20px 14px;">
+        <span class="empty-title">Ничего не найдено</span>
+        <span class="empty-hint">Попробуйте часть названия, инвентарный номер или код задачи.</span>
     </div>
     {% endfor %}
 </div>

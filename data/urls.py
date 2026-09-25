@@ -54,6 +54,8 @@ urlpatterns = [
     path('dict/objects/<uuid:pk>/edit-youtrack/', views.edit_youtrack_view, name='edit_youtrack'),
     path('dict/attachments/<uuid:pk>/set-preview/', views.set_preview_attachment_view, name='set_preview_attachment'),
     path('dict/objects/<uuid:pk>/sync-youtrack/', views.sync_youtrack_view, name='sync_youtrack'),
+    path('dict/objects/<uuid:pk>/sync-status/', views.sync_status_view, name='sync_status'),
+    path('dict/objects/<uuid:pk>/retry-youtrack/', views.retry_youtrack_view, name='retry_youtrack'),
     
     # Детализация моделей
     path('dict/models/<uuid:pk>/', views.model_detail_view, name='model_detail'),

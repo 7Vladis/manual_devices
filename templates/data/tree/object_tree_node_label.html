@@ -2,14 +2,23 @@
 Кликабельная строка объекта. Используется и деревом, и проводником — id должен
 совпадать в обоих режимах, иначе OOB-обновление подсветки из карточки объекта
 уходит в никуда (так и было в режиме проводника).
+
+Точка справа — состояние срока ТО: единственный цвет в списке, и он всегда
+означает срок.
 {% endcomment %}
 <button type="button"
         id="node-label-{{ node.uuid }}"
         class="tree-label {% if is_active or active_object and active_object.uuid == node.uuid %}is-active{% endif %}"
         hx-get="{% url 'object_detail' node.uuid %}"
         hx-target="#detail-container"
-        title="{{ node.name|default:node.model.name }}"
+        title="{{ node.name|default:node.model.name }}{% if node.next_maintenance_date %} — ТО {{ node.next_maintenance_date|date:'d.m.Y' }}{% endif %}"
         {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
-    <i class="bi {% if node.children.all %}bi-folder-fill text-warning{% else %}bi-hdd-fill text-secondary{% endif %} tree-label-icon"></i>
+    <i class="bi {% if node.has_children %}bi-folder2{% else %}bi-hdd{% endif %} tree-label-icon"></i>
     <span class="text-truncate">{{ node.name|default:node.model.name }}</span>
+    {% with state=node.maintenance_state %}
+        {% if state == 'overdue' or state == 'due' %}
+        <span class="tree-dot is-{{ state }}"
+              title="{% if state == 'overdue' %}Срок ТО прошёл{% else %}ТО на ближайшей неделе{% endif %}"></span>
+        {% endif %}
+    {% endwith %}
 </button>

@@ -51,7 +51,7 @@
                         <td>
                             {% if u == request.user %}
                             <span class="pill pill-info" style="font-size: 0.72rem; padding: 3px 10px;">
-                                {{ u.get_role_display }} · это вы
+                                {{ u.get_role_display }} — это вы
                             </span>
                             {% else %}
                             <span class="d-flex align-items-center gap-2">
@@ -124,7 +124,7 @@
 <!-- Модальное окно: новый пользователь -->
 <div class="modal fade" id="createUserModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
-        <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: var(--radius-lg);">
+        <div class="modal-content overflow-hidden">
 
             <div class="sheet-header">
                 <span class="sheet-icon bg-light-primary text-primary"><i class="bi bi-person-plus-fill"></i></span>

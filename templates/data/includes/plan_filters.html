@@ -1,0 +1,54 @@
+{% comment %}
+Полоса показателей плана ТО. Она же фильтр списка: цифру видно, по ней
+и фильтруют. Список работ возвращает этот фрагмент OOB-свопом, чтобы после
+фиксации ТО счётчики не расходились со списком.
+{% endcomment %}
+<div class="plan-filters"
+     {% if oob_filters %}id="plan-filters" hx-swap-oob="outerHTML"{% else %}id="plan-filters"{% endif %}
+     role="group" aria-label="Фильтр плана обслуживания">
+
+    <button type="button" class="stat-tile {% if overdue_count %}is-alert{% endif %} {% if active_period == 'overdue' %}is-active{% endif %}"
+            data-period="overdue"
+            hx-get="{% url 'maintenance_list' %}?period=overdue"
+            hx-target="#maintenance-container">
+        <span class="stat-label">{% if overdue_count %}<i class="bi bi-exclamation-triangle-fill"></i>{% endif %}Просрочено</span>
+        <span class="stat-value {% if overdue_count %}is-danger{% endif %}">{{ overdue_count }}</span>
+        <span class="stat-note">{% if overdue_count %}требует внимания{% else %}всё в срок{% endif %}</span>
+    </button>
+
+    <button type="button" class="stat-tile {% if active_period == 'week' %}is-active{% endif %}"
+            data-period="week"
+            hx-get="{% url 'maintenance_list' %}?period=week"
+            hx-target="#maintenance-container">
+        <span class="stat-label">Эта неделя</span>
+        <span class="stat-value">{{ week_done }}<span class="stat-of"> из {{ week_all }}</span></span>
+        <span class="stat-progress" role="progressbar"
+              aria-label="Выполнение плана на неделю"
+              aria-valuenow="{{ week_percent|floatformat:0 }}" aria-valuemin="0" aria-valuemax="100">
+            <span style="width: {{ week_percent|floatformat:0 }}%"></span>
+        </span>
+    </button>
+
+    <button type="button" class="stat-tile {% if active_period == 'month' %}is-active{% endif %}"
+            data-period="month"
+            hx-get="{% url 'maintenance_list' %}?period=month"
+            hx-target="#maintenance-container">
+        <span class="stat-label">Этот месяц</span>
+        <span class="stat-value">{{ month_done }}<span class="stat-of"> из {{ month_all }}</span></span>
+        <span class="stat-progress is-success" role="progressbar"
+              aria-label="Выполнение плана на месяц"
+              aria-valuenow="{{ month_percent|floatformat:0 }}" aria-valuemin="0" aria-valuemax="100">
+            <span style="width: {{ month_percent|floatformat:0 }}%"></span>
+        </span>
+    </button>
+
+    <button type="button" class="stat-tile {% if active_period == 'all' %}is-active{% endif %}"
+            data-period="all"
+            hx-get="{% url 'maintenance_list' %}?period=all"
+            hx-target="#maintenance-container">
+        <span class="stat-label">Всего на учёте</span>
+        <span class="stat-value">{{ total_objects }}</span>
+        <span class="stat-note">объектов в справочнике</span>
+    </button>
+
+</div>

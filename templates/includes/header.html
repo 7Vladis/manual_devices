@@ -1,90 +1,72 @@
-<header class="app-header sticky-top shadow-sm d-flex align-items-center position-relative">
-    <div class="container-fluid px-4 d-flex align-items-center justify-content-between w-100">
-        
-        <!-- ЛЕВАЯ ЧАСТЬ: Навигационные кнопки (начинаются ровно по оси сетки) -->
-        <nav class="d-flex align-items-center gap-2 z-1">
-            <a class="header-nav-btn {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
-               href="{% url 'dashboard' %}" 
-               title="Главная панель (Дашборд)">
-                <i class="bi bi-house-door-fill fs-6"></i>
+<header class="app-header sticky-top d-flex align-items-center">
+    <div class="container-fluid px-3 d-flex align-items-center gap-3 w-100">
+
+        <!-- Разделы. Подписи рядом с иконками: разделов три, и угадывать их
+             по пиктограмме приходилось каждый раз заново. -->
+        <nav class="header-nav">
+            <a class="header-nav-btn {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+               href="{% url 'dashboard' %}">
+                <i class="bi bi-calendar-check"></i>
+                <span class="d-none d-lg-inline">План ТО</span>
             </a>
-            
-            <a class="header-nav-btn {% if request.resolver_match.url_name == 'dict' %}active{% endif %}" 
-               href="{% url 'dict' %}" 
-               title="Справочник оборудования">
-                <i class="bi bi-journal-bookmark-fill fs-6"></i>
+
+            <a class="header-nav-btn {% if request.resolver_match.url_name == 'dict' %}active{% endif %}"
+               href="{% url 'dict' %}">
+                <i class="bi bi-box-seam"></i>
+                <span class="d-none d-lg-inline">Справочник</span>
             </a>
-            
+
             {% if not request.user.is_junior %}
-            <a class="header-nav-btn {% if request.resolver_match.url_name == 'settings_page' %}active{% endif %}" 
-               href="{% url 'settings_page' %}" 
-               title="Панель управления и настройки">
-                <i class="bi bi-sliders fs-6"></i>
+            <a class="header-nav-btn {% if request.resolver_match.url_name == 'settings_page' %}active{% endif %}"
+               href="{% url 'settings_page' %}">
+                <i class="bi bi-sliders"></i>
+                <span class="d-none d-lg-inline">Настройки</span>
             </a>
             {% endif %}
         </nav>
 
-        <!-- ЦЕНТРАЛЬНАЯ ЧАСТЬ: Поиск строго по центру страницы -->
-        <div class="header-search position-absolute start-50 translate-middle-x" style="max-width: 480px; width: calc(100% - 420px); z-index: 2;">
+        <!-- Поиск занимает свободное место между навигацией и тулбаром -->
+        <div class="header-search ms-auto">
             <i class="bi bi-search header-search-icon"></i>
-            <input type="text" 
-                   name="q" 
-                   class="form-control shadow-none" 
-                   placeholder="Поиск по названию, инв. №, модели, YouTrack..."
-                   hx-get="{% url 'search' %}" 
-                   hx-trigger="keyup changed delay:350ms" 
-                   hx-target="#search-results" 
+            <input type="text"
+                   name="q"
+                   class="form-control shadow-none"
+                   placeholder="Название, инв. №, модель, задача YouTrack"
+                   aria-label="Поиск по справочнику"
+                   hx-get="{% url 'search' %}"
+                   hx-trigger="keyup changed delay:350ms"
+                   hx-target="#search-results"
                    autocomplete="off"
                    onkeydown="if(event.key==='Escape'){ this.value=''; document.getElementById('search-results').innerHTML=''; }">
-            <div id="search-results" class="position-absolute w-100 mt-1" style="z-index: 1060;"></div>
+            <div id="search-results" class="position-absolute w-100" style="z-index: 1060;"></div>
         </div>
 
-        <!-- ПРАВАЯ ЧАСТЬ: Тулбар (заканчивается ровно по оси сетки) -->
-        <div class="d-flex align-items-center z-1" style="gap: 14px;">
-            
-            <!-- 1. Экспорт XLSX -->
+        <div class="d-flex align-items-center gap-2 ms-auto">
+
             {% if request.user.is_admin_or_higher %}
-            <button type="button" 
-                    class="btn btn-sm d-flex align-items-center gap-1.5 px-2.5 py-1 text-success border-0 shadow-none"
-                    style="background-color: rgba(16, 185, 129, 0.12); border-radius: 8px; height: 34px; transition: var(--transition-fast);"
-                    onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.22)'"
-                    onmouseout="this.style.backgroundColor='rgba(16, 185, 129, 0.12)'"
+            <button type="button"
+                    class="header-tool"
                     data-bs-toggle="modal"
                     data-bs-target="#exportModal"
-                    title="Экспорт данных в XLSX">
-                <i class="bi bi-file-earmark-arrow-down-fill fs-5" style="line-height: 1;"></i>
-                <span class="d-none d-xl-inline small fw-bold" style="font-size: 0.78rem;">XLSX</span>
+                    title="Выгрузить справочник в XLSX">
+                <i class="bi bi-download"></i>
+                <span class="d-none d-xl-inline">Выгрузить</span>
             </button>
             {% endif %}
 
-            <!-- 2. Кнопка переключения режима справочника -->
-            {% include 'includes/explorer_toggle_btn.html' with explorer_mode=request.session.explorer_mode %}
-
-            <!-- 3. Индикатор YouTrack -->
+            <!-- Токен YouTrack настраивается здесь и только здесь -->
             {% include 'includes/youtrack_header_btn.html' %}
 
-            <!-- 4. Логин пользователя -->
-            <span class="small fw-semibold text-light d-none d-md-inline text-truncate ms-1" style="max-width: 140px; font-size: 0.85rem;">
-                {{ user.username|default:user.email }}
+            <!-- Кто вошёл. Без меню: внутри было бы только то, что уже есть рядом. -->
+            <span class="header-user" title="{{ user.email }} — {{ user.get_role_display }}">
+                <span class="avatar">{{ user.email|slice:":2"|upper }}</span>
+                <span class="d-none d-md-inline text-truncate" style="max-width: 130px;">{{ user.username|default:user.email }}</span>
             </span>
 
-            <!-- 5. Аватарка -->
-            <span class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center shadow-sm fw-bold flex-shrink-0" 
-                  style="width: 32px; height: 32px; font-size: 0.75rem; border: 1.5px solid rgba(255,255,255,0.25);"
-                  title="Роль: {{ user.get_role_display }}">
-                {{ user.email|slice:":2"|upper }}
-            </span>
-
-            <!-- 6. Кнопка выхода -->
-            <form action="{% url 'logout' %}" method="post" class="m-0 ms-1">
+            <form action="{% url 'logout' %}" method="post" class="m-0">
                 {% csrf_token %}
-                <button type="submit" 
-                        class="btn btn-sm d-flex align-items-center justify-content-center border-0 shadow-none text-danger"
-                        style="width: 34px; height: 34px; border-radius: 8px; background-color: rgba(239, 68, 68, 0.15); transition: var(--transition-fast);"
-                        onmouseover="this.style.backgroundColor='rgba(239, 68, 68, 0.3)'"
-                        onmouseout="this.style.backgroundColor='rgba(239, 68, 68, 0.15)'"
-                        title="Выйти из системы">
-                    <i class="bi bi-box-arrow-right fs-6" style="line-height: 1;"></i>
+                <button type="submit" class="header-tool is-square" title="Выйти из системы" aria-label="Выйти">
+                    <i class="bi bi-box-arrow-right"></i>
                 </button>
             </form>
 

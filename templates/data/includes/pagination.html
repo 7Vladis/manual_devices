@@ -1,0 +1,30 @@
+{% comment %}
+Навигация по страницам длинной ленты.
+
+Ожидает: page — объект Page, base_url — адрес без параметра page (свои
+параметры у него уже могут быть), target — селектор перерисовываемого
+контейнера. Ничего не рисует, пока страница одна.
+{% endcomment %}
+{% if page.paginator.num_pages > 1 %}
+<nav class="pager" aria-label="Навигация по страницам">
+    <button type="button" class="btn btn-light border btn-sm"
+            {% if page.has_previous %}
+            hx-get="{{ base_url }}{% if "?" in base_url %}&{% else %}?{% endif %}page={{ page.previous_page_number }}"
+            hx-target="{{ target }}"
+            {% else %}disabled{% endif %}>
+        <i class="bi bi-chevron-left"></i>Назад
+    </button>
+
+    <span class="pager-state">
+        {{ page.start_index }}–{{ page.end_index }} из {{ page.paginator.count }}
+    </span>
+
+    <button type="button" class="btn btn-light border btn-sm"
+            {% if page.has_next %}
+            hx-get="{{ base_url }}{% if "?" in base_url %}&{% else %}?{% endif %}page={{ page.next_page_number }}"
+            hx-target="{{ target }}"
+            {% else %}disabled{% endif %}>
+        Вперёд<i class="bi bi-chevron-right"></i>
+    </button>
+</nav>
+{% endif %}

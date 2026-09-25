@@ -11,7 +11,7 @@
                value="{{ obj.name|default:'' }}"
                placeholder="{{ obj.model.name }}"
                class="form-control fw-bold"
-               style="max-width: 460px; font-size: 1.25rem; height: 40px;"
+               style="max-width: 460px; font-size: 18px; height: 38px;"
                autocomplete="off"
                autofocus
                required
@@ -30,8 +30,8 @@
     </form>
 {% else %}
     <h1 {% if not request.user.is_junior %}hx-get="{% url 'edit_name' obj.uuid %}" hx-target="#name-display-container" hx-swap="outerHTML"{% endif %}
-        class="fw-bold mb-0 text-dark d-inline-flex align-items-center editable-trigger"
-        style="font-size: 1.35rem; line-height: 1.25; cursor: pointer;">
+        class="mb-0 d-inline-flex align-items-center editable-trigger"
+        style="cursor: pointer;">
         <span>{{ obj.name|default:obj.model.name }}</span>
         {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon fs-6"></i>{% endif %}
     </h1>

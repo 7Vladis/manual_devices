@@ -1,34 +1,31 @@
 <div class="model-tree-list animate-fade">
     {% for ot in object_types %}
         {% if ot.models.all %}
-        <div class="mb-4">
-            <!-- Заголовок группы (Тип оборудования) -->
-            <div class="d-flex align-items-center mb-2 px-1">
-                <i class="bi bi-tags-fill text-muted me-2 small"></i>
-                <span class="text-uppercase small fw-bold text-muted" style="letter-spacing: 0.5px;">{{ ot.type }}</span>
-                <span class="badge bg-light text-dark ms-2 rounded-pill small">{{ ot.models.all|length }}</span>
+        <div class="tree-group">
+            <div class="tree-group-head">
+                <span>{{ ot.type }}</span>
+                <span class="tree-group-count">{{ ot.models.all|length }}</span>
             </div>
-            
-            <!-- Список моделей в этой группе -->
-            <ul class="list-unstyled ps-2 border-start border-light" style="margin-left: 6px;">
+
+            <ul class="list-unstyled mb-0 tree-children">
                 {% for model in ot.models.all %}
-                <li class="tree-item d-flex align-items-center justify-content-between p-2 rounded-2 hover-bg-light transition-all mb-1" id="model-node-{{ model.uuid }}">
-                    
-                    <!-- Подключаем микро-шаблон лейбла модели для автоматической серверной подсветки -->
-                    {% include 'data/tree/model_tree_node_label.html' with model=model %}
-                    
-                    <div class="tree-actions d-flex align-items-center gap-1 opacity-100 ms-2">
-                        <!-- Кнопку удаления модели показываем всем, КРОМЕ младшего инженера (Junior) -->
-                        {% if not request.user.is_junior %}
-                            <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center"
+                <li class="tree-item" id="model-node-{{ model.uuid }}">
+                    <div class="tree-row">
+                        {% include 'data/tree/model_tree_node_label.html' with model=model %}
+
+                        <div class="tree-actions">
+                            {% if not request.user.is_junior %}
+                            <button type="button"
+                                    class="is-danger"
                                     data-bs-toggle="modal"
                                     data-bs-target="#confirmModal"
                                     hx-get="{% url 'delete_model' model.uuid %}"
                                     hx-target="#confirm-modal-content"
-                                    title="Удалить">
-                                <i class="bi bi-trash3 small"></i>
+                                    title="Удалить модель">
+                                <i class="bi bi-trash3"></i>
                             </button>
-                        {% endif %}
+                            {% endif %}
+                        </div>
                     </div>
                 </li>
                 {% endfor %}
@@ -36,6 +33,10 @@
         </div>
         {% endif %}
     {% empty %}
-        <div class="p-3 text-center text-muted small">Модели отсутствуют</div>
+        <div class="empty-state" style="padding: 26px 14px;">
+            <span class="empty-icon"><i class="bi bi-layers"></i></span>
+            <span class="empty-title">Моделей пока нет</span>
+            <span class="empty-hint">Модель задаёт характеристики, общие для всех её экземпляров.</span>
+        </div>
     {% endfor %}
 </div>

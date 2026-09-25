@@ -18,11 +18,13 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django_apscheduler.jobstores import DjangoJobStore
 
+from data.services.youtrack_queue import process_jobs
 from notifications.tasks import run_daily_maintenance_check
 
 logger = logging.getLogger('notifications')
 
 JOB_ID = 'maintenance_digest'
+YOUTRACK_JOB_ID = 'youtrack_queue'
 
 
 class Command(BaseCommand):
@@ -31,9 +33,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--hour', type=int, default=9, help="Час запуска рассылки (по умолчанию 9).")
         parser.add_argument('--minute', type=int, default=0, help="Минута запуска рассылки (по умолчанию 0).")
+        parser.add_argument('--youtrack-interval', type=int, default=5,
+                            help="Как часто разбирать очередь заданий YouTrack, секунд (по умолчанию 5).")
 
     def handle(self, *args, **options):
         hour, minute = options['hour'], options['minute']
+        youtrack_interval = options['youtrack_interval']
 
         # Таймзона задаётся явно: иначе APScheduler берёт зону хоста, которая
         # в контейнере обычно UTC, и «9 утра» оказывается не тем временем.
@@ -55,6 +60,23 @@ class Command(BaseCommand):
             misfire_grace_time=3600,
         )
 
+        # Очередь обмена с YouTrack. Живёт здесь же: отдельный процесс ради
+        # одного цикла опроса — лишняя деталь в развёртывании, а гарантия
+        # «один контейнер = один экземпляр» у планировщика уже есть.
+        scheduler.add_job(
+            process_jobs,
+            trigger='interval',
+            seconds=youtrack_interval,
+            id=YOUTRACK_JOB_ID,
+            name="Очередь заданий YouTrack",
+            replace_existing=True,
+            # Задания не должны наслаиваться: следующий проход стартует
+            # только после того, как закончился предыдущий.
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60,
+        )
+
         def shutdown(signum, _frame):
             logger.info("Получен сигнал %s — останавливаю планировщик", signum)
             scheduler.shutdown(wait=False)
@@ -63,10 +85,11 @@ class Command(BaseCommand):
         signal.signal(signal.SIGTERM, shutdown)
 
         self.stdout.write(self.style.SUCCESS(
-            f"Планировщик запущен: ежедневно в {hour:02d}:{minute:02d} ({settings.TIME_ZONE}). "
-            f"Остановка — Ctrl+C или SIGTERM."
+            f"Планировщик запущен: сводка ежедневно в {hour:02d}:{minute:02d} ({settings.TIME_ZONE}), "
+            f"очередь YouTrack каждые {youtrack_interval} с. Остановка — Ctrl+C или SIGTERM."
         ))
-        logger.info("Планировщик запущен: %02d:%02d %s", hour, minute, settings.TIME_ZONE)
+        logger.info("Планировщик запущен: сводка %02d:%02d %s, очередь YouTrack каждые %s с",
+                    hour, minute, settings.TIME_ZONE, youtrack_interval)
 
         try:
             scheduler.start()

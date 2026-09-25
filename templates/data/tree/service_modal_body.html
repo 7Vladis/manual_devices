@@ -8,9 +8,13 @@
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
 </div>
 
-<form hx-post="{% url 'service_object' obj.uuid %}"
-      hx-target="#node-{{ obj.uuid }}"
-      hx-swap="outerHTML"
+{% comment %}
+Окно открывается из двух мест. Из дерева ответ заменяет строку узла,
+из плана ТО менять нечего — список перезагрузит себя сам по событию
+objectServiced, а OOB-части ответа применятся в любом случае.
+{% endcomment %}
+<form hx-post="{% url 'service_object' obj.uuid %}{% if request.GET.ctx == 'plan' %}?ctx=plan{% endif %}"
+      {% if request.GET.ctx == 'plan' %}hx-target="this" hx-swap="none"{% else %}hx-target="#node-{{ obj.uuid }}" hx-swap="outerHTML"{% endif %}
       hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('serviceModal')).hide(); }">
     {% csrf_token %}
 

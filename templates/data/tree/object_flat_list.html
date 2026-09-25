@@ -2,15 +2,15 @@
 <div class="explorer-flat-container animate-fade">
 
     <!-- Путь: клик по сегменту переходит на соответствующий уровень -->
-    <nav class="d-flex align-items-center flex-wrap gap-1 px-1 py-1 mb-2" aria-label="Текущее расположение">
+    <nav class="d-flex align-items-center flex-wrap gap-1 px-1 pb-2 mb-1 border-bottom" aria-label="Текущее расположение">
         <button type="button" class="explorer-crumb is-root"
                 hx-get="{% url 'explorer_navigate' 'root' %}"
                 hx-swap="none"
-                title="Перейти в корень справочника">/</button>
+                title="Перейти в корень справочника">Справочник</button>
 
         {% if explorer_parent %}
             {% if explorer_parent.parent %}
-            <span class="text-muted" style="font-size: 0.75rem;">/</span>
+            <span class="text-muted small">/</span>
             <button type="button" class="explorer-crumb text-truncate" style="max-width: 110px;"
                     hx-get="{% url 'explorer_navigate' explorer_parent.parent.uuid %}"
                     hx-swap="none"
@@ -18,72 +18,74 @@
                 {{ explorer_parent.parent.name|default:explorer_parent.parent.model.name }}
             </button>
             {% endif %}
-            <span class="text-muted" style="font-size: 0.75rem;">/</span>
-            <span class="fw-bold text-dark text-truncate" style="font-size: 0.8rem;"
+            <span class="text-muted small">/</span>
+            <span class="fw-semibold text-truncate" style="font-size: 12px;"
                   title="{{ explorer_parent.name|default:explorer_parent.model.name }}">
                 {{ explorer_parent.name|default:explorer_parent.model.name }}
             </span>
         {% endif %}
     </nav>
 
-    <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
+    <ul class="list-unstyled mb-0">
 
         {% if explorer_parent %}
-        <li>
+        <li class="mb-1">
             <button type="button" class="explorer-up"
                     hx-get="{% url 'explorer_up' %}"
                     hx-swap="none"
                     title="Перейти на уровень выше">
-                <i class="bi bi-arrow-return-left" style="transform: rotate(90deg);"></i>
-                <span>..</span>
-                <span class="text-muted fw-normal" style="font-size: 0.75rem;">на уровень выше</span>
+                <i class="bi bi-arrow-90deg-up"></i>
+                <span>На уровень выше</span>
             </button>
         </li>
         {% endif %}
 
         {% for obj in objects %}
-        <li class="tree-item d-flex align-items-center gap-1" id="node-{{ obj.uuid }}">
+        <li class="tree-item" id="node-{{ obj.uuid }}">
+            <div class="tree-row">
 
-            {% include 'data/tree/object_tree_node_label.html' with node=obj %}
+                {% include 'data/tree/object_tree_node_label.html' with node=obj %}
 
-            <div class="tree-actions d-flex align-items-center gap-0.5 flex-shrink-0">
-                {% if obj.children.all %}
-                <button type="button" class="btn btn-link text-primary p-1 m-0 d-flex align-items-center"
-                        hx-get="{% url 'explorer_navigate' obj.uuid %}"
-                        hx-swap="none"
-                        title="Открыть состав объекта">
-                    <i class="bi bi-arrow-right-circle-fill" style="font-size: 0.95rem;"></i>
-                </button>
-                {% endif %}
+                <div class="tree-actions">
+                    {% if obj.has_children %}
+                    <button type="button"
+                            hx-get="{% url 'explorer_navigate' obj.uuid %}"
+                            hx-swap="none"
+                            title="Открыть состав объекта">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    {% endif %}
 
-                <button type="button" class="btn btn-link text-secondary p-1 m-0 d-flex align-items-center"
-                        data-bs-toggle="modal"
-                        data-bs-target="#serviceModal"
-                        hx-get="{% url 'service_object' obj.uuid %}"
-                        hx-target="#service-modal-content"
-                        title="Зафиксировать ТО">
-                    <i class="bi bi-wrench-adjustable" style="font-size: 0.85rem;"></i>
-                </button>
+                    <button type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#serviceModal"
+                            hx-get="{% url 'service_object' obj.uuid %}"
+                            hx-target="#service-modal-content"
+                            title="Обслужить: зафиксировать выполненное ТО">
+                        <i class="bi bi-wrench-adjustable"></i>
+                    </button>
 
-                {% if not request.user.is_junior %}
-                <button type="button" class="btn btn-link text-danger p-1 m-0 d-flex align-items-center"
-                        data-bs-toggle="modal"
-                        data-bs-target="#confirmModal"
-                        hx-get="{% url 'delete_object' obj.uuid %}"
-                        hx-target="#confirm-modal-content"
-                        title="Удалить объект">
-                    <i class="bi bi-trash3" style="font-size: 0.85rem;"></i>
-                </button>
-                {% endif %}
+                    {% if not request.user.is_junior %}
+                    <button type="button"
+                            class="is-danger"
+                            data-bs-toggle="modal"
+                            data-bs-target="#confirmModal"
+                            hx-get="{% url 'delete_object' obj.uuid %}"
+                            hx-target="#confirm-modal-content"
+                            title="Удалить объект">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                    {% endif %}
+                </div>
             </div>
         </li>
         {% empty %}
         <li>
             <div class="empty-state" style="padding: 26px 14px;">
                 <span class="empty-icon"><i class="bi bi-folder2-open"></i></span>
-                <span class="empty-title">{% if explorer_parent %}Папка пуста{% else %}Объектов пока нет{% endif %}</span>
+                <span class="empty-title">{% if explorer_parent %}Внутри ничего нет{% else %}Объектов пока нет{% endif %}</span>
                 <span class="empty-hint">
-                    {% if explorer_parent %}Внутри этого объекта нет вложенных компонентов.{% else %}Создайте первый объект кнопкой «Создать».{% endif %}
+                    {% if explorer_parent %}У этого объекта нет вложенных компонентов.{% else %}Начните с кнопки «Добавить» — создайте первый объект.{% endif %}
                 </span>
             </div>
         </li>
