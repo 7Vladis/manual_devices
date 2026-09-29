@@ -11,6 +11,18 @@ from django.contrib.auth import get_user_model
 logger = logging.getLogger('data')
 
 
+# Признак «запись у нас убрана, а в YouTrack оставлена». Дописывается в
+# начало текста комментария и читается синхронизацией — это часть
+# договорённости с YouTrack, поэтому живёт рядом с клиентом. Менять строку
+# нельзя, не пересмотрев уже помеченные записи: по ней они и опознаются.
+OBSOLETE_MARK = '[УСТАРЕЛО]'
+
+
+def is_obsolete(text: str) -> bool:
+    """Помечен ли текст комментария как устаревший."""
+    return (text or '').lstrip().startswith(OBSOLETE_MARK)
+
+
 def get_auth_token(user) -> str | None:
     """Извлекает персональный токен пользователя."""
     if user and getattr(user, 'youtrack_token', None):
@@ -161,70 +173,6 @@ def update_issue_description_in_youtrack(issue_id: str, description: str, user) 
         return False, msg
 
 
-def delete_comment_from_youtrack(issue_id: str, comment_yt_id: str, user) -> tuple[bool, str]:
-    """Удаляет комментарий из YouTrack от имени пользователя"""
-    token = get_auth_token(user)
-    if not token or not issue_id or not comment_yt_id:
-        return False, "Недостаточно данных для удаления комментария в YouTrack"
-
-    base_url = getattr(settings, 'YOUTRACK_BASE_URL', '').rstrip('/')
-    if not base_url:
-        return False, "Базовый URL YouTrack не настроен на сервере."
-
-    url = f"{base_url}/api/issues/{issue_id}/comments/{comment_yt_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json"
-    }
-
-    try:
-        response = requests.delete(url, headers=headers, timeout=10)
-        if response.status_code in [200, 204]:
-            logger.info(f"Комментарий YouTrack ({comment_yt_id}) удален пользователем {user}")
-            return True, "Комментарий удален из YouTrack"
-        else:
-            msg = f"Ошибка удаления комментария из YouTrack ({response.status_code}): {response.text}"
-            logger.error(msg)
-            return False, msg
-
-    except requests.exceptions.RequestException as e:
-        msg = f"Ошибка сети при удалении комментария из YouTrack: {e}"
-        logger.error(msg)
-        return False, msg
-
-
-def delete_attachment_from_youtrack(issue_id: str, attachment_yt_id: str, user) -> tuple[bool, str]:
-    """Удаляет вложение из карточки задачи YouTrack от имени пользователя"""
-    token = get_auth_token(user)
-    if not token or not issue_id or not attachment_yt_id:
-        return False, "Недостаточно данных для удаления вложения в YouTrack"
-
-    base_url = getattr(settings, 'YOUTRACK_BASE_URL', '').rstrip('/')
-    if not base_url:
-        return False, "Базовый URL YouTrack не настроен на сервере."
-
-    url = f"{base_url}/api/issues/{issue_id}/attachments/{attachment_yt_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json"
-    }
-
-    try:
-        response = requests.delete(url, headers=headers, timeout=10)
-        if response.status_code in [200, 204]:
-            logger.info(f"Вложение YouTrack ({attachment_yt_id}) удалено пользователем {user}")
-            return True, "Вложение удалено из YouTrack"
-        else:
-            msg = f"Ошибка удаления вложения из YouTrack ({response.status_code}): {response.text}"
-            logger.error(msg)
-            return False, msg
-
-    except requests.exceptions.RequestException as e:
-        msg = f"Ошибка сети при удалении вложения из YouTrack: {e}"
-        logger.error(msg)
-        return False, msg
-
-
 def update_comment_in_youtrack(issue_id: str, comment_yt_id: str, text: str, user) -> tuple[bool, str]:
     """Обновляет текст комментария в YouTrack от имени пользователя"""
     token = get_auth_token(user)
@@ -295,12 +243,6 @@ def fetch_all_work_items(base_url: str, issue_id: str, headers: dict) -> list | 
     return None
 
 
-def _log_stale(kind: str, issue_id: str, youtrack_ids) -> None:
-    ids = list(youtrack_ids)
-    if ids:
-        logger.info("YouTrack %s: локально удаляются %s, отсутствующие в задаче: %s", issue_id, kind, ids)
-
-
 def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
     """
     Автоматическая двусторонняя синхронизация с YouTrack:
@@ -342,7 +284,7 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
 
         data = response.json()
         User = get_user_model()
-        from .models import Comment, Attachment, ActionHistory
+        from .models import Comment, Attachment, ActionHistory, YouTrackObsoleteRecord
 
         # 1. Синхронизируем описание объекта (пустое описание — тоже валидное состояние)
         if 'description' in data:
@@ -350,6 +292,13 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
             if yt_description != ((data_object.description or '').strip() or None):
                 data_object.description = yt_description
                 data_object.save(update_fields=['description'])
+
+        # Записи, которые у нас пометили устаревшими: скачивать их заново
+        # не нужно. Для комментариев признак лежит в их собственном тексте,
+        # для вложений — только здесь.
+        obsolete_ids = set(
+            YouTrackObsoleteRecord.objects.filter(issue_id=issue_id).values_list('youtrack_id', flat=True)
+        )
 
         active_yt_comment_ids = set()
         active_yt_attachment_ids = set()
@@ -360,12 +309,6 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
         new_files_count = 0
         new_work_items_count = 0
 
-        # Удалять локальные копии можно только по коллекциям, которые сервер
-        # действительно вернул: частичный ответ не должен трактоваться как удаление.
-        comments_received = 'comments' in data
-        attachments_received = 'attachments' in data
-        work_items_received = False
-
         # 2. Синхронизируем комментарии и их вложения
         yt_comments = data.get('comments', [])
         for c_data in yt_comments:
@@ -373,6 +316,25 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
             if not c_id:
                 continue
             active_yt_comment_ids.add(c_id)
+
+            # Помеченные устаревшими записи скачивать не нужно. Если копия
+            # у нас ещё есть — значит, пометили не мы, и её надо убрать.
+            if is_obsolete(c_data.get('text', '')):
+                Comment.objects.filter(data_object=data_object, youtrack_id=c_id).delete()
+                for att_data in c_data.get('attachments', []):
+                    if att_data.get('id'):
+                        active_yt_attachment_ids.add(att_data['id'])
+                continue
+
+            # Комментарий мог быть написан в карточке дочернего объекта, у
+            # которого нет своей задачи: он уехал сюда, но принадлежит ему.
+            # Создавать вторую копию и править её текст нельзя — у владельца
+            # он хранится без префикса компонента.
+            if Comment.objects.filter(youtrack_id=c_id).exclude(data_object=data_object).exists():
+                for att_data in c_data.get('attachments', []):
+                    if att_data.get('id'):
+                        active_yt_attachment_ids.add(att_data['id'])
+                continue
 
             c_text = c_data.get('text', '') or "Вложение из YouTrack"
             comment_obj = Comment.objects.filter(data_object=data_object, youtrack_id=c_id).first()
@@ -396,7 +358,10 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                     data_object=data_object,
                     text=c_text,
                     created_at=created_dt,
-                    youtrack_id=c_id
+                    youtrack_id=c_id,
+                    # Копия пришла из этой задачи — запоминаем, чтобы
+                    # последующий перенос объекта не увёл операции не туда.
+                    youtrack_issue_id=issue_id,
                 )
                 new_comments_count += 1
 
@@ -405,6 +370,12 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                 if not att_id:
                     continue
                 active_yt_attachment_ids.add(att_id)
+
+                if att_id in obsolete_ids:
+                    continue
+
+                if Attachment.objects.filter(youtrack_id=att_id).exclude(data_object=data_object).exists():
+                    continue
 
                 if not Attachment.objects.filter(data_object=data_object, youtrack_id=att_id).exists():
                     att_name = att_data.get('name')
@@ -420,7 +391,8 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                             comment=comment_obj,
                             path=file_content,
                             is_preview=False,
-                            youtrack_id=att_id
+                            youtrack_id=att_id,
+                            youtrack_issue_id=issue_id,
                         )
                         new_files_count += 1
 
@@ -435,6 +407,12 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
             att_name = att_data.get('name') or ''
             
             # Проверяем, существует ли уже это вложение
+            if att_id in obsolete_ids:
+                continue
+
+            if Attachment.objects.filter(youtrack_id=att_id).exclude(data_object=data_object).exists():
+                continue
+
             att_obj = Attachment.objects.filter(data_object=data_object, youtrack_id=att_id).first()
 
             # Ищем, не принадлежит ли файл какому-либо комментарию (по имени файла в тексте Markdown)
@@ -466,7 +444,8 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                         path=file_content,
                         is_preview=False,
                         youtrack_id=att_id,
-                        created_at=created_dt
+                        youtrack_issue_id=issue_id,
+                        created_at=created_dt,
                     )
                     new_files_count += 1
             else:
@@ -479,9 +458,8 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
         # Эндпоинт постраничный ($top по умолчанию 42): выбираем все страницы,
         # иначе старые списания были бы приняты за удалённые.
         yt_work_items = fetch_all_work_items(base_url, issue_id, headers)
-        work_items_received = yt_work_items is not None
 
-        if work_items_received:
+        if yt_work_items is not None:
             for w_data in yt_work_items:
                 w_id = w_data.get('id')
                 if not w_id:
@@ -490,6 +468,9 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
 
                 w_text = (w_data.get('text') or '').strip()
                 if not w_text:
+                    continue
+
+                if ActionHistory.objects.filter(youtrack_id=w_id).exclude(data_object=data_object).exists():
                     continue
 
                 if not ActionHistory.objects.filter(data_object=data_object, youtrack_id=w_id).exists():
@@ -507,6 +488,7 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                         action_type='maintenance',
                         action=w_text,
                         youtrack_id=w_id,
+                        youtrack_issue_id=issue_id,
                         created_at=created_dt,
                         # Списание времени в задаче не закрывает локальное
                         # плановое событие — в статистику плана не попадает.
@@ -514,30 +496,14 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                     )
                     new_work_items_count += 1
 
-        # 5. Удаляем локальные записи, удалённые в YouTrack — только по тем
-        # коллекциям, которые сервер вернул целиком.
+        # 5. Отсева «чего нет в ответе — то удалили» больше нет.
+        #
+        # Он исходил из того, что исчезновение записи означает её удаление.
+        # Это было верно, пока удаление существовало: теперь сервис в YouTrack
+        # ничего не удаляет, сигналом служит пометка, а отсутствие записи в
+        # ответе не значит ничего — так бывает и при частичном ответе, и когда
+        # запись принадлежит дочернему объекту.
         deleted_comments_count = deleted_files_count = deleted_works_count = 0
-
-        if comments_received:
-            stale_comments = Comment.objects.filter(
-                data_object=data_object, youtrack_id__isnull=False
-            ).exclude(youtrack_id__in=active_yt_comment_ids)
-            _log_stale('комментарии', issue_id, stale_comments.values_list('youtrack_id', flat=True))
-            deleted_comments_count, _ = stale_comments.delete()
-
-        if comments_received and attachments_received:
-            stale_files = Attachment.objects.filter(
-                data_object=data_object, youtrack_id__isnull=False
-            ).exclude(youtrack_id__in=active_yt_attachment_ids)
-            _log_stale('вложения', issue_id, stale_files.values_list('youtrack_id', flat=True))
-            deleted_files_count, _ = stale_files.delete()
-
-        if work_items_received:
-            stale_works = ActionHistory.objects.filter(
-                data_object=data_object, youtrack_id__isnull=False
-            ).exclude(youtrack_id__in=active_yt_work_item_ids)
-            _log_stale('списания времени', issue_id, stale_works.values_list('youtrack_id', flat=True))
-            deleted_works_count, _ = stale_works.delete()
 
         total_deleted = deleted_comments_count + deleted_files_count + deleted_works_count
         total_added = new_comments_count + new_files_count + new_work_items_count

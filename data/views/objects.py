@@ -241,7 +241,11 @@ def edit_parent_view(request, pk):
         
     if request.method == 'POST':
         parent_uuid = request.POST.get('parent') or request.POST.get('parent_uuid')
-        
+
+        # Запоминаем задачу ДО переноса: после смены родителя подъём по дереву
+        # даст уже другую, а заметку надо оставить именно в прежней.
+        old_issue_id, _ = obj.get_effective_youtrack_issue()
+
         if parent_uuid:
             new_parent = get_object_or_404(DataObject, pk=parent_uuid)
             # Защита от циклов: нельзя назначить родителем себя или своего потомка
@@ -268,6 +272,22 @@ def edit_parent_view(request, pk):
             action_type='link_change',
             action=f"Назначен новый родительский объект: '{parent_name}'."
         )
+
+        # Прежняя задача узнаёт, что компонент уехал — одной строкой, из
+        # очереди. Записи о прошлых работах остаются нетронутыми: они
+        # правдивы, а перенос меняет настоящее, а не прошлое.
+        new_issue_id, _ = obj.get_effective_youtrack_issue()
+        if old_issue_id and old_issue_id != new_issue_id:
+            destination = f"«{parent_name}»"
+            if new_issue_id:
+                destination += f" (задача {new_issue_id})"
+            else:
+                destination += " — вне задач YouTrack"
+            youtrack_queue.enqueue(
+                YouTrackJob.KIND_MOVE_NOTE, obj, request.user,
+                {'issue_id': old_issue_id, 'destination': destination},
+            )
+
         
         roots = DataObject.objects.filter(parent__isnull=True).order_by('name')
         sidebar_context = {

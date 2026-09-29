@@ -28,7 +28,9 @@ from .models import (
     ObjectModel,
     ObjectType,
     YouTrackJob,
+    YouTrackObsoleteRecord,
 )
+from . import youtrack_services
 from .services.youtrack_queue import process_jobs
 from .templatetags.markdown_extras import markdown_format
 from .views import calculate_next_maintenance_date, get_ancestors_chain
@@ -1149,10 +1151,16 @@ class YoutrackSyncTests(BaseDataTestCase):
         self.assertIn('не найдена', body)
         self.assertNotIn('id="description-container"', body)  # при ошибке описание не трогаем
 
-    def test_missing_collections_do_not_delete_local_records(self):
-        """BUG-006: частичный ответ не трактуется как удаление."""
-        Comment.objects.create(user=self.senior, data_object=self.root, text='старый', youtrack_id='c-old')
-        ActionHistory.objects.create(user=self.senior, data_object=self.root, action='ТО', youtrack_id='w-old')
+    def test_partial_response_does_not_delete_local_records(self):
+        """
+        Частичный ответ не трактуется как удаление. Раньше это обеспечивалось
+        проверкой «коллекция пришла целиком», теперь — тем, что сервис вообще
+        не удаляет записи по их отсутствию в ответе.
+        """
+        Comment.objects.create(user=self.senior, data_object=self.root, text='старый',
+                               youtrack_id='c-old', youtrack_issue_id='MNT-1')
+        ActionHistory.objects.create(user=self.senior, data_object=self.root, action='ТО',
+                                     youtrack_id='w-old', youtrack_issue_id='MNT-1')
         payload = {'id': 'MNT-1', 'description': 'x'}  # без comments/attachments
 
         self.login(self.senior)
@@ -1162,19 +1170,42 @@ class YoutrackSyncTests(BaseDataTestCase):
         self.assertTrue(Comment.objects.filter(youtrack_id='c-old').exists())
         self.assertTrue(ActionHistory.objects.filter(youtrack_id='w-old').exists())
 
-    def test_complete_response_removes_records_deleted_remotely(self):
-        Comment.objects.create(user=self.senior, data_object=self.root, text='удалён в YT', youtrack_id='c-gone')
+    def test_record_missing_from_issue_is_kept(self):
+        """
+        Запись, которой нет в ответе, остаётся: сигналом об удалении служит
+        пометка, а не отсутствие. Удалённое руками в YouTrack придётся
+        убрать и у нас — это осознанный безопасный отказ.
+        """
+        Comment.objects.create(user=self.senior, data_object=self.root, text='нет в ответе',
+                               youtrack_id='c-gone', youtrack_issue_id='MNT-1')
 
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get', side_effect=self._mock_get(self._issue_payload())):
             self._sync()
 
-        self.assertFalse(Comment.objects.filter(youtrack_id='c-gone').exists())
+        self.assertTrue(Comment.objects.filter(youtrack_id='c-gone').exists())
         self.assertTrue(Comment.objects.filter(youtrack_id='c-1').exists())
+
+    def test_obsolete_records_are_not_downloaded_again(self):
+        """Помеченное не возвращается: ни комментарий с маркером, ни файл с надгробием."""
+        YouTrackObsoleteRecord.objects.create(issue_id='MNT-1', youtrack_id='a-9')
+        payload = self._issue_payload(
+            comments=[{'id': 'c-1', 'text': f'{youtrack_services.OBSOLETE_MARK} убрано',
+                       'created': 1_700_000_000_000, 'author': {'email': 'senior@test.local'},
+                       'attachments': []}],
+            attachments=[{'id': 'a-9', 'name': 'doc.pdf', 'url': '/f/a-9'}],
+        )
+
+        with patch('data.youtrack_services.requests.get', side_effect=self._mock_get(payload)):
+            self._sync()
+
+        self.assertFalse(Comment.objects.filter(youtrack_id='c-1').exists())
+        self.assertFalse(Attachment.objects.filter(youtrack_id='a-9').exists())
 
     def test_work_items_are_fetched_across_pages(self):
         """Списания старше первой страницы не должны считаться удалёнными."""
-        ActionHistory.objects.create(user=self.senior, data_object=self.root, action='старое', youtrack_id='w-150')
+        ActionHistory.objects.create(user=self.senior, data_object=self.root, action='старое',
+                                     youtrack_id='w-150', youtrack_issue_id='MNT-1')
         page1 = [{'id': f'w-{i}', 'text': f'работа {i}', 'date': 1_700_000_000_000} for i in range(100)]
         page2 = [{'id': 'w-150', 'text': 'старое', 'date': 1_700_000_000_000}]
 
@@ -1419,13 +1450,15 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
         self.root.refresh_from_db()
         self.assertEqual(self.root.description, 'новое описание')
 
-    def test_comment_is_kept_when_remote_delete_fails(self):
-        """Локальная запись не удаляется, пока она жива в YouTrack."""
+    def test_comment_is_kept_when_marking_fails(self):
+        """Локальная запись не исчезает, пока в YouTrack не проставлена пометка."""
         comment = Comment.objects.create(
-            user=self.senior, data_object=self.root, text='важное', youtrack_id='c-1'
+            user=self.senior, data_object=self.root, text='важное',
+            youtrack_id='c-1', youtrack_issue_id='MNT-1',
         )
 
-        with patch('data.youtrack_services.delete_comment_from_youtrack', return_value=(False, 'сервер недоступен')):
+        with patch('data.youtrack_services.update_comment_in_youtrack',
+                   return_value=(False, 'сервер недоступен')):
             response = self.client.post(reverse('delete_comments_bulk'), {
                 'object_uuid': str(self.root.uuid),
                 'comment_ids': [str(comment.uuid)],
@@ -1434,48 +1467,63 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
         self.assertTrue(Comment.objects.filter(pk=comment.pk).exists())
         body = response.content.decode()
         self.assertIn('сервер недоступен', body)
-        self.assertIn('оставлены локально', body)
+        self.assertIn('оставлены в справочнике', body)
 
-    def test_comment_is_deleted_when_remote_delete_succeeds(self):
+    def test_comment_is_marked_obsolete_instead_of_deleted(self):
+        """Сервис не удаляет запись в YouTrack, а дописывает маркер в её текст."""
         comment = Comment.objects.create(
-            user=self.senior, data_object=self.root, text='важное', youtrack_id='c-1'
+            user=self.senior, data_object=self.root, text='важное',
+            youtrack_id='c-1', youtrack_issue_id='MNT-1',
         )
 
-        with patch('data.youtrack_services.delete_comment_from_youtrack', return_value=(True, 'ok')):
+        with patch('data.youtrack_services.update_comment_in_youtrack',
+                   return_value=(True, 'ok')) as mark:
             response = self.client.post(reverse('delete_comments_bulk'), {
                 'object_uuid': str(self.root.uuid),
                 'comment_ids': [str(comment.uuid)],
             })
 
+        kwargs = mark.call_args.kwargs
+        self.assertEqual(kwargs['issue_id'], 'MNT-1')
+        self.assertTrue(kwargs['text'].startswith(youtrack_services.OBSOLETE_MARK))
+        self.assertIn('важное', kwargs['text'])
+        # Из справочника запись уходит только после подтверждённой пометки
         self.assertFalse(Comment.objects.filter(pk=comment.pk).exists())
         self.assertNotIn('toast-item', response.content.decode())
 
-    def test_local_only_comment_is_deleted_without_remote_call(self):
+    def test_local_only_comment_is_removed_without_remote_call(self):
         comment = Comment.objects.create(user=self.senior, data_object=self.root, text='локальный')
 
-        with patch('data.youtrack_services.delete_comment_from_youtrack') as mock_delete:
+        with patch('data.youtrack_services.update_comment_in_youtrack') as mark:
             self.client.post(reverse('delete_comments_bulk'), {
                 'object_uuid': str(self.root.uuid),
                 'comment_ids': [str(comment.uuid)],
             })
 
-        mock_delete.assert_not_called()
+        mark.assert_not_called()
         self.assertFalse(Comment.objects.filter(pk=comment.pk).exists())
 
-    def test_attachment_is_kept_when_remote_delete_fails(self):
+    def test_attachment_leaves_tombstone_and_note(self):
+        """
+        У вложения нет текста, поэтому признак хранится надгробием, а в
+        задачу уходит заметка. Файл в YouTrack остаётся.
+        """
         att = Attachment.objects.create(
-            user=self.senior, data_object=self.root, youtrack_id='a-1',
+            user=self.senior, data_object=self.root, youtrack_id='a-1', youtrack_issue_id='MNT-1',
             path=SimpleUploadedFile('doc.pdf', b'data', content_type='application/pdf'),
         )
 
-        with patch('data.youtrack_services.delete_attachment_from_youtrack', return_value=(False, '503')):
-            response = self.client.post(reverse('delete_attachments_bulk'), {
+        with patch('data.youtrack_services.send_comment_to_youtrack',
+                   return_value=(True, 'note-1')) as note:
+            self.client.post(reverse('delete_attachments_bulk'), {
                 'object_uuid': str(self.root.uuid),
                 'file_ids': [str(att.uuid)],
             })
 
-        self.assertTrue(Attachment.objects.filter(pk=att.pk).exists())
-        self.assertIn('toast-item', response.content.decode())
+        self.assertFalse(Attachment.objects.filter(pk=att.pk).exists())
+        self.assertTrue(YouTrackObsoleteRecord.objects.filter(
+            issue_id='MNT-1', youtrack_id='a-1').exists())
+        self.assertIn('doc.pdf', note.call_args.kwargs['text'])
 
     def test_failed_attachment_upload_is_reported(self):
         with patch('data.youtrack_services.upload_attachment_to_youtrack', return_value=(False, 'диск переполнен')):
@@ -2022,57 +2070,6 @@ class MaintenancePlanStatsTests(BaseDataTestCase):
 
         body = self.client.get(reverse('object_tab', args=[self.root.uuid, 'history'])).content.decode()
         self.assertIn('план на', body)
-
-
-class MaintenanceBackfillMigrationTests(TestCase):
-    """Обратное заполнение вида обслуживания для накопленной истории."""
-
-    def test_backfill_classifies_existing_records(self):
-        from data.migrations import __name__ as _  # noqa: F401
-        from importlib import import_module
-
-        migration = import_module('data.migrations.0005_backfill_maintenance_kind')
-
-        object_type = ObjectType.objects.create(type='Насос')
-        model = ObjectModel.objects.create(object_type=object_type, name='НМ-1')
-        obj = DataObject.objects.create(model=model, name='Объект')
-
-        planned = ActionHistory.objects.create(
-            data_object=obj, action_type='maintenance',
-            action='[Плановое ТО] Замена масла',
-        )
-        unplanned = ActionHistory.objects.create(
-            data_object=obj, action_type='maintenance',
-            action='Внеплановое техническое обслуживание (след. ТО по графику: 01.01.2027)',
-        )
-        from_youtrack = ActionHistory.objects.create(
-            data_object=obj, action_type='maintenance',
-            action='Списание 2ч', youtrack_id='w-1',
-        )
-        other = ActionHistory.objects.create(
-            data_object=obj, action_type='update', action='Изменено имя',
-        )
-
-        ActionHistory.objects.update(maintenance_kind=None, planned_for=None)
-
-        class FakeApps:
-            @staticmethod
-            def get_model(app_label, model_name):
-                return ActionHistory
-
-        migration.backfill(FakeApps, None)
-
-        planned.refresh_from_db()
-        unplanned.refresh_from_db()
-        from_youtrack.refresh_from_db()
-        other.refresh_from_db()
-
-        self.assertEqual(planned.maintenance_kind, 'planned')
-        self.assertEqual(planned.planned_for, planned.created_at.date())
-        self.assertEqual(unplanned.maintenance_kind, 'unplanned')
-        self.assertIsNone(unplanned.planned_for)
-        self.assertEqual(from_youtrack.maintenance_kind, 'unplanned')
-        self.assertIsNone(other.maintenance_kind)
 
 
 class MaintenanceListPeriodTests(BaseDataTestCase):

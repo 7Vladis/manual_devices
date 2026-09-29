@@ -114,7 +114,12 @@ def edit_comment_view(request, pk):
         comment.save(update_fields=['text'])
         # Правка обязана уехать в YouTrack, иначе следующая синхронизация
         # вернёт прежний текст. Отправит её воркер.
-        if obj.effective_youtrack_issue_id and comment.youtrack_id:
+        #
+        # Куда именно уедет, решает сама запись, а не дерево: объект могли
+        # отвязать от задачи или сделать корневым, а копия в задаче осталась и
+        # должна догнать текст. Спросишь дерево — задание не поставится, хотя
+        # обновлять есть что.
+        if comment.youtrack_id and youtrack_sync.record_issue(comment, obj):
             youtrack_queue.enqueue(YouTrackJob.KIND_COMMENT_EDIT, obj, request.user,
                                    {'comment': str(comment.pk)})
             queued = True
@@ -143,7 +148,7 @@ def delete_comments_bulk(request):
         if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
 
-        deletable_ids, yt_errors = youtrack_sync.remove_comments(obj, queryset, request.user)
+        deletable_ids, yt_errors = youtrack_sync.mark_comments_obsolete(obj, queryset, request.user)
 
         if deletable_ids:
             Comment.objects.filter(uuid__in=deletable_ids).delete()
@@ -153,7 +158,7 @@ def delete_comments_bulk(request):
                             {'obj': obj, 'comments': comments}, request=request)
     if yt_errors:
         html += "\n" + yt_toast(
-            yt_errors + ["Записи оставлены локально, чтобы данные систем не разошлись."],
+            yt_errors + ["Записи оставлены в справочнике, чтобы данные систем не разошлись."],
             request=request
         )
     return HttpResponse(html)
@@ -219,7 +224,7 @@ def delete_attachments_bulk(request):
         if not request.user.can_manage_content:
             queryset = queryset.filter(user=request.user)
 
-        deletable_ids, yt_errors = youtrack_sync.remove_attachments(obj, queryset, request.user)
+        deletable_ids, yt_errors = youtrack_sync.mark_attachments_obsolete(obj, queryset, request.user)
 
         if deletable_ids:
             # Удаляем поштучно: post_delete стирает файл с диска.
@@ -231,7 +236,7 @@ def delete_attachments_bulk(request):
                             {'obj': obj, 'files': files}, request=request)
     if yt_errors:
         html += "\n" + yt_toast(
-            yt_errors + ["Файлы оставлены локально, чтобы данные систем не разошлись."],
+            yt_errors + ["Файл убран из справочника, но в задаче о нём не сообщено."],
             request=request
         )
     return HttpResponse(html)

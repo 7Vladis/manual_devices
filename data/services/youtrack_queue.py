@@ -169,6 +169,17 @@ def _handle_description(job):
     return _outcome(youtrack_sync.push_description(job.data_object, job.user))
 
 
+def _handle_move_note(job):
+    """Заметка в прежнюю задачу о том, что компонент переехал."""
+    _require_token(job)
+    return _outcome(youtrack_sync.push_move_note(
+        job.data_object,
+        job.payload.get('issue_id'),
+        job.payload.get('destination', 'в другой объект'),
+        job.user,
+    ))
+
+
 HANDLERS = {
     YouTrackJob.KIND_SYNC: _handle_sync,
     YouTrackJob.KIND_COMMENT: _handle_comment,
@@ -176,6 +187,7 @@ HANDLERS = {
     YouTrackJob.KIND_ATTACHMENT: _handle_attachment,
     YouTrackJob.KIND_WORK_ITEM: _handle_work_item,
     YouTrackJob.KIND_DESCRIPTION: _handle_description,
+    YouTrackJob.KIND_MOVE_NOTE: _handle_move_note,
 }
 
 

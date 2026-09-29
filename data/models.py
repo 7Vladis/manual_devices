@@ -244,6 +244,8 @@ class ActionHistory(models.Model):
     action_type = models.CharField(max_length=30, choices=ACTION_TYPE_CHOICES, default='other', db_index=True, verbose_name="Тип действия")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата создания")
     youtrack_id = models.CharField(max_length=100, blank=True, null=True, db_index=True, verbose_name="ID записи в YouTrack")
+    # См. пояснение у Comment.youtrack_issue_id.
+    youtrack_issue_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="Задача, где лежит копия")
 
     # Тип обслуживания хранится отдельным полем, а не выводится из текста
     # описания: статистика плана не должна зависеть от формулировок.
@@ -272,6 +274,43 @@ class ActionHistory(models.Model):
         return self.action_type == 'maintenance' and self.maintenance_kind == 'planned'
 
 
+class YouTrackObsoleteRecord(models.Model):
+    """
+    Надгробие: запись, которую у нас убрали, а в YouTrack оставили.
+
+    Сервис в YouTrack ничего не удаляет. Для комментария признак «устарело»
+    пишется прямо в его текст и виден человеку в задаче. У вложения текста
+    нет, ставить маркер некуда — поэтому признак хранится здесь, и
+    синхронизация сверяется с ним, чтобы не скачать файл заново.
+
+    Пара (задача, номер записи) уникальна: повторная пометка ничего не ломает.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    issue_id = models.CharField(max_length=100, verbose_name="Задача YouTrack")
+    youtrack_id = models.CharField(max_length=100, verbose_name="Номер записи в YouTrack")
+    filename = models.CharField(max_length=255, blank=True, default='', verbose_name="Имя файла")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name="Кто пометил",
+    )
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="Когда помечено")
+
+    class Meta:
+        db_table = 'youtrack_obsolete_record'
+        verbose_name = 'Устаревшая запись YouTrack'
+        verbose_name_plural = 'Устаревшие записи YouTrack'
+        constraints = [
+            models.UniqueConstraint(fields=['issue_id', 'youtrack_id'],
+                                    name='unique_obsolete_record'),
+        ]
+        indexes = [
+            models.Index(fields=['issue_id'], name='ytobsolete_issue_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.issue_id}/{self.youtrack_id}"
+
+
 class YouTrackJob(models.Model):
     """
     Задание на обмен с YouTrack, выполняемое вне веб-запроса.
@@ -290,6 +329,7 @@ class YouTrackJob(models.Model):
     KIND_ATTACHMENT = 'attachment'
     KIND_WORK_ITEM = 'work_item'
     KIND_DESCRIPTION = 'description'
+    KIND_MOVE_NOTE = 'move_note'
 
     KIND_CHOICES = [
         (KIND_SYNC, 'Синхронизация задачи'),
@@ -298,6 +338,7 @@ class YouTrackJob(models.Model):
         (KIND_ATTACHMENT, 'Загрузка вложения'),
         (KIND_WORK_ITEM, 'Списание времени'),
         (KIND_DESCRIPTION, 'Обновление описания'),
+        (KIND_MOVE_NOTE, 'Заметка о переносе'),
     ]
 
     QUEUED = 'queued'
@@ -386,6 +427,11 @@ class Comment(models.Model):
     text = models.TextField(verbose_name="Текст комментария")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата создания")
     youtrack_id = models.CharField(max_length=100, blank=True, null=True, db_index=True, verbose_name="ID комментария в YouTrack")
+    # Задача, в которой лежит копия. Хранится рядом с номером записи, потому
+    # что номер без задачи бессмыслен: объект могут перенести к другому
+    # родителю или отвязать от задачи, и «эффективная» задача, вычисленная
+    # по дереву заново, укажет уже не туда, где запись на самом деле.
+    youtrack_issue_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="Задача, где лежит копия")
 
     class Meta:
         db_table = 'comment'
@@ -408,6 +454,8 @@ class Attachment(models.Model):
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата загрузки")
     is_preview = models.BooleanField(default=False, verbose_name="Превью (фото)")
     youtrack_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID вложения в YouTrack")
+    # См. пояснение у Comment.youtrack_issue_id.
+    youtrack_issue_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="Задача, где лежит копия")
 
     class Meta:
         db_table = 'attachment'
