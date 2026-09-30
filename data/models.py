@@ -10,10 +10,32 @@ from django.utils import timezone
 from django.conf import settings
 
 
+# Длина пути вложения. Поле `Attachment.path` хранит строку, поэтому предел
+# есть всегда; важно, чтобы в него укладывался путь целиком. Хранилище Django,
+# получив имя длиннее предела, срезает корень имени файла по остатку и, съев
+# его полностью, бросает SuspiciousFileOperation. С прежним `max_length=100`
+# это случалось легко: один каталог занимает до 100 символов, и файл с длинным
+# именем ронял и загрузку через карточку, и синхронизацию с YouTrack — из-за
+# одного файла терялась вся задача.
+ATTACHMENT_PATH_MAX_LENGTH = 255
+
+# Сколько символов оставить хранилищу: при совпадении имён оно дописывает
+# `_XXXXXXX`. Без запаса второй файл с тем же именем снова упёрся бы в предел.
+ATTACHMENT_NAME_SUFFIX_RESERVE = 8
+
+# Разумный предел на расширение: оно сохраняется целиком, по нему определяются
+# превью и запрет на активный контент, но и разрастаться ему незачем.
+ATTACHMENT_EXT_LIMIT = 20
+
+
 def get_attachment_upload_path(instance, filename):
     """
     Формирует структурированный путь для сохранения вложений:
     attachments/<имя_объекта>_<uuid_объекта>/<исходное_имя_файла>
+
+    Имя файла укорачивается здесь, а не в хранилище: там обрезка кончается
+    исключением, а тут — предсказуемо коротким именем. Каталог не сокращаем:
+    имя объекта и так ограничено 50 символами, а uuid обрезать нельзя.
     """
     obj = instance.data_object
     raw_name = obj.name or (obj.model.name if obj.model else "object")
@@ -23,7 +45,16 @@ def get_attachment_upload_path(instance, filename):
     safe_name = safe_name[:50] or "object"
     
     folder_name = f"{safe_name}_{obj.uuid}"
-    return os.path.join('attachments', folder_name, filename)
+    folder = os.path.join('attachments', folder_name)
+
+    # basename: имя приходит и от YouTrack, где в нём может оказаться путь.
+    root, ext = os.path.splitext(os.path.basename(filename))
+    ext = ext[:ATTACHMENT_EXT_LIMIT]
+    budget = (ATTACHMENT_PATH_MAX_LENGTH - len(folder) - len(os.sep) - len(ext)
+              - ATTACHMENT_NAME_SUFFIX_RESERVE)
+    root = root[:budget] if budget > 0 else ''
+
+    return os.path.join(folder, f"{root}{ext}" or 'file')
 
 
 class ObjectType(models.Model):
@@ -450,7 +481,8 @@ class Attachment(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name="Загрузил")
     data_object = models.ForeignKey(DataObject, on_delete=models.CASCADE, related_name='attachments', verbose_name="Объект")
     comment = models.ForeignKey(Comment, on_delete=models.CASCADE, null=True, blank=True, related_name='attachments', verbose_name="Комментарий")
-    path = models.FileField(upload_to=get_attachment_upload_path, verbose_name="Файл")
+    path = models.FileField(upload_to=get_attachment_upload_path,
+                            max_length=ATTACHMENT_PATH_MAX_LENGTH, verbose_name="Файл")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Дата загрузки")
     is_preview = models.BooleanField(default=False, verbose_name="Превью (фото)")
     youtrack_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID вложения в YouTrack")
