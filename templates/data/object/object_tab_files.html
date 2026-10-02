@@ -55,6 +55,12 @@
                         <img src="{{ file.path.url }}" alt="{{ file.filename }}"
                              data-bs-toggle="modal" data-bs-target="#imageFullscreenModal-{{ file.uuid }}"
                              title="Нажмите, чтобы увеличить">
+                    {% elif file.is_video %}
+                        <button type="button" class="thumb-play"
+                                data-bs-toggle="modal" data-bs-target="#videoModal-{{ file.uuid }}"
+                                title="Открыть в проигрывателе" aria-label="Открыть в проигрывателе">
+                            <i class="bi bi-play-circle-fill"></i>
+                        </button>
                     {% else %}
                         <i class="bi bi-file-earmark-text text-secondary fs-5"></i>
                     {% endif %}
@@ -72,6 +78,16 @@
                 </span>
 
                 <span class="d-flex align-items-center gap-2 flex-shrink-0">
+                    {% if file.is_video %}
+                    <button type="button" class="btn btn-light border fw-semibold"
+                            style="font-size: 0.75rem;"
+                            data-bs-toggle="modal" data-bs-target="#videoModal-{{ file.uuid }}"
+                            title="Открыть в проигрывателе">
+                        <i class="bi bi-play-circle"></i>
+                        <span class="d-none d-xl-inline">Смотреть</span>
+                    </button>
+                    {% endif %}
+
                     {% if file.is_image and not request.user.is_junior %}
                     <button type="button"
                             class="btn {% if file.is_preview %}btn-success{% else %}btn-light border{% endif %} fw-semibold"
@@ -89,6 +105,10 @@
                     </a>
                 </span>
             </div>
+
+            {% if file.is_video %}
+                {% include 'data/includes/video_modal.html' with att=file %}
+            {% endif %}
 
             {% if file.is_image %}
             <div class="modal fade" id="imageFullscreenModal-{{ file.uuid }}" tabindex="-1" aria-hidden="true">

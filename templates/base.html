@@ -220,6 +220,10 @@
         document.addEventListener('hidden.bs.modal', (event) => {
             const modal = event.target;
 
+            // Закрытое окно не должно продолжать играть: само по себе видео
+            // не останавливается, и звук идёт из невидимого проигрывателя.
+            modal.querySelectorAll('video').forEach((player) => { player.pause(); });
+
             if (modal.hasAttribute('data-md-reset')) {
                 const holder = modal.querySelector('.modal-content');
                 if (holder) holder.innerHTML = '';

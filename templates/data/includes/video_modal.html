@@ -1,0 +1,20 @@
+{% comment %}
+Проигрыватель вложения. Окно статичное, как у изображений: разметка уже в
+ленте, HTMX её не подгружает.
+
+`preload="metadata"` тянет только заголовок файла — длительность и первый
+кадр; сам файл пойдёт, когда нажмут воспроизведение. Останавливает
+проигрывание общий обработчик закрытия окон в base.html: иначе за закрытым
+окном продолжал бы идти звук.
+{% endcomment %}
+<div class="modal fade" id="videoModal-{{ att.uuid }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content bg-transparent border-0 shadow-none">
+            <div class="modal-body p-0 position-relative">
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 shadow-none"
+                        style="z-index: 2;" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                <video src="{{ att.path.url }}" controls preload="metadata" class="video-player"></video>
+            </div>
+        </div>
+    </div>
+</div>

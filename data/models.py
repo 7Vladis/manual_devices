@@ -501,6 +501,11 @@ class Attachment(models.Model):
             return os.path.basename(self.path.name)
         return ""
 
+    # Форматы, которые браузер играет сам. Остальное (mkv, avi, wmv) остаётся
+    # файлом для скачивания: во встроенном проигрывателе оно всё равно не
+    # откроется, и кнопка «смотреть» только обманывала бы.
+    VIDEO_EXTENSIONS = ('.mp4', '.m4v', '.webm', '.ogv', '.mov')
+
     @property
     def is_image(self):
         """Проверяет по расширению, является ли вложение изображением"""
@@ -510,6 +515,13 @@ class Attachment(models.Model):
         # SVG намеренно отсутствует: такой файл отдаётся с нашего origin и
         # может выполнить скрипт. Загрузка SVG запрещена в data.validators.
         return ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+
+    @property
+    def is_video(self):
+        """Проверяет по расширению, откроется ли вложение в проигрывателе"""
+        if not self.path:
+            return False
+        return os.path.splitext(self.path.name)[1].lower() in self.VIDEO_EXTENSIONS
 
 
 @receiver(post_delete, sender=Attachment)

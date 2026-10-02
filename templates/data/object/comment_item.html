@@ -69,11 +69,18 @@
                 </button>
             </div>
         {% else %}
-            <div class="markdown-content">{{ comment.text|markdown }}</div>
+            {% comment %}
+            Картинки, на которые ссылается сам текст, встают в текст — так они
+            стоят и в YouTrack. Под комментарием остаются только те вложения,
+            которых в тексте нет.
+            {% endcomment %}
+            {% comment_body comment as body %}
 
-            {% if comment.attachments.all %}
+            <div class="markdown-content">{{ body.html }}</div>
+
+            {% if body.extra %}
             <div class="d-flex flex-wrap gap-2 mt-2 pt-2 border-top">
-                {% for att in comment.attachments.all %}
+                {% for att in body.extra %}
                     {% if att.is_image %}
                         <span class="file-thumb" style="width: 60px; height: 60px; min-width: 60px;"
                               data-bs-toggle="modal" data-bs-target="#imageModal-{{ att.uuid }}">
@@ -90,6 +97,16 @@
                                 </div>
                             </div>
                         </div>
+                    {% elif att.is_video %}
+                        <button type="button" class="btn btn-light border"
+                                style="font-size: 0.78rem; max-width: 220px;"
+                                data-bs-toggle="modal" data-bs-target="#videoModal-{{ att.uuid }}"
+                                title="Открыть в проигрывателе">
+                            <i class="bi bi-play-circle text-primary"></i>
+                            <span class="text-truncate">{{ att.filename }}</span>
+                        </button>
+
+                        {% include 'data/includes/video_modal.html' with att=att %}
                     {% else %}
                         <a href="{{ att.path.url }}" download
                            class="btn btn-light border"
