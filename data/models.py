@@ -27,6 +27,12 @@ ATTACHMENT_NAME_SUFFIX_RESERVE = 8
 # превью и запрет на активный контент, но и разрастаться ему незачем.
 ATTACHMENT_EXT_LIMIT = 20
 
+# Второй предел — файловой системы, и он не на символы, а на байты: ext4 не
+# принимает имя длиннее 255 байт, а кириллица в UTF-8 весит по два символа.
+# Поэтому имя, укладывавшееся в поле базы, всё равно падало на `os.open`
+# ошибкой «File name too long».
+ATTACHMENT_NAME_MAX_BYTES = 255
+
 
 def get_attachment_upload_path(instance, filename):
     """
@@ -50,9 +56,17 @@ def get_attachment_upload_path(instance, filename):
     # basename: имя приходит и от YouTrack, где в нём может оказаться путь.
     root, ext = os.path.splitext(os.path.basename(filename))
     ext = ext[:ATTACHMENT_EXT_LIMIT]
+
+    # Укладываем имя в оба предела: путь целиком — в поле базы, само имя —
+    # в байтовый лимит файловой системы.
     budget = (ATTACHMENT_PATH_MAX_LENGTH - len(folder) - len(os.sep) - len(ext)
               - ATTACHMENT_NAME_SUFFIX_RESERVE)
     root = root[:budget] if budget > 0 else ''
+
+    byte_budget = (ATTACHMENT_NAME_MAX_BYTES - ATTACHMENT_NAME_SUFFIX_RESERVE
+                   - len(ext.encode('utf-8')))
+    while root and len(root.encode('utf-8')) > byte_budget:
+        root = root[:-1]
 
     return os.path.join(folder, f"{root}{ext}" or 'file')
 
