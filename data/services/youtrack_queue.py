@@ -33,14 +33,31 @@ class PermanentFailure(Exception):
     """
 
 
-def enqueue(kind, data_object, user, payload=None):
+def enqueue(kind, data_object, user, payload=None, dedupe_key=None):
     """
     Ставит задание в очередь и возвращает его.
 
     Для синхронизации действует ограничение «одно незавершённое задание на
     объект»: карточку открывают часто, а обновляет она одно и то же состояние.
     Наткнувшись на него, возвращаем уже стоящее в очереди задание.
+
+    `dedupe_key` — поле payload, по которому задание считается повтором уже
+    стоящего: две правки одного комментария подряд отправят одну и ту же
+    текущую версию из базы, второе задание ничего не добавит. Ограничением БД
+    это не выразить — уникальность тут не по объекту, а по записи внутри
+    payload, — поэтому проверка в коде. Схлопываем только `queued`: взятое
+    воркером задание могло уже прочитать прежний текст.
     """
+    if dedupe_key:
+        queued = YouTrackJob.objects.filter(
+            data_object=data_object,
+            kind=kind,
+            status=YouTrackJob.QUEUED,
+            **{f'payload__{dedupe_key}': (payload or {}).get(dedupe_key)},
+        ).order_by('-created_at').first()
+        if queued is not None:
+            return queued
+
     try:
         with transaction.atomic():
             return YouTrackJob.objects.create(
@@ -107,11 +124,20 @@ def _gone(what):
 
 
 def _handle_sync(job):
-    """Входящая синхронизация: YouTrack → локальная база."""
-    if not job.data_object.youtrack_issue_id:
+    """
+    Входящая синхронизация: YouTrack → локальная база.
+
+    Читается задача владельца, а не обязательно объекта задания: у дочерней
+    карточки своей задачи нет, она работает с задачей предка. Передать сюда
+    потомка нельзя — перенос привязывает всё принесённое к тому объекту,
+    который ему дали, и комментарии предка оказались бы у потомка. Записи
+    самого потомка обновляются внутри: они помнят свою задачу.
+    """
+    issue_id, target = job.data_object.get_effective_youtrack_issue()
+    if not issue_id:
         raise PermanentFailure("У объекта не задан ID задачи YouTrack")
     _require_token(job)
-    return youtrack_services.sync_issue_from_youtrack(job.data_object, job.user)
+    return youtrack_services.sync_issue_from_youtrack(target, job.user)
 
 
 def _handle_comment(job):

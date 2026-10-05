@@ -13,14 +13,18 @@
             <div class="detail-actions">
                 {% include 'data/object/maintenance_pill.html' with obj=obj today=today soon_date=soon_date oob=False %}
 
-                {% if obj.youtrack_issue_id %}
-                <!-- Авто-синхронизация: карточка уже показана, данные подтягиваются фоном -->
+                {% if obj.effective_youtrack_issue_id %}
+                {% comment %}
+                Авто-синхронизация: карточка уже показана, данные подтягиваются
+                фоном. У дочернего объекта своей задачи нет — читается задача
+                предка, в ней лежат и его записи.
+                {% endcomment %}
                 <span id="yt-sync-status"
                       class="pill pill-neutral"
                       hx-post="{% url 'sync_youtrack' obj.uuid %}"
                       hx-trigger="load"
                       hx-swap="outerHTML"
-                      title="Синхронизация с задачей {{ obj.youtrack_issue_id }}">
+                      title="Синхронизация с задачей {{ obj.effective_youtrack_issue_id }}">
                     <span class="spinner-border spinner-border-sm" role="status" style="width: 0.85em; height: 0.85em;"></span>
                     <span class="pill-label">YouTrack</span>
                 </span>

@@ -72,10 +72,10 @@ def sync_pill_oob(obj, request=None):
     """
     OOB-пилюля состояния обмена: после действия она снова начинает опрос.
 
-    Пустая строка, если у объекта нет своей задачи YouTrack: пилюли в шапке
+    Пустая строка, если задачи нет ни у объекта, ни у предков: пилюли в шапке
     карточки тогда нет, и своп ушёл бы в никуда.
     """
-    if not obj.youtrack_issue_id:
+    if not obj.effective_youtrack_issue_id:
         return ''
     return render_to_string(
         'data/object/sync_status.html',

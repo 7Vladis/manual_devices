@@ -67,7 +67,7 @@ failed — что-то не уехало (пилюля предлагает по
 <span id="yt-sync-status" class="pill pill-neutral"
       {% if oob %}hx-swap-oob="outerHTML"{% endif %}
       style="cursor: help;"
-      title="{% if obj.youtrack_issue_id %}Обмен с YouTrack не выполнялся{% else %}Задача YouTrack не привязана к объекту{% endif %}">
+      title="{% if obj.effective_youtrack_issue_id %}Обмен с YouTrack не выполнялся{% else %}Задача YouTrack не привязана ни к объекту, ни к его предкам{% endif %}">
     <i class="bi bi-cloud"></i>
     <span class="pill-label">YouTrack</span>
 </span>

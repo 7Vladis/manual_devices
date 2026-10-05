@@ -122,7 +122,9 @@ def sync_youtrack_view(request, pk):
     """
     obj = get_object_or_404(DataObject.objects.select_related('model'), pk=pk)
 
-    if not obj.youtrack_issue_id:
+    # Своя задача не обязательна: карточка дочернего объекта читает задачу
+    # предка — там лежат и её записи.
+    if not obj.effective_youtrack_issue_id:
         return render(request, 'data/object/sync_status.html',
                       {'obj': obj, 'sync_state': 'none'})
 

@@ -31,7 +31,15 @@ def settings_page(request):
 
     # 1. ВКЛАДКА: Правила планирования ТО
     if active_tab == 'rules':
-        rules_query = DateUpdateRule.objects.prefetch_related('data_objects').annotate(
+        # select_related('model') в prefetch обязателен: список объектов под
+        # правилом подписывается как `obj.name|default:obj.model.name`, а фильтр
+        # default вычисляет аргумент всегда, даже когда имя задано. Без него
+        # каждый объект спрашивал свою модель отдельным запросом — на 220
+        # объектах страница делала 224 запроса вместо пяти.
+        rules_query = DateUpdateRule.objects.prefetch_related(
+            Prefetch('data_objects',
+                     queryset=DataObject.objects.select_related('model').order_by('name'))
+        ).annotate(
             objects_count=Count('data_objects')
         ).order_by('name')
         

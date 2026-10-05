@@ -38,7 +38,7 @@
                            onchange="window.mdSyncCommentForm(this); document.getElementById('file-chosen-label').textContent = this.files[0] ? this.files[0].name : '';">
                     <span id="file-chosen-label" class="text-muted small text-truncate" style="max-width: 240px; font-size: 0.78rem;"></span>
 
-                    {% if obj.youtrack_issue_id and not request.user.youtrack_token %}
+                    {% if obj.effective_youtrack_issue_id and not request.user.youtrack_token %}
                     <span class="text-warning" style="font-size: 0.78rem;">
                         <i class="bi bi-exclamation-circle me-1"></i>Токен YouTrack не указан
                     </span>

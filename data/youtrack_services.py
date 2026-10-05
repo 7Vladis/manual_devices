@@ -2,6 +2,7 @@
 
 from datetime import datetime
 import logging
+import re
 import requests
 from django.conf import settings
 from django.utils import timezone
@@ -21,6 +22,18 @@ OBSOLETE_MARK = '[УСТАРЕЛО]'
 def is_obsolete(text: str) -> bool:
     """Помечен ли текст комментария как устаревший."""
     return (text or '').lstrip().startswith(OBSOLETE_MARK)
+
+
+# Пометка компонента, которой сервис снабжает запись дочернего объекта,
+# уезжающую в задачу предка: `**[Плата]** текст`. Снимается по шаблону, а не
+# по имени объекта: объект могли переименовать, и в старых записях осталось
+# прежнее имя.
+_COMPONENT_PREFIX_RE = re.compile(r'^\s*\*\*\[[^\]]*\]\*\*\s*')
+
+
+def strip_component_prefix(text: str) -> str:
+    """Текст записи без пометки компонента — так он хранится у владельца."""
+    return _COMPONENT_PREFIX_RE.sub('', text or '', count=1)
 
 
 def get_auth_token(user) -> str | None:
@@ -207,6 +220,62 @@ def update_comment_in_youtrack(issue_id: str, comment_yt_id: str, text: str, use
         return False, msg
 
 
+def _as_datetime(timestamp):
+    """
+    Время YouTrack (миллисекунды) в наше.
+
+    Мусор вместо числа не должен ронять перенос записи: дата — не то, из-за
+    чего стоит терять комментарий. Тогда берём текущее время и пишем в лог.
+    """
+    if not timestamp:
+        return timezone.now()
+    try:
+        return datetime.fromtimestamp(timestamp / 1000.0, tz=timezone.get_current_timezone())
+    except (TypeError, ValueError, OSError, OverflowError):
+        logger.warning("YouTrack вернул непонятную дату: %r", timestamp)
+        return timezone.now()
+
+
+def _save_attachment(att_data, *, data_object, issue_id, base_url, headers,
+                     user, comment=None, created_at=None):
+    """
+    Скачивает вложение задачи и сохраняет локальную копию.
+
+    Возвращает (сохранено?, причина). Исключение наружу не выпускает: раньше
+    любая осечка на одном файле — пустой адрес в ответе, недоступная ссылка,
+    имя, которого не принимает файловая система — уносила всю синхронизацию
+    вместе с комментариями и списаниями времени, к файлу отношения не имеющими.
+    """
+    from .models import Attachment
+
+    att_name = att_data.get('name') or ''
+    att_url = att_data.get('url')
+    if not att_url:
+        return False, f"у файла «{att_name or att_data.get('id')}» в ответе нет адреса"
+
+    full_url = f"{base_url}{att_url}" if att_url.startswith('/') else att_url
+    try:
+        response = requests.get(full_url, headers=headers, timeout=20)
+        if response.status_code != 200:
+            return False, f"файл «{att_name}» не скачан ({response.status_code})"
+
+        Attachment.objects.create(
+            user=user,
+            data_object=data_object,
+            comment=comment,
+            path=ContentFile(response.content, name=att_name),
+            is_preview=False,
+            youtrack_id=att_data.get('id'),
+            youtrack_issue_id=issue_id,
+            **({} if created_at is None else {'created_at': created_at}),
+        )
+    except Exception as exc:  # noqa: BLE001 — один файл не уносит синхронизацию
+        logger.exception("Вложение %s задачи %s не сохранено", att_data.get('id'), issue_id)
+        return False, f"файл «{att_name}» не сохранён: {exc}"
+
+    return True, ''
+
+
 WORK_ITEMS_PAGE_SIZE = 100
 WORK_ITEMS_MAX_PAGES = 50
 
@@ -309,6 +378,10 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
         new_files_count = 0
         new_work_items_count = 0
 
+        # Записи, которые перенести не удалось. Синхронизация идёт дальше,
+        # а в конце честно сообщает, что пришло не всё.
+        problems = []
+
         # 2. Синхронизируем комментарии и их вложения
         yt_comments = data.get('comments', [])
         for c_data in yt_comments:
@@ -319,8 +392,13 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
 
             # Помеченные устаревшими записи скачивать не нужно. Если копия
             # у нас ещё есть — значит, пометили не мы, и её надо убрать.
+            #
+            # Убираем по номеру записи, не сужая до своего объекта: копия
+            # могла принадлежать дочернему объекту, и у него пометка значит
+            # ровно то же. Номер записи выдаёт YouTrack, двух разных записей
+            # под ним быть не может.
             if is_obsolete(c_data.get('text', '')):
-                Comment.objects.filter(data_object=data_object, youtrack_id=c_id).delete()
+                Comment.objects.filter(youtrack_id=c_id).delete()
                 for att_data in c_data.get('attachments', []):
                     if att_data.get('id'):
                         active_yt_attachment_ids.add(att_data['id'])
@@ -328,9 +406,16 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
 
             # Комментарий мог быть написан в карточке дочернего объекта, у
             # которого нет своей задачи: он уехал сюда, но принадлежит ему.
-            # Создавать вторую копию и править её текст нельзя — у владельца
-            # он хранится без префикса компонента.
-            if Comment.objects.filter(youtrack_id=c_id).exclude(data_object=data_object).exists():
+            # Второй копии не создаём и себе текст не берём — догоняем текстом
+            # владельца. У него он хранится без пометки компонента, поэтому
+            # пометку снимаем.
+            owner_copy = Comment.objects.filter(youtrack_id=c_id).exclude(data_object=data_object).first()
+            if owner_copy is not None:
+                owner_text = strip_component_prefix(c_data.get('text', '') or '')
+                if owner_text and owner_copy.text != owner_text:
+                    owner_copy.text = owner_text
+                    owner_copy.save(update_fields=['text'])
+                    updated_comments_count += 1
                 for att_data in c_data.get('attachments', []):
                     if att_data.get('id'):
                         active_yt_attachment_ids.add(att_data['id'])
@@ -345,13 +430,10 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                 updated_comments_count += 1
 
             if not comment_obj:
-                author_email = c_data.get('author', {}).get('email')
+                author_email = (c_data.get('author') or {}).get('email')
                 author_user = User.objects.filter(email__iexact=author_email).first() if author_email else None
 
-                created_ts = c_data.get('created')
-                created_dt = timezone.now()
-                if created_ts:
-                    created_dt = datetime.fromtimestamp(created_ts / 1000.0, tz=timezone.get_current_timezone())
+                created_dt = _as_datetime(c_data.get('created'))
 
                 comment_obj = Comment.objects.create(
                     user=author_user or user,
@@ -378,25 +460,26 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                     continue
 
                 if not Attachment.objects.filter(data_object=data_object, youtrack_id=att_id).exists():
-                    att_name = att_data.get('name')
-                    att_url = att_data.get('url')
-                    full_att_url = f"{base_url}{att_url}" if att_url.startswith('/') else att_url
-                    file_res = requests.get(full_att_url, headers=headers, timeout=10)
-                    
-                    if file_res.status_code == 200:
-                        file_content = ContentFile(file_res.content, name=att_name)
-                        Attachment.objects.create(
-                            user=comment_obj.user,
-                            data_object=data_object,
-                            comment=comment_obj,
-                            path=file_content,
-                            is_preview=False,
-                            youtrack_id=att_id,
-                            youtrack_issue_id=issue_id,
-                        )
+                    saved, problem = _save_attachment(
+                        att_data,
+                        data_object=data_object,
+                        issue_id=issue_id,
+                        base_url=base_url,
+                        headers=headers,
+                        user=comment_obj.user,
+                        comment=comment_obj,
+                    )
+                    if saved:
                         new_files_count += 1
+                    else:
+                        problems.append(problem)
 
         # 3. Синхронизируем общие файлы карточки
+        #
+        # Комментарии выбираем один раз: привязка файла к комментарию ищется
+        # по имени файла в тексте, и внутри цикла `data_object.comments.all()`
+        # спрашивал базу заново на каждый файл.
+        local_comments = list(data_object.comments.all())
         yt_issue_attachments = data.get('attachments', [])
         for att_data in yt_issue_attachments:
             att_id = att_data.get('id')
@@ -417,37 +500,29 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
 
             # Ищем, не принадлежит ли файл какому-либо комментарию (по имени файла в тексте Markdown)
             matched_comment = None
-            for c in data_object.comments.all():
+            for c in local_comments:
                 if att_name and att_name in c.text:
                     matched_comment = c
                     break
 
             if not att_obj:
-                att_url = att_data.get('url')
-                full_att_url = f"{base_url}{att_url}" if att_url.startswith('/') else att_url
-                file_res = requests.get(full_att_url, headers=headers, timeout=20)
-                
-                if file_res.status_code == 200:
-                    author_email = att_data.get('author', {}).get('email')
-                    author_user = User.objects.filter(email__iexact=author_email).first() if author_email else None
-                    
-                    created_ts = att_data.get('created')
-                    created_dt = timezone.now()
-                    if created_ts:
-                        created_dt = datetime.fromtimestamp(created_ts / 1000.0, tz=timezone.get_current_timezone())
+                author_email = (att_data.get('author') or {}).get('email')
+                author_user = User.objects.filter(email__iexact=author_email).first() if author_email else None
 
-                    file_content = ContentFile(file_res.content, name=att_name)
-                    Attachment.objects.create(
-                        user=author_user or user,
-                        data_object=data_object,
-                        comment=matched_comment,  # Привязываем к комментарию, если имя совпало
-                        path=file_content,
-                        is_preview=False,
-                        youtrack_id=att_id,
-                        youtrack_issue_id=issue_id,
-                        created_at=created_dt,
-                    )
+                saved, problem = _save_attachment(
+                    att_data,
+                    data_object=data_object,
+                    issue_id=issue_id,
+                    base_url=base_url,
+                    headers=headers,
+                    user=author_user or user,
+                    comment=matched_comment,  # Привязываем к комментарию, если имя совпало
+                    created_at=_as_datetime(att_data.get('created')),
+                )
+                if saved:
                     new_files_count += 1
+                else:
+                    problems.append(problem)
             else:
                 # Если файл уже скачан, но ранее не был привязан к комментарию — привязываем его
                 if matched_comment and not att_obj.comment:
@@ -474,13 +549,10 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                     continue
 
                 if not ActionHistory.objects.filter(data_object=data_object, youtrack_id=w_id).exists():
-                    author_email = w_data.get('author', {}).get('email')
+                    author_email = (w_data.get('author') or {}).get('email')
                     author_user = User.objects.filter(email__iexact=author_email).first() if author_email else None
 
-                    created_ts = w_data.get('date') or w_data.get('created')
-                    created_dt = timezone.now()
-                    if created_ts:
-                        created_dt = datetime.fromtimestamp(created_ts / 1000.0, tz=timezone.get_current_timezone())
+                    created_dt = _as_datetime(w_data.get('date') or w_data.get('created'))
 
                     ActionHistory.objects.create(
                         user=author_user or user,
@@ -518,6 +590,11 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                     f"обновлено {updated_comments_count}, удалено {total_deleted}."
                 )
             )
+
+        if problems:
+            summary = "; ".join(dict.fromkeys(problems))
+            logger.warning("Задача %s перенесена не полностью: %s", issue_id, summary)
+            return False, f"Перенесено не всё — {summary}"
 
         return True, "Данные успешно синхронизированы с YouTrack"
 
