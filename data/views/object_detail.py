@@ -43,7 +43,6 @@ def render_object_detail(request, pk):
         'comments_count': obj.comments.count(),
         'files_count': obj.attachments.count(),
         'history_count': obj.actions.count(),
-        'specs_count': len(obj.model.specifications or {}) if obj.model else 0,
     }
     
     response_content = render_to_string('data/object/object_details.html', context, request=request)
@@ -92,11 +91,10 @@ def object_tab_view(request, pk, tab_name):
     if tab_name == 'short_info':
         preview = Attachment.objects.filter(data_object=obj, is_preview=True).first()
         context['preview'] = preview
-        template = 'data/object/object_tab_short_info.html'
-        
-    elif tab_name == 'specs':
+        # Характеристики показываются здесь же, в левой колонке: своей вкладки
+        # у них больше нет — таблица узкая и читается вместе с описанием.
         context['specifications'] = obj.model.specifications or {}
-        template = 'data/object/object_tab_specs.html'
+        template = 'data/object/object_tab_short_info.html'
         
     elif tab_name == 'comments':
         context['comments'] = get_comments_for(obj, request.user, request.GET.get('page'))

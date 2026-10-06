@@ -6,7 +6,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
-from .common import tree_queryset
+from .common import tree_sidebar_context
 from ..models import DataObject, ObjectModel, ObjectType
 from users.decorators import role_required
 
@@ -53,7 +53,7 @@ def clone_object_view(request):
             # Вся копия создаётся одной транзакцией: при ошибке в середине
             # не остаётся наполовину склонированного поддерева.
             with transaction.atomic():
-                deep_clone_object(
+                new_root = deep_clone_object(
                     source_obj=source_obj,
                     new_root_name=new_name,
                     new_parent=new_parent,
@@ -61,13 +61,7 @@ def clone_object_view(request):
                     clone_children=clone_children
                 )
 
-        roots = tree_queryset(DataObject.objects.filter(parent__isnull=True))
-        context = {
-            'initial_objects': roots,
-            'active_tab': 'objects',
-            'models': ObjectModel.objects.all().order_by('name'),
-            'object_types': ObjectType.objects.all().order_by('type')
-        }
-        return render(request, 'data/tree/dict_sidebar.html', context)
+        return render(request, 'data/tree/dict_sidebar.html',
+                      tree_sidebar_context(request, active_object=new_root))
 
     return HttpResponse("Метод не разрешен", status=405)

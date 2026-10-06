@@ -1,5 +1,7 @@
 """Подсказки, проверка имён и конструктор характеристик."""
 
+import re
+
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import HttpResponse
@@ -43,12 +45,30 @@ def check_model_name_view(request):
 
 @login_required
 def check_object_name_view(request):
-    """Подсказка при вводе имени объекта: точный дубликат или похожие записи"""
+    """
+    Подсказка при вводе имени объекта: точный дубликат или похожие записи.
+
+    Сравнение идёт внутри одного дерева, а не по всему справочнику. Родитель
+    не указан — смотрим среди корневых объектов; указан — по всему его
+    поддереву. Так дети одного родителя остаются различимыми, а два разных ПК
+    спокойно носят по «материнской плате»: это разные ветки, и путать их
+    некому.
+    """
     name = request.GET.get('name', '').strip()
     if not name or len(name) < 2:
         return HttpResponse('')
 
-    exact_match = DataObject.objects.select_related('model').filter(name__iexact=name).first()
+    parent_uuid = (request.GET.get('parent') or '').strip()
+    parent = DataObject.objects.select_related('model').filter(pk=parent_uuid).first() if parent_uuid else None
+
+    if parent is not None:
+        scope = DataObject.objects.filter(pk__in=parent.get_descendant_uuids())
+        scope_label = parent.name or parent.model.name
+    else:
+        scope = DataObject.objects.filter(parent__isnull=True)
+        scope_label = ''
+
+    exact_match = scope.select_related('model').filter(name__iexact=name).first()
     similar_objects = []
     if not exact_match:
         stop_words = {'в', 'на', 'под', 'над', 'для', 'из', 'со', 'и', 'или', 'а', 'но', 'с', 'по'}
@@ -57,12 +77,13 @@ def check_object_name_view(request):
             query = Q()
             for word in words:
                 query |= Q(name__icontains=word) | Q(model__name__icontains=word)
-            similar_objects = DataObject.objects.filter(query).select_related('model').distinct()[:5]
+            similar_objects = scope.filter(query).select_related('model').distinct()[:5]
 
     return render(request, 'data/includes/name_check_result.html', {
         'kind': 'object',
         'exact': exact_match,
         'similar': similar_objects,
+        'scope_label': scope_label,
         'modal_id': 'createObjectModal',
     })
 
@@ -204,6 +225,36 @@ def reset_suggestion_view(request):
     })
 
 
+# Чем в строке отделяется параметр от значения. Порядок важен: сначала
+# разделители, которые не встречаются внутри значения (табуляция, двоеточие,
+# несколько пробелов подряд), и только в конце одиночный пробел.
+#
+# Угадать можно не всё: в строке «Класс защиты IP55» одиночный пробел разделит
+# её после первого слова. Поэтому разобранное сразу показывается списком —
+# ошибку видно и её можно поправить или удалить строку.
+_SPEC_SEPARATORS = (r'\t+', r' {2,}', r'\s*:\s*', r'\s+')
+
+
+def parse_spec_text(text):
+    """
+    Разбирает вставленный текст в пары «параметр — значение», строка за строкой.
+
+    Нужно для переноса характеристик из паспорта или с сайта: человек копирует
+    кусок таблицы целиком, а не вбивает полями по одной.
+    """
+    specs = {}
+    for line in (text or '').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        for separator in _SPEC_SEPARATORS:
+            parts = re.split(separator, line, maxsplit=1)
+            if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                specs[parts[0].strip(' :\t')] = parts[1].strip()
+                break
+    return specs
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def specs_builder_view(request):
@@ -221,6 +272,10 @@ def specs_builder_view(request):
     new_value = data.get('new_value', '').strip()
     if new_key and new_value:
         specs[new_key] = new_value
+
+    # Вставленный списком текст разбирается здесь же: уже набранные вручную
+    # характеристики остаются, совпавшие параметры перезаписываются.
+    specs.update(parse_spec_text(data.get('bulk_text', '')))
         
     remove_key = data.get('remove_key')
     if remove_key:

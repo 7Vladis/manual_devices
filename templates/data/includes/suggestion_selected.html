@@ -7,7 +7,8 @@
         </span>
 
         <input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}"
-               {% if field == 'object_type' %}hx-on::load="htmx.trigger(document.body, 'checkModelName')"{% endif %}>
+               {% if field == 'object_type' %}hx-on::load="htmx.trigger(document.body, 'checkModelName')"{% endif %}
+               {% if field == 'parent' %}hx-on::load="htmx.trigger(document.body, 'checkObjectName')"{% endif %}>
 
         <button type="button"
                 class="btn btn-link text-secondary p-0 border-0 fw-semibold flex-shrink-0"

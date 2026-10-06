@@ -22,7 +22,7 @@
     </form>
 {% else %}
     {% if obj.description %}
-        <div class="markdown-content">{{ obj.description|markdown }}</div>
+        <div class="markdown-content">{% description_body obj %}</div>
         {% if not request.user.is_junior %}
         <button type="button" class="btn btn-light border mt-3"
                 hx-get="{% url 'edit_description' obj.uuid %}"

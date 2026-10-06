@@ -17,7 +17,7 @@ from users.decorators import role_required
 
 from ..services import youtrack_queue
 from ..services.maintenance import calculate_next_maintenance_date
-from .common import htmx_error, sync_pill_oob
+from .common import htmx_error, sync_pill_oob, tree_sidebar_context
 
 logger = logging.getLogger('data')
 
@@ -126,14 +126,8 @@ def create_object_view(request):
             action=action_desc
         )
         
-        roots = DataObject.objects.filter(parent__isnull=True).order_by('name')
-        context = {
-            'initial_objects': roots,
-            'active_tab': 'objects',
-            'models': ObjectModel.objects.all().order_by('name'),
-            'object_types': ObjectType.objects.all().order_by('type')
-        }
-        return render(request, 'data/tree/dict_sidebar.html', context)
+        return render(request, 'data/tree/dict_sidebar.html',
+                      tree_sidebar_context(request, active_object=new_obj))
 
     return render(request, 'data/includes/create_object_modal_body.html')
 

@@ -210,6 +210,42 @@
         };
 
         /**
+         * Раскрытые ветки дерева справочника.
+         *
+         * Дерево пересобирает сервер целиком, и он не знает, что человек успел
+         * открыть, — поэтому формы создания и копирования объекта отправляют
+         * этот список вместе с данными. Иначе после добавления объекта
+         * схлопывались все ветки, и путь к рабочему узлу приходилось
+         * открывать заново.
+         */
+        window.mdOpenTreeNodes = function () {
+            return Array.from(document.querySelectorAll('.tree-item > .collapse.show'))
+                .map((el) => el.id.replace('children-', ''))
+                .filter(Boolean)
+                .join(',');
+        };
+
+        /**
+         * Подсказки закрываются по щелчку мимо них и по Escape.
+         *
+         * Раньше список висел до выбора значения и перекрывал поля формы под
+         * собой. Щелчки внутри поля не трогаем: там выбор пункта, и убирать
+         * список до того, как HTMX отправит запрос, нельзя. Список результатов
+         * поиска (`suggest-menu-static`) — не подсказка, а содержимое страницы.
+         */
+        const mdCloseSuggestions = (event) => {
+            document.querySelectorAll('.suggest-menu:not(.suggest-menu-static)').forEach((menu) => {
+                const wrapper = menu.closest('[id^="search-wrapper-"]');
+                if (!wrapper || !event || !wrapper.contains(event.target)) menu.remove();
+            });
+        };
+
+        document.addEventListener('click', mdCloseSuggestions);
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') mdCloseSuggestions(null);
+        });
+
+        /**
          * Содержимое модальных окон, подгружаемое по HTMX, очищается при закрытии.
          *
          * Иначе в DOM одновременно живут несколько загруженных окон с одинаковыми

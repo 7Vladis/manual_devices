@@ -1275,6 +1275,15 @@ small, .small { font-size: 0.86em; }
 .kv-table .kv-val { color: var(--ink); font-weight: 500; }
 
 /* Зона превью */
+/* Вкладка «Инфо» делится 33/67 — это доли сетки (col-lg-4 и col-lg-8), своего
+   правила ширины здесь не нужно. Ниже 992px колонки встают друг под друга.
+
+   Описание — документ, а не лента: строка здесь длиннее общих 78 символов,
+   иначе справа в панели остаётся пустое поле в четверть её ширины. Дальше
+   тянуть нельзя: в эту панель помещается строка символов на сто, а такую
+   уже трудно читать — глаз теряет начало следующей. */
+.info-main .markdown-content { max-width: 92ch; }
+
 .preview-box {
     position: relative;
     display: flex;
@@ -1639,6 +1648,20 @@ small, .small { font-size: 0.86em; }
 .spec-item .spec-key { flex: 1 1 40%; min-width: 0; color: var(--ink-faint); }
 .spec-item .spec-val { flex: 1 1 60%; min-width: 0; font-weight: 500; color: var(--ink); }
 
+/* Вставка характеристик списком: свёрнута, пока не понадобится */
+.spec-bulk > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--steel);
+    list-style: none;
+}
+.spec-bulk > summary::-webkit-details-marker { display: none; }
+.spec-bulk > summary:hover { color: var(--steel-hover); }
+
 /* Сообщения формы */
 .alert {
     border-radius: var(--radius-md);
@@ -1660,7 +1683,10 @@ small, .small { font-size: 0.86em; }
     left: 0;
     width: 100%;
     min-width: 240px;
-    max-height: 260px;
+    /* Три строки и прокрутка: список подсказок висит поверх формы, и длинный
+       перекрывал поля под собой. Высота строки — 7px отступа сверху и снизу
+       плюс строка текста в 13px. */
+    max-height: 108px;
     overflow-y: auto;
     z-index: 1250;
     padding: 4px;

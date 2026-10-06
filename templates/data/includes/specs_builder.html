@@ -56,6 +56,31 @@
         </div>
     </div>
 
+    <!-- Вставка списком: перенести характеристики из паспорта целиком -->
+    <details class="spec-bulk mt-2">
+        <summary>
+            <i class="bi bi-clipboard-plus"></i>Вставить списком
+        </summary>
+        <div class="pt-2">
+            <textarea name="bulk_text" id="spec-bulk-input" rows="4" class="form-control"
+                      style="font-size: 0.85rem;"
+                      placeholder="Мощность 1,5 кВт&#10;Напряжение: 380 В&#10;Класс защиты&#9;IP55"></textarea>
+            <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
+                <span class="hint mb-0">
+                    По строке на характеристику. Параметр от значения отделяют табуляция,
+                    двоеточие, несколько пробелов или один пробел — что встретится первым.
+                </span>
+                <button type="button" class="btn btn-light border fw-semibold flex-shrink-0"
+                        hx-post="{% url 'specs_builder' %}"
+                        hx-target="#specs-builder-container"
+                        hx-swap="outerHTML"
+                        hx-include="[name='spec_keys'], [name='spec_values'], #spec-bulk-input">
+                    <i class="bi bi-magic"></i>Разобрать
+                </button>
+            </div>
+        </div>
+    </details>
+
     <!-- Итоговые значения, уходящие вместе с формой создания модели -->
     {% for key, val in specifications.items %}
         <input type="hidden" name="spec_keys" value="{{ key }}">

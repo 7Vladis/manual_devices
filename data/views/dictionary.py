@@ -199,17 +199,27 @@ def explorer_up_view(request):
 
 @login_required
 def object_children_view(request, parent_uuid):
+    """
+    Дочерние узлы ветки: дерево подгружает их по мере раскрытия.
+
+    `open_nodes` приходит от страницы и перечисляет ветки, раскрытые человеком.
+    Без него после пересборки дерева открывался только путь к активному
+    объекту, а остальные ветки, вложенные глубже первого уровня, схлопывались:
+    их разметку отдаёт как раз это представление.
+    """
     parent = get_object_or_404(DataObject, pk=parent_uuid)
     children = tree_queryset(parent.children.all())
-    
+
     active_object_id = request.GET.get('active_object')
     active_object = None
-    parent_uuids = []
-    
+    parent_uuids = [part for part in (request.GET.get('open_nodes') or '').split(',') if part.strip()]
+
     if active_object_id:
         try:
             active_object = DataObject.objects.select_related('parent').get(pk=active_object_id)
-            parent_uuids = [str(anc.pk) for anc in get_ancestors_chain(active_object)]
+            for ancestor in get_ancestors_chain(active_object):
+                if str(ancestor.pk) not in parent_uuids:
+                    parent_uuids.append(str(ancestor.pk))
         except DataObject.DoesNotExist:
             pass
 

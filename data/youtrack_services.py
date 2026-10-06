@@ -369,6 +369,13 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
             YouTrackObsoleteRecord.objects.filter(issue_id=issue_id).values_list('youtrack_id', flat=True)
         )
 
+        # Чей файл: YouTrack перечисляет вложения и у комментария, и общим
+        # списком задачи. По тексту комментария угадать владельца удаётся
+        # только для картинок (они вставлены разметкой) — видео и документы
+        # уезжали во вкладку «Файлы» без связи с комментарием, который их
+        # пояснял. Поэтому запоминаем принадлежность из самого ответа.
+        comment_by_attachment = {}
+
         active_yt_comment_ids = set()
         active_yt_attachment_ids = set()
         active_yt_work_item_ids = set()
@@ -459,6 +466,8 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
                 if Attachment.objects.filter(youtrack_id=att_id).exclude(data_object=data_object).exists():
                     continue
 
+                comment_by_attachment[att_id] = comment_obj
+
                 if not Attachment.objects.filter(data_object=data_object, youtrack_id=att_id).exists():
                     saved, problem = _save_attachment(
                         att_data,
@@ -498,12 +507,15 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
 
             att_obj = Attachment.objects.filter(data_object=data_object, youtrack_id=att_id).first()
 
-            # Ищем, не принадлежит ли файл какому-либо комментарию (по имени файла в тексте Markdown)
-            matched_comment = None
-            for c in local_comments:
-                if att_name and att_name in c.text:
-                    matched_comment = c
-                    break
+            # Владелец известен из ответа — комментарий, к которому файл
+            # приложен в YouTrack. Если такого указания нет (файл приложен к
+            # самой задаче), остаётся прежняя догадка по имени в тексте.
+            matched_comment = comment_by_attachment.get(att_id)
+            if matched_comment is None:
+                for c in local_comments:
+                    if att_name and att_name in c.text:
+                        matched_comment = c
+                        break
 
             if not att_obj:
                 author_email = (att_data.get('author') or {}).get('email')

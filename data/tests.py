@@ -432,19 +432,20 @@ class ObjectCardTests(BaseDataTestCase):
         self.assertIn('pill-success', body)
         self.assertNotIn('pill-danger', body)
 
-    def test_specs_tab_shows_model_specifications(self):
+    def test_info_tab_shows_model_specifications(self):
+        """Характеристики живут на вкладке «Инфо» — своей вкладки у них нет."""
         self.login(self.junior)
-        response = self.client.get(reverse('object_tab', args=[self.root.uuid, 'specs']))
+        response = self.client.get(reverse('object_tab', args=[self.root.uuid, 'short_info']))
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('Мощность', response.content.decode())
 
-    def test_specs_tab_survives_null_specifications(self):
+    def test_info_tab_survives_null_specifications(self):
         self.model.specifications = None
         self.model.save(update_fields=['specifications'])
 
         self.login(self.junior)
-        response = self.client.get(reverse('object_tab', args=[self.root.uuid, 'specs']))
+        response = self.client.get(reverse('object_tab', args=[self.root.uuid, 'short_info']))
         self.assertEqual(response.status_code, 200)
 
     def test_unknown_tab_returns_404(self):

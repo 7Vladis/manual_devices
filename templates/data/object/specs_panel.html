@@ -1,0 +1,53 @@
+{% comment %}
+Характеристики модели в левой колонке вкладки «Инфо».
+
+Отдельной вкладки у них больше нет: таблица узкая и читается вместе с
+описанием — «что это» и «как обслуживать» на одном экране. Заодно колонка
+под фотографией перестала быть пустой.
+
+Характеристики принадлежат модели, у экземпляра своих нет, поэтому править
+их отсюда нельзя — только перейти в карточку модели.
+{% endcomment %}
+<div class="panel">
+    <div class="panel-head">
+        <h6 class="panel-title"><i class="bi bi-cpu"></i>Характеристики</h6>
+        {% if not request.user.is_junior %}
+        <a href="{% url 'dict' %}?model={{ obj.model.uuid }}" class="btn btn-light border btn-icon"
+           title="Изменить характеристики в карточке модели «{{ obj.model.name }}»">
+            <i class="bi bi-pencil-square"></i>
+        </a>
+        {% endif %}
+    </div>
+
+    {% if specifications %}
+    <div class="panel-body pt-0">
+        <span class="d-block text-muted mb-2" style="font-size: 0.75rem;">
+            Наследуются от модели {{ obj.model.name }}
+        </span>
+    </div>
+    <div class="table-responsive">
+        <table class="kv-table">
+            <tbody>
+                {% for key, val in specifications.items %}
+                <tr>
+                    <td class="kv-key">{{ key }}</td>
+                    <td class="kv-val">{{ val }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <span class="empty-icon"><i class="bi bi-cpu"></i></span>
+        <span class="empty-title">Характеристики не заданы</span>
+        <span class="empty-hint">
+            {% if request.user.is_junior %}
+                У модели «{{ obj.model.name }}» ещё нет шаблона характеристик.
+            {% else %}
+                Добавьте параметры в карточке модели «{{ obj.model.name }}».
+            {% endif %}
+        </span>
+    </div>
+    {% endif %}
+</div>

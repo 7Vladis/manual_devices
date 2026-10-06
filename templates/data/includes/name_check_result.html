@@ -1,14 +1,22 @@
 {% comment %}
 Результат проверки названия при создании модели/объекта.
 Контекст: kind ('model'|'object'), exact (точное совпадение или None),
-similar (список похожих), modal_id (модалка, которую нужно закрыть при переходе).
+similar (список похожих), modal_id (модалка, которую нужно закрыть при переходе),
+scope_label (для объектов — родитель, внутри которого сравнивали; пусто —
+значит сравнивали среди корневых).
 Все названия экранируются шаблонизатором — HTML здесь не собирается из строк.
 {% endcomment %}
 {% if exact %}
 <div class="alert alert-danger py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">
     <div class="fw-bold mb-1">
         <i class="bi bi-x-circle-fill me-1"></i>
-        {% if kind == 'model' %}Модель с таким названием уже существует!{% else %}Объект с таким именем уже существует!{% endif %}
+        {% if kind == 'model' %}
+            Модель с таким названием уже существует!
+        {% elif scope_label %}
+            В составе «{{ scope_label }}» уже есть объект с таким именем!
+        {% else %}
+            Среди корневых объектов такое имя уже занято!
+        {% endif %}
     </div>
     <a href="#" class="text-danger fw-bold"
        {% if kind == 'model' %}hx-get="{% url 'model_detail' exact.uuid %}?sidebar=1"{% else %}hx-get="{% url 'object_detail' exact.uuid %}?sidebar=1"{% endif %}
@@ -25,7 +33,13 @@ similar (список похожих), modal_id (модалка, которую 
 <div class="alert alert-warning py-2 px-3 mt-2 mb-0 rounded-3 small animate-fade">
     <div class="fw-bold text-dark mb-1">
         <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
-        {% if kind == 'model' %}Похожие модели{% else %}Похожие объекты{% endif %} ({{ similar|length }} шт.):
+        {% if kind == 'model' %}
+            Похожие модели
+        {% elif scope_label %}
+            Похожие объекты в составе «{{ scope_label }}»
+        {% else %}
+            Похожие корневые объекты
+        {% endif %} ({{ similar|length }} шт.):
     </div>
     <ul class="ps-3 mb-1" style="max-height: 80px; overflow-y: auto;">
         {% for item in similar %}
@@ -47,6 +61,12 @@ similar (список похожих), modal_id (модалка, которую 
 {% else %}
 <div class="text-success small mt-1">
     <i class="bi bi-check-circle-fill me-1"></i>
-    {% if kind == 'model' %}Название свободно{% else %}Имя свободно{% endif %}
+    {% if kind == 'model' %}
+        Название свободно
+    {% elif scope_label %}
+        Имя свободно в составе «{{ scope_label }}»
+    {% else %}
+        Имя свободно среди корневых объектов
+    {% endif %}
 </div>
 {% endif %}

@@ -48,7 +48,12 @@
     {% if node.has_children %}
     <div class="collapse {% if node.uuid|stringformat:'s' in parent_uuids %}show{% endif %}"
          id="children-{{ node.uuid }}"
-         hx-get="{% url 'object_children' node.uuid %}{% if active_object %}?active_object={{ active_object.uuid }}{% endif %}"
+         {% comment %}
+         Вместе с запросом детей передаём и список раскрытых веток: ветка
+         глубже первого уровня иначе схлопнулась бы — её разметку отдаёт
+         именно этот запрос.
+         {% endcomment %}
+         hx-get="{% url 'object_children' node.uuid %}?active_object={{ active_object.uuid|default:'' }}&open_nodes={{ parent_uuids|join:',' }}"
          hx-trigger="{% if node.uuid|stringformat:'s' in parent_uuids %}load once{% else %}show.bs.collapse once{% endif %}"
          hx-target="#children-{{ node.uuid }}"
          hx-swap="innerHTML">

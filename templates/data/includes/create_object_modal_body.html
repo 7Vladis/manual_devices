@@ -10,6 +10,9 @@
 
 <form hx-post="{% url 'create_object' %}"
       hx-target="#sidebar-container"
+      {% comment %}Раскрытые ветки дерева знает только браузер — отправляем их
+      вместе с формой, иначе пересобранная панель схлопнется целиком.{% endcomment %}
+      hx-vals='js:{open_nodes: window.mdOpenTreeNodes()}'
       hx-on::before-request="if (event.detail.elt === this && !this.querySelector('input[name=&quot;model&quot;]')) { event.preventDefault(); window.mdShowFormError(this, 'Выберите модель оборудования из выпадающего списка подсказок.'); }"
       hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('createObjectModal')).hide(); }">
     {% csrf_token %}
@@ -27,8 +30,9 @@
                 <input type="text" name="name" id="new-object-name" class="form-control"
                        placeholder="Например: Котельная установка КУ-5" required
                        hx-get="{% url 'check_object_name' %}"
-                       hx-trigger="keyup changed delay:500ms"
+                       hx-trigger="keyup changed delay:500ms, checkObjectName from:body"
                        hx-target="#name-check-container"
+                       hx-include="[name='parent']"
                        autocomplete="off">
                 <div id="name-check-container"></div>
             </div>

@@ -3,11 +3,21 @@
 
 <span id="tab-count-files" class="tab-count" hx-swap-oob="true">{{ obj.attachments.count }}</span>
 
-<div class="row g-3 align-items-stretch animate-fade">
+{% comment %}
+Вкладка «Инфо» — паспорт объекта: слева то, что отвечает на вопрос «что это»
+(фотография и характеристики модели), справа — «как его обслуживать»
+(описание из YouTrack).
+
+Панели не растягиваются под высоту соседней (`align-items-start`): раньше под
+фотографией оставалась пустая белая простыня во весь экран. Характеристики
+переехали сюда из собственной вкладки — таблица узкая, а колонка всё равно
+пустовала.
+{% endcomment %}
+<div class="row g-3 align-items-start animate-fade">
 
     <!-- ЛЕВАЯ КОЛОНКА: превью объекта -->
-    <div class="col-12 col-lg-4 col-xxl-3">
-        <div class="panel h-100">
+    <div class="col-12 col-lg-4 d-flex flex-column gap-3">
+        <div class="panel">
             <div class="panel-head">
                 <h6 class="panel-title"><i class="bi bi-image"></i>Превью</h6>
                 {% if preview %}
@@ -47,11 +57,13 @@
                 </form>
             </div>
         </div>
+
+        {% include 'data/object/specs_panel.html' with obj=obj specifications=specifications %}
     </div>
 
     <!-- ПРАВАЯ КОЛОНКА: описание -->
-    <div class="col-12 col-lg-8 col-xxl-9">
-        <div class="panel h-100">
+    <div class="col-12 col-lg-8 info-main">
+        <div class="panel">
             <div class="panel-head">
                 <h6 class="panel-title"><i class="bi bi-file-earmark-text"></i>Описание объекта</h6>
                 <span class="text-muted" style="font-size: 0.75rem;">

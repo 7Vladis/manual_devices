@@ -10,6 +10,9 @@
 
 <form hx-post="{% url 'clone_object' %}"
       hx-target="#sidebar-container"
+      {% comment %}Раскрытые ветки дерева знает только браузер — отправляем их
+      вместе с формой, иначе пересобранная панель схлопнется целиком.{% endcomment %}
+      hx-vals='js:{open_nodes: window.mdOpenTreeNodes()}'
       hx-on::before-request="if (event.detail.elt === this && !this.querySelector('input[name=&quot;source_object&quot;]')) { event.preventDefault(); window.mdShowFormError(this, 'Выберите исходный объект из списка подсказок.'); }"
       hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('cloneObjectModal')).hide(); }">
     {% csrf_token %}

@@ -10,6 +10,36 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 
+def tree_sidebar_context(request, active_object=None):
+    """
+    Контекст боковой панели справочника.
+
+    `parent_uuids` — ветки, которые дерево должно оставить раскрытыми. Какие
+    именно, знает только браузер, поэтому он присылает их полем `open_nodes`:
+    после создания объекта панель пересобирается целиком, и без этого списка
+    схлопывались все ветки, открытые до того. К присланным добавляется путь к
+    самому объекту — иначе новый узел оказался бы в закрытой ветке.
+    """
+    from ..models import DataObject, ObjectModel, ObjectType
+
+    raw = request.POST.get('open_nodes') or request.GET.get('open_nodes') or ''
+    open_nodes = [part for part in raw.split(',') if part.strip()]
+
+    if active_object is not None:
+        for ancestor in get_ancestors_chain(active_object):
+            if str(ancestor.pk) not in open_nodes:
+                open_nodes.append(str(ancestor.pk))
+
+    return {
+        'initial_objects': tree_queryset(DataObject.objects.filter(parent__isnull=True)),
+        'active_tab': 'objects',
+        'models': ObjectModel.objects.all().order_by('name'),
+        'object_types': ObjectType.objects.all().order_by('type'),
+        'parent_uuids': open_nodes,
+        'active_object': active_object,
+    }
+
+
 def htmx_error(message, status=400, retarget=None):
     """
     Ответ с текстом ошибки для HTMX-запроса. Тело — готовый алерт, при необходимости
