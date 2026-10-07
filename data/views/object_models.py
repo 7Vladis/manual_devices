@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST, require_http_methods
 
 from ..models import ObjectModel, ObjectType
 from users.decorators import role_required
+from .suggestions import parse_spec_text
 
 from .common import htmx_error
 
@@ -188,12 +189,22 @@ def model_tab_view(request, pk, tab_name):
 @role_required(['senior', 'admin', 'superuser'])
 @require_POST
 def model_spec_add_view(request, pk):
+    """
+    Добавляет характеристику модели — по одной полями или списком разом.
+
+    Разбор вставленного текста тот же, что в окне создания модели: переносить
+    характеристики из паспорта удобно целиком, а не по одной.
+    """
     model_obj = get_object_or_404(ObjectModel, pk=pk)
     key = request.POST.get('key', '').strip()
     value = request.POST.get('value', '').strip()
-    if key and value:
+    bulk = parse_spec_text(request.POST.get('bulk_text', ''))
+
+    if (key and value) or bulk:
         specs = model_obj.specifications or {}
-        specs[key] = value
+        if key and value:
+            specs[key] = value
+        specs.update(bulk)
         model_obj.specifications = specs
         model_obj.save(update_fields=['specifications'])
         

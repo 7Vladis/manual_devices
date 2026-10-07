@@ -15,6 +15,12 @@
 #   ./update.sh --dry-run              # показать план, ничего не менять
 #   ./update.sh --no-restart           # не трогать docker compose
 #   ./update.sh --keep-compose         # оставить docker-compose.yaml старой версии
+#   ./update.sh --keep-old 2           # сколько прежних версий оставить (по умолчанию 1)
+#   ./update.sh --no-prune             # не убирать образы без тега
+#
+# После успешного запуска скрипт прибирает за собой: удаляет прежние версии
+# сверх --keep-old и образы без тега, оставшиеся от прежних сборок. Тома docker
+# не трогаются ни при каких условиях — в postgres_data лежит база.
 #
 set -euo pipefail
 
@@ -25,6 +31,12 @@ RELEASE_DIR=""
 DRY_RUN=0
 RESTART=1
 KEEP_COMPOSE=0
+
+# Сколько прежних версий оставить рядом. Каждая хранит свою копию вложений,
+# поэтому накапливаться им нельзя: один ролик на 20 МБ в пяти копиях — это
+# уже сто. Одна копия остаётся на случай отката.
+KEEP_OLD=1
+PRUNE_IMAGES=1
 
 # Состояние, которое переносится из рабочей установки в новый релиз.
 STATE_REQUIRED=(".env")
@@ -42,6 +54,8 @@ while [[ $# -gt 0 ]]; do
         --dry-run)      DRY_RUN=1 ;;
         --no-restart)   RESTART=0 ;;
         --keep-compose) KEEP_COMPOSE=1 ;;
+        --keep-old)     KEEP_OLD="${2:-1}"; shift ;;
+        --no-prune)     PRUNE_IMAGES=0 ;;
         -h|--help)      usage 0 ;;
         -*)             echo "Неизвестный параметр: $1" >&2; usage 1 ;;
         *)              RELEASE_DIR="$1" ;;
@@ -50,6 +64,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 : "${RELEASE_DIR:=$(dirname "$INSTALL_DIR")/manual_devices}"
+
+[[ "$KEEP_OLD" =~ ^[0-9]+$ ]] || { echo "--keep-old ожидает число, получено: $KEEP_OLD" >&2; exit 1; }
 
 # --- Вывод -----------------------------------------------------------------
 
@@ -212,6 +228,56 @@ if [[ $RESTART -eq 1 ]]; then
             exit 1
         fi
     fi
+fi
+
+# --- Уборка ----------------------------------------------------------------
+#
+# Место съедают две вещи. Первая — прежние версии: каждая хранит полную копию
+# вложений, и после пятого обновления на диске лежит пять копий всех файлов.
+# Вторая — образы docker: каждая сборка выпускает новый образ, а прежний
+# остаётся без тега и висит мёртвым грузом.
+#
+# Тома не трогаем ни при каких условиях: база лежит в postgres_data, и
+# `docker volume prune` или `docker system prune --volumes` её бы снесли.
+# Здесь вызывается только `docker image prune` — он убирает образы без тега,
+# не занятые ни одним контейнером, и до томов не добирается.
+
+info "Уборка"
+
+shopt -s nullglob
+OLD_DIRS=("${INSTALL_DIR}"_old_*)
+shopt -u nullglob
+
+if (( ${#OLD_DIRS[@]} > KEEP_OLD )); then
+    # Имена кончаются отметкой времени, поэтому обычная сортировка ставит
+    # свежие в конец: удаляем всё, кроме последних KEEP_OLD.
+    mapfile -t OLD_DIRS < <(printf '%s\n' "${OLD_DIRS[@]}" | sort)
+    DOOMED=("${OLD_DIRS[@]:0:${#OLD_DIRS[@]}-KEEP_OLD}")
+
+    for dir in "${DOOMED[@]}"; do
+        # Страховка перед rm -rf: удаляем только то, что похоже на нашу
+        # прежнюю версию, а не любой каталог с подходящим именем.
+        if [[ ! -f "$dir/manage.py" ]]; then
+            warn "пропущено (не похоже на версию ManDev): $dir"
+            continue
+        fi
+        size="$(du -sh "$dir" 2>/dev/null | cut -f1)"
+        run rm -rf "$dir"
+        ok "удалена прежняя версия: $(basename "$dir") (${size:-?})"
+    done
+else
+    ok "прежних версий: ${#OLD_DIRS[@]} — удалять нечего (оставляем $KEEP_OLD)"
+fi
+
+if [[ $PRUNE_IMAGES -eq 1 && -n "$COMPOSE" ]]; then
+    if [[ $DRY_RUN -eq 1 ]]; then
+        printf '      [dry-run] docker image prune -f\n'
+    else
+        freed="$(docker image prune -f 2>/dev/null | tail -n 1)"
+        ok "образы без тега убраны${freed:+ — $freed}"
+    fi
+else
+    [[ $PRUNE_IMAGES -eq 0 ]] && ok "образы не трогаем (--no-prune)"
 fi
 
 info "Обновление завершено"

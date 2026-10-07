@@ -60,7 +60,7 @@
                 </span>
                 <div class="d-flex flex-wrap gap-2 mb-3">
                     {% for model in item.models.all %}
-                    <a href="{% url 'dict' %}?model={{ model.uuid }}" class="chip-link">
+                    <a href="{% url 'dict' %}?tab=models&model={{ model.uuid }}" class="chip-link">
                         <i class="bi bi-layers text-purple"></i>
                         <span class="text-truncate fw-semibold">{{ model.name }}</span>
                         <span class="chip-sub">{{ model.data_objects.all|length }} об.</span>

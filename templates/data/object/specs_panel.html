@@ -12,7 +12,12 @@
     <div class="panel-head">
         <h6 class="panel-title"><i class="bi bi-cpu"></i>Характеристики</h6>
         {% if not request.user.is_junior %}
-        <a href="{% url 'dict' %}?model={{ obj.model.uuid }}" class="btn btn-light border btn-icon"
+        {% comment %}
+        `tab=models` обязателен: справочник открывает вкладку объектов по
+        умолчанию и параметр `model` в ней просто не смотрит — ссылка молча
+        никуда не вела.
+        {% endcomment %}
+        <a href="{% url 'dict' %}?tab=models&model={{ obj.model.uuid }}" class="btn btn-light border btn-icon"
            title="Изменить характеристики в карточке модели «{{ obj.model.name }}»">
             <i class="bi bi-pencil-square"></i>
         </a>

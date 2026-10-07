@@ -55,6 +55,30 @@
                 <button type="submit" class="btn btn-primary w-100 fw-semibold"><i class="bi bi-plus-lg"></i>Добавить</button>
             </div>
         </form>
+
+        {% comment %}
+        Вставка списком — та же, что в окне создания модели: характеристики
+        чаще переносят из паспорта целиком, чем набирают по одной.
+        {% endcomment %}
+        <details class="spec-bulk mt-3">
+            <summary>
+                <i class="bi bi-clipboard-plus"></i>Вставить списком
+            </summary>
+            <form hx-post="{% url 'model_spec_add' model_obj.uuid %}" hx-target="#tab-pane-model-specs" class="pt-2">
+                {% csrf_token %}
+                <textarea name="bulk_text" rows="4" class="form-control" style="font-size: 0.85rem;"
+                          placeholder="Мощность 1,5 кВт&#10;Напряжение: 380 В&#10;Класс защиты&#9;IP55"></textarea>
+                <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
+                    <span class="hint mb-0">
+                        По строке на характеристику. Параметр от значения отделяют табуляция,
+                        двоеточие, несколько пробелов или один пробел — что встретится первым.
+                    </span>
+                    <button type="submit" class="btn btn-light border fw-semibold flex-shrink-0">
+                        <i class="bi bi-magic"></i>Разобрать
+                    </button>
+                </div>
+            </form>
+        </details>
     </div>
     {% endif %}
 </div>

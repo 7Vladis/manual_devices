@@ -24,7 +24,7 @@
 </div>
 <div class="sheet-footer">
     <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Закрыть</button>
-    <a href="{% url 'dict' %}?model={{ model_obj.uuid }}" class="btn btn-primary fw-semibold"
+    <a href="{% url 'dict' %}?tab=models&model={{ model_obj.uuid }}" class="btn btn-primary fw-semibold"
        onclick="bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();">
         <i class="bi bi-box-seam"></i>Показать объекты
     </a>
