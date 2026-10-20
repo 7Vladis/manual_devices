@@ -199,19 +199,22 @@ def edit_youtrack_view(request, pk):
         # сама покажет, чем всё кончилось.
         queued = False
         if obj.youtrack_issue_id:
-            youtrack_queue.enqueue(YouTrackJob.KIND_SYNC, obj, request.user)
-            queued = True
+            queued = youtrack_queue.enqueue(YouTrackJob.KIND_SYNC, obj, request.user) is not None
 
         html = render_to_string('data/object/inline_youtrack.html', {
             'obj': obj,
             'editing': False,
-            'sync_queued': queued,
         }, request=request)
+
+        # Пилюля уходит OOB-свопом в шапку. Без этого фрагмент оседал в цели
+        # формы — в ячейке рядом с номером задачи, и на экране получалось два
+        # индикатора одного и того же обмена.
         if queued:
-            # Пилюля возвращается к ожиданию и снова начинает опрос.
-            html += "\n" + render_to_string('data/object/sync_status.html',
-                                            {'obj': obj, 'sync_state': 'pending', 'poll': 1},
-                                            request=request)
+            html += "\n" + sync_pill_oob(obj, request)
+        else:
+            # Задачу отвязали: пилюле в шапке больше нечего показывать.
+            html += "\n" + render_to_string('data/object/sync_pill_empty.html',
+                                            {'oob': True}, request=request)
         return HttpResponse(html)
         
     if request.GET.get('cancel') == '1':

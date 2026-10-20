@@ -1,8 +1,8 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
+from core.media import serve_media
 from users.views import MyLoginView
 
 urlpatterns = [
@@ -14,5 +14,9 @@ urlpatterns = [
     path('', include('data.urls')),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Вложения раздаёт своё представление, а не `static()` из Django:
+# стандартное не понимает `Range` (видео нельзя перемотать) и подключалось
+# только при DEBUG=True — с выключенной отладкой вложения пропадали совсем.
+urlpatterns += [
+    re_path(r'^%s(?P<path>.*)$' % settings.MEDIA_URL.lstrip('/'), serve_media, name='media'),
+]

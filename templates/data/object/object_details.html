@@ -13,11 +13,14 @@
             <div class="detail-actions">
                 {% include 'data/object/maintenance_pill.html' with obj=obj today=today soon_date=soon_date oob=False %}
 
-                {% if obj.effective_youtrack_issue_id %}
+                {% if obj.effective_youtrack_issue_id and request.user.youtrack_token %}
                 {% comment %}
                 Авто-синхронизация: карточка уже показана, данные подтягиваются
                 фоном. У дочернего объекта своей задачи нет — читается задача
                 предка, в ней лежат и его записи.
+
+                Токен личный, поэтому и пилюля личная: у кого токена нет, у
+                того нет и обмена — пилюля не рисуется, запрос не уходит.
                 {% endcomment %}
                 <span id="yt-sync-status"
                       class="pill pill-neutral"
@@ -28,6 +31,8 @@
                     <span class="spinner-border spinner-border-sm" role="status" style="width: 0.85em; height: 0.85em;"></span>
                     <span class="pill-label">YouTrack</span>
                 </span>
+                {% else %}
+                {% include 'data/object/sync_pill_empty.html' %}
                 {% endif %}
             </div>
         </div>

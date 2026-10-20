@@ -404,9 +404,15 @@ class ObjectCardTests(BaseDataTestCase):
         self.assertIn('hx-trigger="load"', body)
 
     def test_card_without_youtrack_issue_has_no_sync_trigger(self):
+        """
+        Место для пилюли в шапке есть всегда — иначе OOB-свопу некуда встать,
+        — но у объекта без задачи оно пустое и в YouTrack не ходит.
+        """
         self.login(self.senior)
         body = self.client.get(reverse('object_detail', args=[self.root.uuid])).content.decode()
-        self.assertNotIn('yt-sync-status', body)
+
+        self.assertIn('<span id="yt-sync-status" class="d-none">', body)
+        self.assertNotIn(reverse('sync_youtrack', args=[self.root.uuid]), body)
 
     def test_info_tab_does_not_duplicate_tree_children(self):
         self.login(self.junior)
@@ -1240,19 +1246,25 @@ class YoutrackSyncTests(BaseDataTestCase):
         self.assertEqual(Comment.objects.get(youtrack_id='c-1').text, 'Комментарий из YT')
 
     def test_sync_requires_token(self):
+        """
+        Обмен идёт личным токеном, поэтому без токена он человеку недоступен:
+        задание не ставится, пилюли нет — гасить её всё равно было бы нечем.
+        """
         self.senior.youtrack_token = None
         self.senior.save(update_fields=['youtrack_token'])
 
         self.login(self.senior)
         with patch('data.youtrack_services.requests.get') as mock_get:
-            self._sync()
+            response = self._sync()
 
         mock_get.assert_not_called()
-        # Отсутствие токена повтором не лечится: задание закрывается сразу.
-        job = YouTrackJob.objects.get(data_object=self.root, kind=YouTrackJob.KIND_SYNC)
-        self.assertEqual(job.status, YouTrackJob.FAILED)
-        self.assertIn('токен', job.last_error)
-        self.assertIn('токен', self._sync_status())
+        self.assertFalse(
+            YouTrackJob.objects.filter(data_object=self.root, kind=YouTrackJob.KIND_SYNC).exists(),
+            'без токена задание выполнить нечем — создавать его незачем'
+        )
+        body = response.content.decode()
+        self.assertIn('<span id="yt-sync-status" class="d-none">', body)
+        self.assertNotIn('pill', body)
 
 
 class AttachmentValidationTests(BaseDataTestCase):

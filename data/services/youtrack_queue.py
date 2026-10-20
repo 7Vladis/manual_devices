@@ -35,11 +35,18 @@ class PermanentFailure(Exception):
 
 def enqueue(kind, data_object, user, payload=None, dedupe_key=None):
     """
-    Ставит задание в очередь и возвращает его.
+    Ставит задание в очередь и возвращает его. Без токена — `None`.
+
+    Обмен идёт от имени того, кто выполнил действие, его личным токеном.
+    Поэтому без токена задание не создаётся вовсе: выполнить его нечем, а
+    висеть неудачей в чужой очереди оно не должно. Для человека это значит,
+    что синхронизация ему недоступна — запись остаётся локальной, и об этом
+    говорит предупреждение в ленте комментариев.
 
     Для синхронизации действует ограничение «одно незавершённое задание на
-    объект»: карточку открывают часто, а обновляет она одно и то же состояние.
-    Наткнувшись на него, возвращаем уже стоящее в очереди задание.
+    объект у пользователя»: карточку открывают часто, а обновляет она одно и
+    то же состояние. Наткнувшись на него, возвращаем уже стоящее в очереди
+    задание.
 
     `dedupe_key` — поле payload, по которому задание считается повтором уже
     стоящего: две правки одного комментария подряд отправят одну и ту же
@@ -58,6 +65,9 @@ def enqueue(kind, data_object, user, payload=None, dedupe_key=None):
         if queued is not None:
             return queued
 
+    if not youtrack_services.get_auth_token(user):
+        return None
+
     try:
         with transaction.atomic():
             return YouTrackJob.objects.create(
@@ -67,7 +77,7 @@ def enqueue(kind, data_object, user, payload=None, dedupe_key=None):
                 payload=payload or {},
             )
     except IntegrityError:
-        existing = pending_job(data_object, kind)
+        existing = pending_job(data_object, kind, user)
         if existing is None:
             # Ограничение сработало, но задания уже нет: воркер успел его
             # завершить между попыткой вставки и этим запросом.
@@ -75,14 +85,13 @@ def enqueue(kind, data_object, user, payload=None, dedupe_key=None):
         return existing
 
 
-def pending_job(data_object, kind):
+def pending_job(data_object, kind, user=None):
     """Незавершённое задание такого вида по объекту, если оно есть."""
-    return (
-        YouTrackJob.objects
-        .filter(data_object=data_object, kind=kind, status__in=YouTrackJob.PENDING_STATUSES)
-        .order_by('-created_at')
-        .first()
-    )
+    jobs = YouTrackJob.objects.filter(
+        data_object=data_object, kind=kind, status__in=YouTrackJob.PENDING_STATUSES)
+    if user is not None:
+        jobs = jobs.filter(user=user)
+    return jobs.order_by('-created_at').first()
 
 
 def latest_job(data_object, kind):
@@ -282,39 +291,58 @@ def process_jobs(limit=20):
         logger.info("Обработано заданий YouTrack: %s", processed)
     return processed
 
-def object_state(data_object):
+def object_state(data_object, user):
     """
-    Состояние обмена с YouTrack по объекту — то, что показывает пилюля.
+    Состояние обмена по объекту **для этого пользователя** — то, что
+    показывает его пилюля.
 
-    Неудача важнее ожидания, ожидание важнее успеха: если хоть что-то не
-    уехало, человек должен увидеть именно это, а не зелёную галочку от
-    предыдущей удачной синхронизации.
+    Обмен идёт личным токеном, поэтому и итог личный: чужая неудача не
+    касается того, кто смотрит, и уж точно не должна красить ему карточку.
+    Раньше состояние было общим, и одного входа без токена хватало, чтобы
+    объект навсегда числился несинхронизированным у всех.
+
+    Считается по **последнему заданию каждого вида**, а не по всем подряд.
+    Неудача важнее ожидания, ожидание важнее успеха: если комментарий не
+    уехал, человек должен видеть это, а не зелёную галочку от другой операции.
+    Но неудача, которую тот же вид задания уже перекрыл успехом, не висит —
+    иначе одна осечка красит карточку навсегда.
     """
-    jobs = YouTrackJob.objects.filter(data_object=data_object)
+    # distinct('kind') — Postgres-only, как и вся установка.
+    latest = list(
+        YouTrackJob.objects
+        .filter(data_object=data_object, user=user)
+        .order_by('kind', '-updated_at')
+        .distinct('kind')
+    )
+    if not latest:
+        return 'idle', ''
 
-    failed = jobs.filter(status=YouTrackJob.FAILED).order_by('-updated_at').first()
-    if failed is not None:
-        return 'failed', f"{failed.get_kind_display()}: {failed.last_error}"
+    failed = [job for job in latest if job.status == YouTrackJob.FAILED]
+    if failed:
+        newest = max(failed, key=lambda job: job.updated_at)
+        return 'failed', f"{newest.get_kind_display()}: {newest.last_error}"
 
-    if jobs.filter(status__in=YouTrackJob.PENDING_STATUSES).exists():
+    if any(job.status in YouTrackJob.PENDING_STATUSES for job in latest):
         return 'pending', ''
 
-    done = jobs.filter(status=YouTrackJob.DONE).order_by('-updated_at').first()
-    if done is not None:
-        return 'done', done.result
+    done = [job for job in latest if job.status == YouTrackJob.DONE]
+    if done:
+        return 'done', max(done, key=lambda job: job.updated_at).result
 
     return 'idle', ''
 
 
-def retry_failed(data_object):
+def retry_failed(data_object, user):
     """
-    Возвращает неудавшиеся задания объекта в очередь.
+    Возвращает в очередь неудавшиеся задания этого пользователя.
 
-    Счётчик попыток сбрасывается: это осознанное решение человека повторить,
-    а не автоматический ретрай. Возвращает, сколько заданий поставлено заново.
+    Только свои: задание выполняется личным токеном, и повторить чужое всё
+    равно нечем. Счётчик попыток сбрасывается — это осознанное решение
+    человека повторить, а не автоматический ретрай. Возвращает, сколько
+    заданий поставлено заново.
     """
     return YouTrackJob.objects.filter(
-        data_object=data_object, status=YouTrackJob.FAILED
+        data_object=data_object, user=user, status=YouTrackJob.FAILED
     ).update(
         status=YouTrackJob.QUEUED,
         attempts=0,

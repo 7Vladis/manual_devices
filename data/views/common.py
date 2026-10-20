@@ -102,10 +102,15 @@ def sync_pill_oob(obj, request=None):
     """
     OOB-пилюля состояния обмена: после действия она снова начинает опрос.
 
-    Пустая строка, если задачи нет ни у объекта, ни у предков: пилюли в шапке
-    карточки тогда нет, и своп ушёл бы в никуда.
+    Пустая строка, если своп ушёл бы в никуда: задачи нет ни у объекта, ни у
+    предков, либо у человека нет токена — тогда пилюли в шапке нет вовсе,
+    обмен ему недоступен.
     """
+    from .. import youtrack_services
+
     if not obj.effective_youtrack_issue_id:
+        return ''
+    if request is not None and not youtrack_services.get_auth_token(request.user):
         return ''
     return render_to_string(
         'data/object/sync_status.html',

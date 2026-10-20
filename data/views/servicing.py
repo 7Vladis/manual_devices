@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 
 from ..forms import parse_maintenance_date
 from ..models import ActionHistory, DataObject, YouTrackJob
+from .. import youtrack_services
 from ..services import youtrack_queue
 from ..services.maintenance import calculate_next_maintenance_date
 from .common import htmx_error, render_maintenance_pill, yt_toast
@@ -128,7 +129,13 @@ def sync_youtrack_view(request, pk):
         return render(request, 'data/object/sync_status.html',
                       {'obj': obj, 'sync_state': 'none'})
 
-    youtrack_queue.enqueue(YouTrackJob.KIND_SYNC, obj, request.user)
+    # Без токена обмен человеку недоступен: ходить в YouTrack нечем.
+    # Пилюли у него нет вовсе — ни запроса, ни индикатора, который всё равно
+    # нечем погасить. Про сам токен говорит кнопка «YouTrack» в шапке и
+    # предупреждение в ленте комментариев.
+    if youtrack_queue.enqueue(YouTrackJob.KIND_SYNC, obj, request.user) is None:
+        return render(request, 'data/object/sync_pill_empty.html', {})
+
     return render(request, 'data/object/sync_status.html',
                   {'obj': obj, 'sync_state': 'pending', 'poll': 1})
 
@@ -140,7 +147,7 @@ def sync_status_view(request, pk):
     пока в очереди есть незавершённые задания.
     """
     obj = get_object_or_404(DataObject.objects.select_related('model'), pk=pk)
-    state, message = youtrack_queue.object_state(obj)
+    state, message = youtrack_queue.object_state(obj, request.user)
 
     try:
         poll = int(request.GET.get('poll', 1))
@@ -174,7 +181,7 @@ def sync_status_view(request, pk):
 def retry_youtrack_view(request, pk):
     """Повторяет неудавшиеся задания объекта по явному нажатию на пилюлю."""
     obj = get_object_or_404(DataObject.objects.select_related('model'), pk=pk)
-    restarted = youtrack_queue.retry_failed(obj)
+    restarted = youtrack_queue.retry_failed(obj, request.user)
 
     state = 'pending' if restarted else 'idle'
     return render(request, 'data/object/sync_status.html',

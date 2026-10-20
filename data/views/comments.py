@@ -120,9 +120,9 @@ def edit_comment_view(request, pk):
         # должна догнать текст. Спросишь дерево — задание не поставится, хотя
         # обновлять есть что.
         if comment.youtrack_id and youtrack_sync.record_issue(comment, obj):
-            youtrack_queue.enqueue(YouTrackJob.KIND_COMMENT_EDIT, obj, request.user,
-                                   {'comment': str(comment.pk)}, dedupe_key='comment')
-            queued = True
+            job = youtrack_queue.enqueue(YouTrackJob.KIND_COMMENT_EDIT, obj, request.user,
+                                         {'comment': str(comment.pk)}, dedupe_key='comment')
+            queued = job is not None
 
     html = render_to_string('data/object/object_tab_comments.html', {
         'obj': obj,
@@ -192,9 +192,9 @@ def add_attachment_view(request, pk):
         )
 
         if obj.effective_youtrack_issue_id:
-            youtrack_queue.enqueue(YouTrackJob.KIND_ATTACHMENT, obj, request.user,
-                                   {'attachment': str(attachment_obj.pk)})
-            queued = True
+            job = youtrack_queue.enqueue(YouTrackJob.KIND_ATTACHMENT, obj, request.user,
+                                         {'attachment': str(attachment_obj.pk)})
+            queued = job is not None
 
     if is_preview_upload:
         preview = Attachment.objects.filter(data_object=obj, is_preview=True).first()
