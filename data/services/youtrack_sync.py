@@ -282,7 +282,9 @@ def push_attachment(attachment, user):
         attachment.youtrack_issue_id = issue_id
         attachment.save(update_fields=['youtrack_id', 'youtrack_issue_id'])
 
-    prefix = _component_prefix(obj, target_obj)
+    # Метка служебной заметки идёт первой, до пометки компонента: по началу
+    # строки синхронизация и узнаёт собственные записи.
+    prefix = f"{youtrack_services.SERVICE_NOTE_MARK} {_component_prefix(obj, target_obj)}"
     if attachment.is_preview:
         note_ok, detail = youtrack_services.send_comment_to_youtrack(
             issue_id=issue_id,
@@ -335,7 +337,8 @@ def mark_attachments_obsolete(obj, attachments, user):
                 prefix = _prefix_for_issue(obj, issue_id)
                 ok, detail = youtrack_services.send_comment_to_youtrack(
                     issue_id=issue_id,
-                    text=f"{prefix}Файл «{att.filename}» помечен устаревшим и убран из справочника",
+                    text=(f"{youtrack_services.SERVICE_NOTE_MARK} {prefix}"
+                          f"Файл «{att.filename}» помечен устаревшим и убран из справочника"),
                     user=user,
                 )
                 if not ok:
@@ -398,7 +401,8 @@ def push_move_note(obj, issue_id, destination, user):
     name = obj.name or obj.model.name
     ok, detail = youtrack_services.send_comment_to_youtrack(
         issue_id=issue_id,
-        text=f"**[{name}]** Компонент перенесён: {destination}",
+        text=(f"{youtrack_services.SERVICE_NOTE_MARK} **[{name}]** "
+              f"Компонент перенесён: {destination}"),
         user=user,
     )
     if ok:

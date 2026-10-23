@@ -24,6 +24,21 @@ def is_obsolete(text: str) -> bool:
     return (text or '').lstrip().startswith(OBSOLETE_MARK)
 
 
+# Пометка служебной заметки — строки, которую в задачу пишет сам сервис, а не
+# человек: «файл помечен устаревшим», «компонент перенесён», «прикреплён новый
+# документ». В задаче она нужна тому, кто её откроет, а в справочнике не нужна
+# никому: то, о чём она сообщает, здесь уже произошло. По этой метке
+# синхронизация узнаёт свои же заметки и не тащит их обратно комментариями.
+# Строку нельзя менять, не пересмотрев уже отправленные заметки: по ней они и
+# опознаются.
+SERVICE_NOTE_MARK = 'ManDev:'
+
+
+def is_service_note(text: str) -> bool:
+    """Это заметка самого сервиса, а не комментарий человека."""
+    return (text or '').lstrip().startswith(SERVICE_NOTE_MARK)
+
+
 # Пометка компонента, которой сервис снабжает запись дочернего объекта,
 # уезжающую в задачу предка: `**[Плата]** текст`. Снимается по шаблону, а не
 # по имени объекта: объект могли переименовать, и в старых записях осталось
@@ -406,6 +421,16 @@ def sync_issue_from_youtrack(data_object, user) -> tuple[bool, str]:
             # под ним быть не может.
             if is_obsolete(c_data.get('text', '')):
                 Comment.objects.filter(youtrack_id=c_id).delete()
+                for att_data in c_data.get('attachments', []):
+                    if att_data.get('id'):
+                        active_yt_attachment_ids.add(att_data['id'])
+                continue
+
+            # Наша же служебная заметка. Без этой проверки она возвращалась
+            # в справочник обычным комментарием: номер отправленной заметки
+            # нигде не хранится, и для синхронизации она ничем не отличалась
+            # от написанной человеком.
+            if is_service_note(c_data.get('text', '')):
                 for att_data in c_data.get('attachments', []):
                     if att_data.get('id'):
                         active_yt_attachment_ids.add(att_data['id'])
