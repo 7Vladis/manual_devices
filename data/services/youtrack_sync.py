@@ -169,6 +169,17 @@ def push_comment_edit(comment, user):
     if ok:
         return []
 
+    if youtrack_services.is_record_gone(detail):
+        # Копии в YouTrack больше нет: догонять нечего, и прежний текст
+        # оттуда уже не вернётся. Снимаем указатель — запись становится
+        # обычной локальной, и удалить её потом можно без обращения наружу.
+        logger.info("Комментарий %s удалён в YouTrack — запись стала локальной",
+                    comment.youtrack_id)
+        comment.youtrack_id = None
+        comment.youtrack_issue_id = None
+        comment.save(update_fields=['youtrack_id', 'youtrack_issue_id'])
+        return []
+
     logger.warning("Комментарий не обновлён в YouTrack %s: %s", issue_id, detail)
     return [
         f"Комментарий изменён локально, но не в YouTrack: {detail}. "
@@ -221,6 +232,17 @@ def mark_comments_obsolete(obj, comments, user):
             text=f"{youtrack_services.OBSOLETE_MARK} {prefix}{comment.text}",
             user=user,
         )
+        if not ok and youtrack_services.is_record_gone(detail):
+            # Копию удалили в YouTrack руками. Правило «локальная запись
+            # исчезает только после подтверждённой пометки» бережёт от
+            # расхождения систем, но расходиться уже не с чем: помечать
+            # нечего. Без этой ветки запись запиралась навсегда — удалить её
+            # в справочнике было нельзя, потому что в YouTrack её нет.
+            logger.info("Комментарий %s удалён в YouTrack — убираем локальную копию",
+                        comment.youtrack_id)
+            deletable.append(comment.uuid)
+            continue
+
         if not ok:
             logger.warning("Комментарий не помечен устаревшим в YouTrack %s: %s", issue_id, detail)
             errors.append(f"Комментарий не помечен устаревшим в YouTrack: {detail}")

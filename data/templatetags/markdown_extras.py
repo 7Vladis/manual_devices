@@ -232,6 +232,63 @@ def _substitute_images(text, attachments, used):
     return _IMAGE_RE.sub(replace, text)
 
 
+# Начало пункта списка. Отдельно — те, которыми список имеет право прервать
+# абзац: маркированный любым знаком и нумерованный, начинающийся с единицы.
+# Так же решает и CommonMark, по которому разбирает текст YouTrack: «2.» в
+# середине абзаца остаётся текстом, а не превращается в список с другого номера.
+_LIST_LINE_RE = re.compile(r'^ {0,3}(?:[-*+]\s+|\d{1,9}[.)]\s+)\S')
+_LIST_INTERRUPT_RE = re.compile(r'^ {0,3}(?:[-*+]\s+|1[.)]\s+)\S')
+_FENCE_RE = re.compile(r'^\s*(?:```|~~~)')
+
+
+def _loosen_lists(text):
+    """
+    Вставляет пустую строку перед списком, начатым сразу после абзаца.
+
+    python-markdown требует пустую строку между абзацем и списком, а разборщик
+    YouTrack — нет. Из-за этого один и тот же текст выглядел по-разному: там
+    пункты, здесь строка «- пункт» как есть. Текст не меняется — добавляется
+    только перенос, которого ждёт разборщик.
+
+    Внутрь блоков кода не лезем: там дефис в начале строки — часть примера.
+    """
+    result = []
+    in_fence = False
+    in_list = False
+
+    for line in text.split('\n'):
+        if _FENCE_RE.match(line):
+            in_fence = not in_fence
+            result.append(line)
+            continue
+
+        if in_fence:
+            result.append(line)
+            continue
+
+        if not line.strip():
+            in_list = False
+            result.append(line)
+            continue
+
+        if _LIST_LINE_RE.match(line):
+            if not in_list and result and result[-1].strip() and _LIST_INTERRUPT_RE.match(line):
+                result.append('')
+            in_list = True
+            result.append(line)
+            continue
+
+        # Продолжение пункта с отступом списком быть не перестаёт.
+        if in_list and line[:1] in (' ', '\t'):
+            result.append(line)
+            continue
+
+        in_list = False
+        result.append(line)
+
+    return '\n'.join(result)
+
+
 def render_markdown(text, attachments=()):
     """
     Преобразует Markdown в безопасный HTML.
@@ -244,7 +301,7 @@ def render_markdown(text, attachments=()):
 
     attachments = list(attachments)
     used = []
-    prepared = _substitute_images(text, attachments, used).strip()
+    prepared = _loosen_lists(_substitute_images(text, attachments, used).strip())
     html = md.markdown(prepared, extensions=['extra', 'nl2br', 'sane_lists'])
     return mark_safe(sanitize_html(html, attachments)), used
 

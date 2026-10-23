@@ -39,6 +39,18 @@ def is_service_note(text: str) -> bool:
     return (text or '').lstrip().startswith(SERVICE_NOTE_MARK)
 
 
+# Ответ «записи в YouTrack больше нет» — договорённость клиента с
+# оркестратором обмена. Отличать этот случай от прочих отказов обязательно:
+# при недоступном сервере локальную копию трогать нельзя, а когда копии в
+# YouTrack уже нет, держать локальную запись не от чего — расходиться не с чем.
+RECORD_GONE = 'запись не найдена в YouTrack'
+
+
+def is_record_gone(detail: str) -> bool:
+    """Отказ означает, что записи в YouTrack больше нет."""
+    return detail == RECORD_GONE
+
+
 # Пометка компонента, которой сервис снабжает запись дочернего объекта,
 # уезжающую в задачу предка: `**[Плата]** текст`. Снимается по шаблону, а не
 # по имени объекта: объект могли переименовать, и в старых записях осталось
@@ -224,6 +236,10 @@ def update_comment_in_youtrack(issue_id: str, comment_yt_id: str, text: str, use
         if response.status_code in [200, 201]:
             logger.info(f"Комментарий YouTrack ({comment_yt_id}) успешно обновлен пользователем {user}")
             return True, "Комментарий обновлен в YouTrack"
+        elif response.status_code == 404:
+            # Комментарий (или всю задачу) удалили в YouTrack руками.
+            logger.info("Комментарий YouTrack (%s) не найден: удалён в YouTrack", comment_yt_id)
+            return False, RECORD_GONE
         else:
             msg = f"Ошибка обновления комментария в YouTrack ({response.status_code}): {response.text}"
             logger.error(msg)
