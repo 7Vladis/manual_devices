@@ -45,6 +45,12 @@
                                placeholder="ИНВ-003429" autocomplete="off">
                     </div>
                 </div>
+                {% comment %}
+                Поле видит только участник обмена: без токена человек связал бы
+                карточку с задачей, сам же запер себе правку, а данные из задачи
+                никто бы не перенёс. Представление такое поле и не принимает.
+                {% endcomment %}
+                {% if request.user.youtrack_token %}
                 <div class="col-12 col-md-6">
                     <div class="field">
                         <label for="new-object-yt">Задача в YouTrack</label>
@@ -53,6 +59,7 @@
                         <span class="hint">Если не задать — используется задача родителя.</span>
                     </div>
                 </div>
+                {% endif %}
             </div>
         </section>
 

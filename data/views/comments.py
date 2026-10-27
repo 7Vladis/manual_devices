@@ -14,7 +14,8 @@ from ..models import Attachment, Comment, DataObject, YouTrackJob
 from ..validators import validate_attachment
 from users.decorators import role_required
 
-from .common import get_comments_for, get_files_for, htmx_error, sync_pill_oob, yt_toast
+from .common import (blocked_without_token, get_comments_for, get_files_for, htmx_error,
+                     sync_pill_oob, yt_toast)
 
 logger = logging.getLogger('data')
 
@@ -23,6 +24,11 @@ logger = logging.getLogger('data')
 @require_POST
 def add_comment_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
+    blocked = blocked_without_token(request, obj.effective_youtrack_issue_id,
+                                    retarget='#tab-pane-comments')
+    if blocked:
+        return blocked
+
     text = request.POST.get('text', '').strip()
     file = request.FILES.get('file')
     form_error = None
@@ -91,6 +97,15 @@ def edit_comment_view(request, pk):
     if not comment.can_be_edited_by(request.user):
         return htmx_error("Редактировать можно только собственные комментарии.", status=403)
 
+    # Правка уезжает только у записи, копия которой лежит в задаче: условие
+    # то же, что ниже у `enqueue`. Комментарий, написанный локально (объект
+    # тогда не был связан с задачей или у автора не было токена), наружу не
+    # поедет никогда — править его можно без токена.
+    record_issue_id = youtrack_sync.record_issue(comment, obj) if comment.youtrack_id else None
+    blocked = blocked_without_token(request, record_issue_id, retarget='#tab-pane-comments')
+    if blocked:
+        return blocked
+
     if request.method == 'GET':
         return render(request, 'data/object/comment_item.html', {
             'comment': comment,
@@ -139,7 +154,10 @@ def delete_comments_bulk(request):
     comment_ids = request.POST.getlist('comment_ids')
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
-    
+
+    # Объектного запрета здесь нет: решение принимается по каждой записи.
+    # Локальную уберём молча, запись с копией в задаче без токена пометить
+    # нечем — `mark_comments_obsolete` оставит её в справочнике и скажет об этом.
     yt_errors = []
 
     if comment_ids:
@@ -157,10 +175,7 @@ def delete_comments_bulk(request):
     html = render_to_string('data/object/object_tab_comments.html',
                             {'obj': obj, 'comments': comments}, request=request)
     if yt_errors:
-        html += "\n" + yt_toast(
-            yt_errors + ["Записи оставлены в справочнике, чтобы данные систем не разошлись."],
-            request=request
-        )
+        html += "\n" + yt_toast(yt_errors, request=request)
     return HttpResponse(html)
 
 
@@ -168,6 +183,11 @@ def delete_comments_bulk(request):
 @require_POST
 def add_attachment_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
+    blocked = blocked_without_token(request, obj.effective_youtrack_issue_id,
+                                    retarget='#tab-pane-files')
+    if blocked:
+        return blocked
+
     file = request.FILES.get('file')
     is_preview_upload = request.POST.get('is_preview') == 'true'
     queued = False
@@ -215,7 +235,8 @@ def delete_attachments_bulk(request):
     file_ids = request.POST.getlist('file_ids')
     obj_pk = request.POST.get('object_uuid')
     obj = get_object_or_404(DataObject, pk=obj_pk)
-    
+
+    # Как и у комментариев, решение по каждой записи: см. mark_attachments_obsolete.
     yt_errors = []
 
     if file_ids:
@@ -235,10 +256,7 @@ def delete_attachments_bulk(request):
     html = render_to_string('data/object/object_tab_files.html',
                             {'obj': obj, 'files': files}, request=request)
     if yt_errors:
-        html += "\n" + yt_toast(
-            yt_errors + ["Файл убран из справочника, но в задаче о нём не сообщено."],
-            request=request
-        )
+        html += "\n" + yt_toast(yt_errors, request=request)
     return HttpResponse(html)
 
 
@@ -248,7 +266,9 @@ def delete_attachments_bulk(request):
 def set_preview_attachment_view(request, pk):
     attachment = get_object_or_404(Attachment.objects.select_related('data_object'), pk=pk)
     obj = attachment.data_object
-    
+
+    # `is_preview` — локальный флаг: в YouTrack такого признака нет, уезжать
+    # нечему, значит и токен для этого не нужен.
     if not attachment.is_image:
         return HttpResponse("Только изображение может быть превью", status=400)
     

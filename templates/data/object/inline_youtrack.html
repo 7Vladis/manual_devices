@@ -28,8 +28,13 @@
         </button>
     </form>
 {% else %}
-    <span class="d-inline-flex align-items-center text-truncate {% if not request.user.is_junior %}editable-trigger{% endif %}"
-          {% if not request.user.is_junior %}
+    {% comment %}
+    Номер задачи — рубильник обмена для всего поддерева: отвязавший задачу
+    остановит перенос записей у всех остальных. Поэтому поле открывает только
+    тот, у кого есть личный токен; остальным номер виден ссылкой, но не правится.
+    {% endcomment %}
+    <span class="d-inline-flex align-items-center text-truncate {% if not request.user.is_junior and request.user.youtrack_token %}editable-trigger{% endif %}"
+          {% if not request.user.is_junior and request.user.youtrack_token %}
           hx-get="{% url 'edit_youtrack' obj.uuid %}"
           hx-target="#youtrack-display-container"
           hx-swap="outerHTML"
@@ -49,7 +54,7 @@
             <span class="text-empty">не привязана</span>
         {% endif %}
 
-        {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon"></i>{% endif %}
+        {% if not request.user.is_junior and request.user.youtrack_token %}<i class="bi bi-pencil-square edit-icon"></i>{% endif %}
 
         {% comment %}
         Своего индикатора обмена здесь нет: состояние показывает пилюля

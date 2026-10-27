@@ -10,6 +10,7 @@
 """
 
 import datetime
+import io
 from unittest.mock import patch
 
 from django.conf import settings
@@ -33,7 +34,7 @@ from .models import (
 from . import youtrack_services
 from .services.youtrack_queue import process_jobs
 from .templatetags.markdown_extras import markdown_format
-from .views import calculate_next_maintenance_date, get_ancestors_chain
+from .views import calculate_next_maintenance_date, get_ancestors_chain, parse_spec_text
 
 User = get_user_model()
 
@@ -1026,12 +1027,6 @@ class DashboardAndExportTests(BaseDataTestCase):
         self.assertIn('spreadsheetml', response['Content-Type'])
         self.assertIn('attachment;', response['Content-Disposition'])
 
-    def test_export_with_inventory_filter_skips_objects_without_number(self):
-        DataObject.objects.create(model=self.model, name='Без инвентарника')
-
-        self.login(self.admin)
-        response = self.client.get(reverse('export_xlsx'), {'export_mode': 'with_inventory'})
-        self.assertEqual(response.status_code, 200)
 
 
 class ExplorerModeTests(BaseDataTestCase):
@@ -1371,7 +1366,8 @@ class XlsxExportSafetyTests(BaseDataTestCase):
         response = self.client.get(reverse('export_xlsx'))
         self.assertEqual(response.status_code, 200)
         wb = openpyxl.load_workbook(BytesIO(response.content))
-        return list(wb.active.iter_rows(min_row=2, values_only=True))
+        # Строки описи: выше них шапка документа и заголовки таблицы.
+        return list(wb['Опись'].iter_rows(min_row=6, values_only=True))
 
     def test_formula_like_values_are_escaped(self):
         DataObject.objects.create(
@@ -1386,13 +1382,13 @@ class XlsxExportSafetyTests(BaseDataTestCase):
         dangerous = [c for row in rows for c in row if isinstance(c, str) and c[:1] in '=+-@']
         self.assertEqual(dangerous, [])
 
-        exported = {row[1] for row in rows}
+        exported = {row[2] for row in rows}
         self.assertIn('\'=HYPERLINK("http://evil","click")', exported)
 
     def test_normal_values_are_not_mangled(self):
         self.login(self.admin)
         rows = self._export_rows()
-        names = {row[1] for row in rows}
+        names = {row[2] for row in rows}
         self.assertIn('Насосная станция №1', names)
 
 
@@ -1480,7 +1476,7 @@ class YoutrackFailureReportingTests(BaseDataTestCase):
         self.assertTrue(Comment.objects.filter(pk=comment.pk).exists())
         body = response.content.decode()
         self.assertIn('сервер недоступен', body)
-        self.assertIn('оставлены в справочнике', body)
+        self.assertIn('оставлена в справочнике', body)
 
     def test_comment_is_marked_obsolete_instead_of_deleted(self):
         """Сервис не удаляет запись в YouTrack, а дописывает маркер в её текст."""
@@ -2160,3 +2156,433 @@ class DictMobileLayoutTests(BaseDataTestCase):
 
         self.assertIn('dict-back-btn', body)
         self.assertIn('mdShowDictList', body)
+
+
+class YouTrackTokenGuardTests(BaseDataTestCase):
+    """
+    Запрет без токена вешается на действие, а не на объект.
+
+    Отказываем ровно там, где действие сейчас уехало бы в YouTrack: условие
+    запрета — то же, под которым стоит `enqueue` или `push`. Всё остальное
+    на связанном объекте остаётся доступным, иначе одна задача на корне
+    запирала бы всё поддерево.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.root.youtrack_issue_id = 'MNT-1'
+        cls.root.save(update_fields=['youtrack_issue_id'])
+        cls.loose = DataObject.objects.create(
+            model=cls.model, name='Вне задач', inventory_number='ИНВ-900')
+
+    def setUp(self):
+        self.login(self.senior)
+
+    def with_token(self):
+        self.senior.youtrack_token = 'perm:token'
+        self.senior.save(update_fields=['youtrack_token'])
+
+    # --- действия, которые наружу не уезжают ---
+
+    def test_child_description_is_editable_without_token(self):
+        """У потомка описание локальное в обе стороны: отправка идёт по своей
+        задаче, а входящая синхронизация пишет описание владельцу задачи."""
+        response = self.client.post(reverse('edit_description', args=[self.child.uuid]),
+                                    {'description': 'как обслуживать'})
+
+        self.assertEqual(response.status_code, 200)
+        self.child.refresh_from_db()
+        self.assertEqual(self.child.description, 'как обслуживать')
+
+    def test_child_name_is_editable_without_token(self):
+        response = self.client.post(reverse('edit_name', args=[self.child.uuid]),
+                                    {'name': 'Насос Б'})
+
+        self.assertEqual(response.status_code, 200)
+        self.child.refresh_from_db()
+        self.assertEqual(self.child.name, 'Насос Б')
+
+    def test_local_comment_is_editable_without_token(self):
+        """Комментарий без копии в задаче править можно: уезжать нечему."""
+        comment = Comment.objects.create(user=self.senior, data_object=self.root,
+                                         text='локальный')
+
+        response = self.client.post(reverse('edit_comment', args=[comment.uuid]),
+                                    {'text': 'правка'})
+
+        self.assertEqual(response.status_code, 200)
+        comment.refresh_from_db()
+        self.assertEqual(comment.text, 'правка')
+
+    def test_local_comment_is_deleted_without_token(self):
+        comment = Comment.objects.create(user=self.senior, data_object=self.root,
+                                         text='локальный')
+
+        self.client.post(reverse('delete_comments_bulk'), {
+            'comment_ids': [str(comment.uuid)], 'object_uuid': str(self.root.uuid),
+        })
+
+        self.assertFalse(Comment.objects.filter(uuid=comment.uuid).exists())
+
+    # --- действия, которые уезжают ---
+
+    def test_own_description_needs_token(self):
+        response = self.client.post(reverse('edit_description', args=[self.root.uuid]),
+                                    {'description': 'правка'})
+
+        self.assertEqual(response.status_code, 403)
+        self.root.refresh_from_db()
+        self.assertIsNone(self.root.description)
+
+    def test_copied_comment_needs_token(self):
+        """У записи есть копия в задаче — правка обязана туда уехать."""
+        comment = Comment.objects.create(user=self.senior, data_object=self.root,
+                                         text='из задачи', youtrack_id='c-1',
+                                         youtrack_issue_id='MNT-1')
+
+        response = self.client.post(reverse('edit_comment', args=[comment.uuid]),
+                                    {'text': 'правка'})
+
+        self.assertEqual(response.status_code, 403)
+        comment.refresh_from_db()
+        self.assertEqual(comment.text, 'из задачи')
+
+    def test_copied_comment_is_held_on_delete_without_token(self):
+        """Пометить устаревшим нечем — запись остаётся в справочнике."""
+        comment = Comment.objects.create(user=self.senior, data_object=self.root,
+                                         text='из задачи', youtrack_id='c-1',
+                                         youtrack_issue_id='MNT-1')
+
+        body = self.client.post(reverse('delete_comments_bulk'), {
+            'comment_ids': [str(comment.uuid)], 'object_uuid': str(self.root.uuid),
+        }).content.decode()
+
+        self.assertTrue(Comment.objects.filter(uuid=comment.uuid).exists())
+        self.assertIn('отметка об устаревании не выполнена', body)
+
+    def test_copied_attachment_is_held_on_delete_without_token(self):
+        """У вложения надгробие ставится локально, но распоряжается оно
+        зеркалом задачи: без токена файл тоже остаётся."""
+        att = Attachment.objects.create(
+            user=self.senior, data_object=self.root, youtrack_id='a-1',
+            youtrack_issue_id='MNT-1',
+            path=SimpleUploadedFile('doc.pdf', b'%PDF-1.4 data', content_type='application/pdf'))
+
+        self.client.post(reverse('delete_attachments_bulk'), {
+            'file_ids': [str(att.uuid)], 'object_uuid': str(self.root.uuid),
+        })
+
+        self.assertTrue(Attachment.objects.filter(uuid=att.uuid).exists())
+        self.assertFalse(YouTrackObsoleteRecord.objects.filter(youtrack_id='a-1').exists())
+
+    def test_comment_on_child_needs_token(self):
+        """Комментарий потомка уезжает в задачу предка."""
+        response = self.client.post(reverse('add_comment', args=[self.child.uuid]),
+                                    {'text': 'новый'})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Comment.objects.filter(data_object=self.child).count(), 0)
+
+    def test_issue_number_needs_token(self):
+        """Номер задачи — рубильник обмена для всего поддерева."""
+        response = self.client.post(reverse('edit_youtrack', args=[self.loose.uuid]),
+                                    {'youtrack_issue_id': 'MNT-9'})
+
+        self.assertEqual(response.status_code, 403)
+        self.loose.refresh_from_db()
+        self.assertIsNone(self.loose.youtrack_issue_id)
+
+    def test_issue_number_is_dropped_on_create_without_token(self):
+        self.client.post(reverse('create_object'), {
+            'name': 'Новый', 'model': str(self.model.uuid),
+            'youtrack_issue_id': 'MNT-5', 'next_maintenance_date': '',
+        })
+
+        created = DataObject.objects.get(name='Новый')
+        self.assertIsNone(created.youtrack_issue_id)
+
+    def test_move_into_linked_branch_needs_token(self):
+        """Пересадка свободного объекта под связанного предка меняет задачу,
+        в которую поедут все его дальнейшие записи."""
+        response = self.client.post(reverse('edit_parent', args=[self.loose.uuid]),
+                                    {'parent': str(self.root.uuid)})
+
+        self.assertEqual(response.status_code, 403)
+        self.loose.refresh_from_db()
+        self.assertIsNone(self.loose.parent)
+
+    # --- ТО ---
+
+    def test_maintenance_is_recorded_without_token(self):
+        """Записи о ТО в задаче не бывает ни при каком токене — наружу уезжает
+        только списание времени. Поэтому само ТО фиксируется локально."""
+        response = self.client.post(reverse('service_object', args=[self.root.uuid]), {
+            'maintenance_date': '2030-01-01', 'comment': 'продувка', 'spent_time': '1h',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ActionHistory.objects.filter(
+            data_object=self.root, maintenance_kind='planned').exists())
+        self.assertFalse(YouTrackJob.objects.filter(kind=YouTrackJob.KIND_WORK_ITEM).exists())
+
+    def test_spent_time_field_is_hidden_without_token(self):
+        body = self.client.get(reverse('service_object', args=[self.root.uuid])).content.decode()
+
+        self.assertNotIn('service-spent-time', body)
+        self.assertIn('MNT-1', body)
+
+    # --- удаление объекта ---
+
+    def test_delete_window_shows_refusal(self):
+        """Удаляют только из дерева и проводника, и обе кнопки сначала просят
+        это окно: отказ должен прийти окном, а не голым алертом без «×»."""
+        response = self.client.get(reverse('delete_object', args=[self.root.uuid]))
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('Удаление объекта', body)
+        self.assertIn('btn-close', body)
+        self.assertIn('MNT-1', body)
+        self.assertNotIn('confirm-delete-btn', body)
+
+    def test_delete_post_is_refused_without_token(self):
+        response = self.client.post(reverse('delete_object', args=[self.root.uuid]),
+                                    {'confirm_subtree': 'yes'})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(DataObject.objects.filter(pk=self.root.pk).exists())
+
+    def test_delete_checks_subtree_not_only_ancestors(self):
+        """`effective_youtrack_issue_id` смотрит вверх, а каскад идёт вниз."""
+        root = DataObject.objects.create(model=self.model, name='Корень без задачи')
+        DataObject.objects.create(model=self.model, name='Деталь с задачей',
+                                  parent=root, youtrack_issue_id='MNT-7')
+
+        response = self.client.get(reverse('delete_object', args=[root.uuid]))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('MNT-7', response.content.decode())
+
+    def test_delete_is_free_outside_youtrack(self):
+        response = self.client.post(reverse('delete_object', args=[self.loose.uuid]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(DataObject.objects.filter(pk=self.loose.pk).exists())
+
+    # --- интерфейс прячет то, что нельзя выполнить ---
+
+    def test_comment_form_is_replaced_by_notice(self):
+        body = self.client.get(reverse('object_tab', args=[self.child.uuid, 'comments'])).content.decode()
+
+        self.assertNotIn('comment-submit-btn', body)
+        self.assertIn('MNT-1', body)
+
+    def test_upload_forms_are_hidden(self):
+        """Превью — такое же вложение, как файл на вкладке «Файлы»."""
+        files = self.client.get(reverse('object_tab', args=[self.child.uuid, 'files'])).content.decode()
+        info = self.client.get(reverse('object_tab', args=[self.child.uuid, 'short_info'])).content.decode()
+
+        self.assertNotIn('Загрузить</button>', files)
+        self.assertNotIn('preview-file-input', info)
+
+    def test_token_notice_loads_the_token_window(self):
+        """Окно токена чистится при закрытии, поэтому одной ссылки мало:
+        без hx-get открывалось пустое окно."""
+        body = self.client.get(reverse('object_tab', args=[self.child.uuid, 'comments'])).content.decode()
+
+        self.assertIn(reverse('users:profile_youtrack_token'), body)
+        self.assertIn('user-token-modal-content', body)
+
+    # --- с токеном всё доступно ---
+
+    def test_token_restores_every_action(self):
+        self.with_token()
+
+        self.assertEqual(
+            self.client.get(reverse('delete_object', args=[self.root.uuid])).status_code, 200)
+        self.assertEqual(
+            self.client.post(reverse('edit_youtrack', args=[self.loose.uuid]),
+                             {'youtrack_issue_id': 'MNT-9'}).status_code, 200)
+        self.assertIn('service-spent-time',
+                      self.client.get(reverse('service_object', args=[self.root.uuid])).content.decode())
+
+
+class SpecBulkParseTests(TestCase):
+    """
+    Вставка характеристик списком: по строке на пару, разделитель ищется
+    по порядку — табуляция, два пробела, двоеточие, одиночный пробел.
+    Параметр может стоять и отдельной строкой над значением.
+    """
+
+    def test_separators_are_tried_in_order(self):
+        specs = parse_spec_text("Мощность 1,5 кВт\nНапряжение: 380 В\nКласс защиты\tIP55")
+
+        self.assertEqual(specs, {
+            'Мощность': '1,5 кВт',
+            'Напряжение': '380 В',
+            'Класс защиты': 'IP55',
+        })
+
+    def test_value_on_the_next_line(self):
+        """Таблица с сайта копируется по ячейке на строку."""
+        specs = parse_spec_text("Мощность\n1,5 кВт\nВес\n80 кг")
+
+        self.assertEqual(specs, {'Мощность': '1,5 кВт', 'Вес': '80 кг'})
+
+    def test_value_on_the_next_line_keeps_inner_spaces(self):
+        """«1,5 кВт» — значение целиком, а не пара «1,5» и «кВт»."""
+        specs = parse_spec_text("Напряжение\n380 В переменного тока")
+
+        self.assertEqual(specs, {'Напряжение': '380 В переменного тока'})
+
+    def test_both_forms_in_one_paste(self):
+        specs = parse_spec_text("Мощность\t5 кВт\nВес\n80 кг")
+
+        self.assertEqual(specs, {'Мощность': '5 кВт', 'Вес': '80 кг'})
+
+    def test_blank_line_between_parameter_and_value(self):
+        specs = parse_spec_text("Мощность\n\n5 кВт")
+
+        self.assertEqual(specs, {'Мощность': '5 кВт'})
+
+    def test_trailing_colon_is_stripped_from_parameter(self):
+        specs = parse_spec_text("Мощность:\n5 кВт")
+
+        self.assertEqual(specs, {'Мощность': '5 кВт'})
+
+    def test_complete_pair_below_belongs_to_itself(self):
+        """Строка с сильным разделителем несёт свою пару: одинокий параметр
+        над ней остаётся без значения, как и раньше."""
+        specs = parse_spec_text("Мощность\nВес: 80 кг")
+
+        self.assertEqual(specs, {'Вес': '80 кг'})
+
+    def test_lone_parameter_at_the_end_is_dropped(self):
+        specs = parse_spec_text("Мощность 5 кВт\nВес")
+
+        self.assertEqual(specs, {'Мощность': '5 кВт'})
+
+    def test_builder_accepts_vertical_paste(self):
+        user = User.objects.create_user(
+            email='spec@test.local', username='spec', password='pass12345', role='senior')
+        self.client.force_login(user)
+
+        body = self.client.post(reverse('specs_builder'), {
+            'bulk_text': 'Мощность\n1,5 кВт',
+        }).content.decode()
+
+        self.assertIn('Мощность', body)
+        self.assertIn('1,5 кВт', body)
+
+
+class ExportSheetTests(BaseDataTestCase):
+    """
+    Опись оборудования: файл печатают и носят в руках, поэтому проверяем
+    не только «отдался ли xlsx», но и то, что в нём можно разобраться.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.root.inventory_number = 'ИНВ-001'
+        cls.root.next_maintenance_date = datetime.date(2030, 5, 17)
+        cls.root.description = 'Стоит в цехе №3, у западной стены.'
+        cls.root.save(update_fields=['inventory_number', 'next_maintenance_date', 'description'])
+        # Компонент без инвентарного номера: из описи не исчезает, но помечен.
+        cls.part = DataObject.objects.create(
+            model=cls.model, name='Крыльчатка', parent=cls.child)
+
+    def workbook(self):
+        import openpyxl
+
+        self.login(self.admin)
+        response = self.client.get(reverse('export_xlsx'))
+        self.assertEqual(response.status_code, 200)
+        return openpyxl.load_workbook(io.BytesIO(response.content))
+
+    def inventory_rows(self, ws):
+        """Строки описи без шапки документа и заголовков таблицы."""
+        return [[cell.value for cell in row] for row in ws.iter_rows(min_row=6)]
+
+    def test_rows_follow_the_tree_with_structural_numbers(self):
+        """Порядок строк — маршрут обхода: агрегат, под ним его состав."""
+        rows = self.inventory_rows(self.workbook()['Опись'])
+
+        self.assertEqual([(row[0], row[2]) for row in rows], [
+            ('1', 'Насосная станция №1'),
+            ('1.1', 'Насос А'),
+            ('1.1.1', 'Крыльчатка'),
+        ])
+
+    def test_nesting_is_shown_by_cell_indent(self):
+        """Отступ родной, а не пробелами в тексте: он печатается и не мешает
+        поиску по названию."""
+        ws = self.workbook()['Опись']
+
+        self.assertEqual(ws.cell(row=6, column=3).alignment.indent, 0)
+        self.assertEqual(ws.cell(row=7, column=3).alignment.indent, 1)
+        self.assertEqual(ws.cell(row=8, column=3).alignment.indent, 2)
+
+    def test_object_without_inventory_number_is_kept_and_greyed(self):
+        """Выбросить такой объект нельзя: он держит под собой состав и сам
+        говорит, где этот состав искать."""
+        ws = self.workbook()['Опись']
+        rows = self.inventory_rows(ws)
+
+        self.assertIn('Крыльчатка', [row[2] for row in rows])
+        self.assertFalse(ws.cell(row=8, column=2).value)
+        self.assertIn('F1F5F9', ws.cell(row=8, column=3).fill.start_color.rgb)
+        self.assertNotIn('F1F5F9', ws.cell(row=6, column=3).fill.start_color.rgb)
+
+    def test_row_carries_parent_and_next_maintenance(self):
+        rows = self.inventory_rows(self.workbook()['Опись'])
+
+        self.assertEqual(rows[1][4], 'Насосная станция №1')
+        self.assertEqual(rows[0][5], '17.05.2030')
+
+    def test_blank_columns_for_handwriting(self):
+        """Опись печатают, чтобы ставить отметки ручкой."""
+        ws = self.workbook()['Опись']
+
+        self.assertEqual(ws.cell(row=5, column=7).value, 'Отметка')
+        self.assertEqual(ws.cell(row=5, column=8).value, 'Примечание')
+        self.assertFalse(ws.cell(row=6, column=7).value)
+
+    def test_sheet_is_set_up_for_printing(self):
+        ws = self.workbook()['Опись']
+
+        self.assertEqual(ws.print_title_rows, '$5:$5')
+        self.assertEqual(ws.page_setup.orientation, 'landscape')
+        self.assertEqual(ws.freeze_panes, 'A6')
+
+    def test_specs_live_on_the_models_sheet_once(self):
+        """Характеристики принадлежат модели: в описи их нет, а на своём
+        листе они встречаются по разу, а не в строке каждого экземпляра."""
+        wb = self.workbook()
+        opis = self.inventory_rows(wb['Опись'])
+        models = [[cell.value for cell in row] for row in wb['Модели'].iter_rows(min_row=2)]
+
+        self.assertNotIn('Мощность: 5 кВт', [str(row[3]) for row in opis])
+        self.assertEqual(len(models), 1)
+        self.assertIn('Мощность: 5 кВт', models[0][2])
+        self.assertEqual(models[0][3], '3')
+
+    def test_descriptions_go_to_their_own_sheet(self):
+        """В описании нередко записано точное место — выбрасывать нельзя,
+        но и в опись оно не помещается."""
+        rows = [[cell.value for cell in row]
+                for row in self.workbook()['Описания'].iter_rows(min_row=2)]
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], '1')
+        self.assertIn('цехе №3', rows[0][3])
+
+    def test_formula_injection_is_escaped(self):
+        """Имена приходят от людей и из YouTrack: Excel не должен считать
+        их формулами."""
+        DataObject.objects.create(model=self.model, name='=SUM(A1:A9)')
+
+        values = [row[2] for row in self.inventory_rows(self.workbook()['Опись'])]
+
+        self.assertIn("'=SUM(A1:A9)", values)

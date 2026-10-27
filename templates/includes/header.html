@@ -44,14 +44,18 @@
         <div class="d-flex align-items-center gap-2 ms-auto">
 
             {% if request.user.is_admin_or_higher %}
-            <button type="button"
-                    class="header-tool"
-                    data-bs-toggle="modal"
-                    data-bs-target="#exportModal"
-                    title="Выгрузить справочник в XLSX">
+            {% comment %}
+            Окна выбора нет: выгрузка одна и всегда полная. Прежний выбор
+            «только с инвентарным номером» рвал дерево — объект без номера
+            исчезал вместе со своим составом, хотя именно он и говорит, где
+            этот состав искать. Теперь такие строки просто серые.
+            {% endcomment %}
+            <a class="header-tool"
+               href="{% url 'export_xlsx' %}"
+               title="Скачать опись оборудования в XLSX">
                 <i class="bi bi-download"></i>
                 <span class="d-none d-xl-inline">Выгрузить</span>
-            </button>
+            </a>
             {% endif %}
 
             <!-- Токен YouTrack настраивается здесь и только здесь -->

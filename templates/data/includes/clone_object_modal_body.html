@@ -58,10 +58,21 @@
 
         <div class="field">
             <label for="clone-new-name">Название копии<span class="req">*</span></label>
+            {% comment %}
+            Проверка на тёзку в той же ветке — та же, что при создании объекта.
+            Родителя здесь задаёт не поле, а переключатель «оставить в том же
+            родителе», поэтому в запрос уходят исходный объект и его состояние.
+            {% endcomment %}
             <input type="text" name="new_name" id="clone-new-name" class="form-control"
                    placeholder="{% if preselected_object %}{{ preselected_object.name|default:preselected_object.model.name }} (копия){% else %}Например: ПК-102{% endif %}"
                    value="{% if preselected_object %}{{ preselected_object.name|default:preselected_object.model.name }} (копия){% endif %}"
-                   required autocomplete="off">
+                   required autocomplete="off"
+                   hx-get="{% url 'check_object_name' %}?modal=cloneObjectModal"
+                   hx-trigger="keyup changed delay:500ms, checkObjectName from:body"
+                   hx-target="#clone-name-check-container"
+                   hx-include="closest form"
+                   hx-vals='js:{name: document.getElementById("clone-new-name").value}'>
+            <div id="clone-name-check-container"></div>
             <span class="hint">Имена дочерних компонентов будут автоматически переименованы под новое название.</span>
         </div>
 
@@ -84,7 +95,8 @@
                     <small>Иначе копия станет самостоятельным корневым объектом.</small>
                 </span>
                 <span class="form-check form-switch m-0 flex-shrink-0">
-                    <input class="form-check-input shadow-none" type="checkbox" name="keep_parent" id="keepParentCheck" checked>
+                    <input class="form-check-input shadow-none" type="checkbox" name="keep_parent" id="keepParentCheck" checked
+                           onchange="htmx.trigger(document.body, 'checkObjectName')">
                 </span>
             </label>
         </div>

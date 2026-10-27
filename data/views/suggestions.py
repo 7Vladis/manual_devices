@@ -61,6 +61,14 @@ def check_object_name_view(request):
     parent_uuid = (request.GET.get('parent') or '').strip()
     parent = DataObject.objects.select_related('model').filter(pk=parent_uuid).first() if parent_uuid else None
 
+    # Окно копирования: своего поля родителя там нет — копия либо остаётся у
+    # родителя исходного объекта, либо становится корневой. Разбираем это
+    # здесь, чтобы форма не считала ничего сама.
+    if parent is None and request.GET.get('keep_parent') and request.GET.get('source_object'):
+        source = DataObject.objects.select_related('parent', 'parent__model').filter(
+            pk=request.GET['source_object']).first()
+        parent = source.parent if source else None
+
     if parent is not None:
         scope = DataObject.objects.filter(pk__in=parent.get_descendant_uuids())
         scope_label = parent.name or parent.model.name
@@ -84,7 +92,8 @@ def check_object_name_view(request):
         'exact': exact_match,
         'similar': similar_objects,
         'scope_label': scope_label,
-        'modal_id': 'createObjectModal',
+        # Ссылка «перейти к объекту» закрывает то окно, из которого проверяли.
+        'modal_id': request.GET.get('modal') or 'createObjectModal',
     })
 
 
@@ -232,26 +241,66 @@ def reset_suggestion_view(request):
 # Угадать можно не всё: в строке «Класс защиты IP55» одиночный пробел разделит
 # её после первого слова. Поэтому разобранное сразу показывается списком —
 # ошибку видно и её можно поправить или удалить строку.
-_SPEC_SEPARATORS = (r'\t+', r' {2,}', r'\s*:\s*', r'\s+')
+_STRONG_SEPARATORS = (r'\t+', r' {2,}', r'\s*:\s*')
+_SPEC_SEPARATORS = _STRONG_SEPARATORS + (r'\s+',)
+
+
+def _split_spec_line(line, separators=_SPEC_SEPARATORS):
+    """Пара «параметр — значение» из одной строки или `None`, если не вышло."""
+    for separator in separators:
+        parts = re.split(separator, line, maxsplit=1)
+        if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+            return parts[0].strip(' :\t'), parts[1].strip()
+    return None
 
 
 def parse_spec_text(text):
     """
-    Разбирает вставленный текст в пары «параметр — значение», строка за строкой.
+    Разбирает вставленный текст в пары «параметр — значение».
 
     Нужно для переноса характеристик из паспорта или с сайта: человек копирует
     кусок таблицы целиком, а не вбивает полями по одной.
+
+    Обычная строка несёт пару целиком. Но таблица с сайта или из PDF часто
+    копируется по ячейке на строку — тогда параметр стоит над своим значением:
+
+        Мощность
+        1,5 кВт
+
+    Такую строку узнать просто: в ней нет ни одного разделителя, то есть она
+    состоит из одного слова (пробел развалил бы её последним правилом). Сейчас
+    она молча пропадала, поэтому значение с соседней строки — чистая прибавка:
+    сломать ею нечего.
+
+    Значение берётся следующей непустой строкой целиком, вместе с пробелами
+    внутри: «1,5 кВт» — это значение, а не пара «1,5» и «кВт». Исключение —
+    строка, которая сама несёт пару через сильный разделитель («Вес: 80 кг»):
+    она принадлежит себе, и одинокий параметр над ней остаётся без значения,
+    как и раньше.
+
+    Цена та же, что у одиночного пробела: одинокое слово, под которым стоит
+    обычная пара через пробел, заберёт её себе. Разобранное показывается
+    списком, и такую строку видно сразу.
     """
+    lines = [line.strip() for line in (text or '').splitlines()]
+    lines = [line for line in lines if line]
+
     specs = {}
-    for line in (text or '').splitlines():
-        line = line.strip()
-        if not line:
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        index += 1
+
+        pair = _split_spec_line(line)
+        if pair:
+            specs[pair[0]] = pair[1]
             continue
-        for separator in _SPEC_SEPARATORS:
-            parts = re.split(separator, line, maxsplit=1)
-            if len(parts) == 2 and parts[0].strip() and parts[1].strip():
-                specs[parts[0].strip(' :\t')] = parts[1].strip()
-                break
+
+        # Разделителя нет вовсе — значение ищем строкой ниже.
+        if index < len(lines) and _split_spec_line(lines[index], _STRONG_SEPARATORS) is None:
+            specs[line.strip(' :\t')] = lines[index]
+            index += 1
+
     return specs
 
 

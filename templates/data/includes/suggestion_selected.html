@@ -1,14 +1,21 @@
-<!-- templates/data/includes/suggestion_selected.html -->
-<div id="search-wrapper-{{ field }}" class="w-100 animate-fade">
+{% comment %}
+Выбранное значение подсказки.
+
+`hx-on::load` висит именно на этом теге — верхнем узле подменяемого фрагмента.
+На вложенных элементах htmx событие `load` не шлёт, и пересчёт проверки имени
+молча не срабатывал: подсказка о похожих записях появлялась только после
+правки самого имени.
+{% endcomment %}
+<div id="search-wrapper-{{ field }}" class="w-100 animate-fade"
+     {% if field == 'object_type' %}hx-on::load="htmx.trigger(document.body, 'checkModelName')"{% endif %}
+     {% if field == 'parent' or field == 'source_object' %}hx-on::load="htmx.trigger(document.body, 'checkObjectName')"{% endif %}>
     <div class="suggest-chosen">
         <span class="d-inline-flex align-items-center gap-2 text-truncate fw-semibold text-dark" title="{{ display_name }}">
             <i class="bi bi-check-circle-fill text-success flex-shrink-0"></i>
             <span class="text-truncate">{{ display_name }}</span>
         </span>
 
-        <input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}"
-               {% if field == 'object_type' %}hx-on::load="htmx.trigger(document.body, 'checkModelName')"{% endif %}
-               {% if field == 'parent' %}hx-on::load="htmx.trigger(document.body, 'checkObjectName')"{% endif %}>
+        <input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">
 
         <button type="button"
                 class="btn btn-link text-secondary p-0 border-0 fw-semibold flex-shrink-0"

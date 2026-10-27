@@ -26,9 +26,12 @@ objectServiced, а OOB-части ответа применятся в любо�
         <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3 small animate-fade">
             <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
             <div>
-                Персональный токен YouTrack не настроен — запись о ТО и списание времени
-                <strong>не попадут</strong> в задачу <strong>{{ effective_yt_id }}</strong>.
-                <a href="#" data-bs-toggle="modal" data-bs-target="#userTokenModal" class="alert-link">Указать токен</a>
+                Личный токен YouTrack не указан. ТО будет записано только
+                в справочнике — время в задачу <strong>{{ effective_yt_id }}</strong> не списывается.
+                <a href="#" data-bs-toggle="modal" data-bs-target="#userTokenModal"
+                   hx-get="{% url 'users:profile_youtrack_token' %}"
+                   hx-target="#user-token-modal-content"
+                   class="alert-link">Указать токен</a>
             </div>
         </div>
         {% endif %}
@@ -67,7 +70,8 @@ objectServiced, а OOB-части ответа применятся в любо�
             <textarea name="comment" id="service-comment" rows="3" class="form-control"
                       style="resize: vertical;"
                       placeholder="Например: заменён кулер, выполнена продувка от пыли"></textarea>
-            <span class="hint">Текст попадёт в историю объекта и в комментарий к задаче YouTrack.</span>
+            <span class="hint">Текст попадёт в историю объекта{% if effective_yt_id and request.user.youtrack_token %}, а если указать
+                потраченное время — станет подписью списания в задаче {{ effective_yt_id }}{% endif %}.</span>
         </div>
 
         <!-- Дата следующего ТО -->
@@ -86,8 +90,9 @@ objectServiced, а OOB-части ответа применятся в любо�
             {% endif %}
         </div>
 
-        <!-- Списание времени -->
-        {% if effective_yt_id %}
+        <!-- Списание времени: только участнику обмена. Без токена списывать
+             его не от чьего имени, поэтому поля нет — как нет и пилюли. -->
+        {% if effective_yt_id and request.user.youtrack_token %}
         <div class="field animate-fade">
             <label for="service-spent-time">Потраченное время</label>
             <input type="text" name="spent_time" id="service-spent-time" class="form-control" placeholder="1h 30m или 45m">

@@ -20,7 +20,7 @@ ALLOWED_TAGS = {
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'ul', 'ol', 'li',
     'blockquote',
-    'a', 'img',
+    'a', 'img', 'video',
     'table', 'thead', 'tbody', 'tr', 'th', 'td',
     'dl', 'dt', 'dd',
 }
@@ -30,6 +30,9 @@ ALLOWED_ATTRIBUTES = {
     # width/height приходят из разметки YouTrack `![](имя.png){width=70%}`:
     # markdown разбирает её сам и кладёт размер в атрибут.
     'img': {'src', 'alt', 'title', 'width', 'height'},
+    # Видео YouTrack вставляет той же разметкой, что и картинку, — отсюда
+    # проигрыватель в разрешённых тегах. Источник проверяется так же строго.
+    'video': {'src', 'controls', 'preload', 'width', 'height', 'class'},
     'th': {'align'},
     'td': {'align'},
     'code': {'class'},
@@ -69,8 +72,9 @@ def _attribute_filter_for(attachments):
     def attribute_filter(tag, attr, value):
         value = (value or '').strip()
 
-        # Изображения — только из наших медиафайлов или по абсолютному адресу.
-        if tag == 'img' and attr == 'src':
+        # Изображения и видео — только из наших медиафайлов или по
+        # абсолютному адресу.
+        if tag in ('img', 'video') and attr == 'src':
             return value if value.startswith(_READY_PREFIXES) else None
 
         if attr in ('width', 'height'):
@@ -209,9 +213,19 @@ def _find_attachment(src, attachments):
     return None
 
 
+# Размер из `{width=70%}`: markdown кладёт его в атрибут сам, но только для
+# картинки. Для проигрывателя разбираем сами — там мы пишем готовый тег.
+_WIDTH_IN_ATTRS_RE = re.compile(r'width\s*=\s*["\']?(\d{1,4}%?)')
+
+
 def _substitute_images(text, attachments, used):
     """
     Меняет имена файлов во вставках на ссылки наших копий.
+
+    Видео YouTrack вставляет той же разметкой, что и картинку: `![](ролик.mp4)`.
+    Картинкой его не покажешь — браузер рисует битый значок, — поэтому на месте
+    такой вставки появляется проигрыватель. Разметку пишем готовым тегом:
+    markdown из `![]()` умеет делать только `img`.
 
     Вставку, которой файла не нашлось, убираем: битая картинка в ленте хуже её
     отсутствия. Так вёл себя фильтр и раньше — только тогда вырезались все
@@ -227,7 +241,16 @@ def _substitute_images(text, attachments, used):
             return ''
 
         used.append(att.uuid)
-        return f"![{match.group('alt')}]({att.path.url}){match.group('attrs') or ''}"
+        attrs = match.group('attrs') or ''
+
+        if getattr(att, 'is_video', False):
+            size = _WIDTH_IN_ATTRS_RE.search(attrs)
+            width = f' width="{size.group(1)}"' if size else ''
+            # preload="metadata" тянет заголовок, а не весь ролик.
+            return (f'<video src="{att.path.url}" controls preload="metadata"'
+                    f' class="markdown-video"{width}></video>')
+
+        return f"![{match.group('alt')}]({att.path.url}){attrs}"
 
     return _IMAGE_RE.sub(replace, text)
 

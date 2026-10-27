@@ -17,7 +17,9 @@ from users.decorators import role_required
 
 from ..services import youtrack_queue
 from ..services.maintenance import calculate_next_maintenance_date
-from .common import htmx_error, sync_pill_oob, tree_sidebar_context
+from .common import (NO_TOKEN_DELETE_MESSAGE, blocked_without_token,
+                     blocked_without_token_setup, has_youtrack_token, htmx_error,
+                     sync_pill_oob, token_missing_for, tree_sidebar_context)
 
 logger = logging.getLogger('data')
 
@@ -35,11 +37,29 @@ def delete_object_view(request, pk):
     obj = get_object_or_404(DataObject.objects.select_related('model'), pk=pk)
     stats = obj.get_subtree_stats()
 
+    # Каскад уносит комментарии и файлы, копии которых лежат в задаче, поэтому
+    # удаление доступно только участнику обмена. Пометку устаревания при этом
+    # не ставим: локальное удаление не значит, что запись устарела — карточку
+    # сносят, чтобы пересоздать объект или чтобы перестать следить за ним
+    # у себя, а задача в YouTrack остаётся живой. Пометка была бы неправдой.
+    subtree_issue = obj.find_subtree_youtrack_issue()
+    blocked = token_missing_for(request, subtree_issue)
+    refusal = NO_TOKEN_DELETE_MESSAGE.format(issue=subtree_issue) if blocked else None
+
     if request.method == 'GET':
+        # Удаляют только из дерева и проводника, и обе кнопки сначала просят
+        # это окно — значит отказ показываем в нём же, вместе с заголовком
+        # и кнопкой закрытия. Голый алерт встал бы в пустую оболочку окна.
         return render(request, 'data/includes/confirm_delete_object.html', {
             'obj': obj,
             'stats': stats,
-        })
+            'blocked_message': refusal,
+        }, status=403 if blocked else 200)
+
+    if blocked:
+        # Окно могли открыть с токеном и потерять его, или POST пришёл мимо
+        # окна: ответ встанет в блок обратной связи формы.
+        return htmx_error(refusal, status=403)
 
     if request.method not in ['POST', 'DELETE']:
         return HttpResponse("Метод не разрешен", status=405)
@@ -74,7 +94,12 @@ def create_object_view(request):
         name = request.POST.get('name')
         model_uuid = request.POST.get('model')
         inventory_number = request.POST.get('inventory_number')
+        # Номер задачи принимаем только у того, у кого есть токен: иначе
+        # человек связал бы карточку с задачей и сам же запер себе правку,
+        # а данные из задачи никто бы не перенёс. В форме поля у него нет.
         youtrack_issue_id = request.POST.get('youtrack_issue_id', '').strip()
+        if not has_youtrack_token(request.user):
+            youtrack_issue_id = ''
         parent_uuid = request.POST.get('parent')
         maintenance_str = request.POST.get('next_maintenance_date')
         rule_uuid = request.POST.get('date_update_rule')
@@ -136,7 +161,9 @@ def create_object_view(request):
 @role_required(['senior', 'admin', 'superuser'])
 @require_POST
 def unlink_rule_view(request, pk):
+    # Сроки ТО в YouTrack не зеркалятся — отвязка правила уезжать никуда не может.
     obj = get_object_or_404(DataObject, pk=pk)
+
     obj.date_update_rule = None
     obj.save(update_fields=['date_update_rule'])
     
@@ -157,7 +184,9 @@ def unlink_rule_view(request, pk):
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
 def edit_inventory_view(request, pk):
+    # Инвентарный номер в YouTrack не передаётся: правка локальная.
     obj = get_object_or_404(DataObject, pk=pk)
+
     if request.method == 'POST':
         new_inv = request.POST.get('inventory_number', '').strip()
         obj.inventory_number = new_inv if new_inv else None
@@ -181,7 +210,12 @@ def edit_inventory_view(request, pk):
 @role_required(['senior', 'admin', 'superuser'])
 def edit_youtrack_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
-    
+
+    if request.GET.get('cancel') != '1':
+        blocked = blocked_without_token_setup(request)
+        if blocked:
+            return blocked
+
     if request.method == 'POST':
         new_yt = request.POST.get('youtrack_issue_id', '').strip()
         obj.youtrack_issue_id = new_yt if new_yt else None
@@ -228,7 +262,16 @@ def edit_youtrack_view(request, pk):
 def edit_parent_view(request, pk):
     """Смена родительского объекта напрямую через ForeignKey parent"""
     obj = get_object_or_404(DataObject.objects.select_related('parent', 'parent__model'), pk=pk)
-    
+
+    # Перенос пишет в YouTrack одну строку «Компонент перенесён» — в прежнюю
+    # задачу. Значит и запрет судит по ней. Но прежней задачи может не быть,
+    # а новая — появиться: пересадка несвязанного объекта под связанного
+    # предка тоже меняет задачу, поэтому в POST проверяем обе.
+    if request.GET.get('cancel') != '1':
+        blocked = blocked_without_token(request, obj.effective_youtrack_issue_id)
+        if blocked:
+            return blocked
+
     if request.method == 'GET' and request.GET.get('cancel') == '1':
         return render(request, 'data/object/inline_parent.html', {
             'obj': obj, 
@@ -255,6 +298,13 @@ def edit_parent_view(request, pk):
                     'editing': False,
                     'error': " ".join(exc.messages),
                 }, status=400)
+            # Объект без задачи вешают в связанную ветку: заметку о переносе
+            # отправлять некуда, зато все его дальнейшие записи поедут в задачу
+            # нового предка. Без токена это тихая пересадка в чужую задачу.
+            blocked = blocked_without_token(request, new_parent.effective_youtrack_issue_id)
+            if blocked:
+                return blocked
+
             obj.parent = new_parent
             parent_name = new_parent.name or new_parent.model.name
         else:
@@ -318,8 +368,9 @@ def edit_parent_view(request, pk):
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
 def edit_name_view(request, pk):
+    # Имя объекта в YouTrack не передаётся: правка локальная.
     obj = get_object_or_404(DataObject, pk=pk)
-    
+
     if request.method == 'GET' and request.GET.get('cancel') == '1':
         return render(request, 'data/object/inline_name.html', {'obj': obj, 'editing': False})
         
@@ -355,6 +406,15 @@ def edit_name_view(request, pk):
 def edit_description_view(request, pk):
     obj = get_object_or_404(DataObject, pk=pk)
 
+    # Условие то же, под которым ниже стоит `enqueue`: своя задача, а не
+    # эффективная. Описание потомка в задачу предка не уезжает, а входящая
+    # синхронизация пишет описание владельцу задачи — у потомка оно локальное
+    # в обе стороны, и токен для его правки не нужен.
+    if request.GET.get('cancel') != '1':
+        blocked = blocked_without_token(request, obj.youtrack_issue_id)
+        if blocked:
+            return blocked
+
     if request.method == 'GET' and request.GET.get('cancel') == '1':
         return render(request, 'data/object/inline_description.html', {'obj': obj, 'editing': False})
 
@@ -389,8 +449,9 @@ def edit_description_view(request, pk):
 @login_required
 @role_required(['senior', 'admin', 'superuser'])
 def edit_object_model_view(request, pk):
+    # Модель экземпляра в YouTrack не передаётся: правка локальная.
     obj = get_object_or_404(DataObject, pk=pk)
-    
+
     if request.method == 'GET' and request.GET.get('cancel') == '1':
         return render(request, 'data/object/inline_model.html', {'obj': obj, 'editing': False})
         

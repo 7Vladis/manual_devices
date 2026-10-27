@@ -8,6 +8,28 @@
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
 </div>
 
+{% comment %}
+Отказ показываем в этом же окне, а не одним алертом: оболочка в dict.html
+пустая, и голый фрагмент оставил бы окно без заголовка и без кнопки закрытия.
+{% endcomment %}
+{% if blocked_message %}
+<div class="sheet-body">
+    <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3 mb-0 rounded-3 small">
+        <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
+        <div>{{ blocked_message }}</div>
+    </div>
+</div>
+
+<div class="sheet-footer">
+    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Закрыть</button>
+    <button type="button" class="btn btn-primary px-4 fw-semibold"
+            data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#userTokenModal"
+            hx-get="{% url 'users:profile_youtrack_token' %}"
+            hx-target="#user-token-modal-content">
+        <i class="bi bi-key"></i>Указать токен
+    </button>
+</div>
+{% else %}
 <form hx-post="{% url 'delete_object' obj.uuid %}"
       hx-target="find .form-feedback"
       hx-swap="innerHTML"
@@ -68,3 +90,4 @@
         </button>
     </div>
 </form>
+{% endif %}

@@ -221,6 +221,22 @@ class DataObject(models.Model):
         issue_id, _ = self.get_effective_youtrack_issue()
         return issue_id
 
+    def find_subtree_youtrack_issue(self):
+        """
+        Задача, которую затронуло бы удаление объекта вместе с поддеревом.
+
+        `effective_youtrack_issue_id` смотрит только вверх, а каскад идёт
+        вниз: корень без задачи может нести потомка со своей, и проверка по
+        одной лишь эффективной задаче пропустила бы такое удаление.
+        """
+        own = self.effective_youtrack_issue_id
+        if own:
+            return own
+        return DataObject.objects.filter(
+            uuid__in=self.get_descendant_uuids(),
+            youtrack_issue_id__isnull=False,
+        ).values_list('youtrack_issue_id', flat=True).first()
+
     # --- Целостность иерархии ---
 
     MAX_TREE_DEPTH = 64

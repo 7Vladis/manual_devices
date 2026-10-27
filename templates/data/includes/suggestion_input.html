@@ -4,7 +4,8 @@
 имени: область сравнения — дерево, и без родителя она другая.
 {% endcomment %}
 <div id="search-wrapper-{{ field }}" class="w-100 position-relative"
-     {% if field == 'parent' %}hx-on::load="htmx.trigger(document.body, 'checkObjectName')"{% endif %}>
+     {% if field == 'parent' or field == 'source_object' %}hx-on::load="htmx.trigger(document.body, 'checkObjectName')"{% endif %}
+     {% if field == 'object_type' %}hx-on::load="htmx.trigger(document.body, 'checkModelName')"{% endif %}>
     <input type="text"
            name="q"
            class="form-control"

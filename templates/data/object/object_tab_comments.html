@@ -13,6 +13,26 @@
     </div>
     {% endif %}
 
+    {% comment %}
+    Комментарий связанного объекта публикуется в задаче YouTrack, а без
+    личного токена публиковать его не от чьего имени. Поэтому формы нет совсем —
+    как нет и пилюли обмена: предупреждение рядом с живой кнопкой обещало бы
+    отправку, которой не будет. На объекте вне задач форма доступна всем: там
+    запись локальная.
+    {% endcomment %}
+    {% if obj.effective_youtrack_issue_id and not request.user.youtrack_token %}
+    <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3 small">
+        <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
+        <div>
+            Комментарий публикуется в задаче <strong>{{ obj.effective_youtrack_issue_id }}</strong>.
+            Личный токен YouTrack не указан — публикация недоступна.
+            <a href="#" data-bs-toggle="modal" data-bs-target="#userTokenModal"
+               hx-get="{% url 'users:profile_youtrack_token' %}"
+               hx-target="#user-token-modal-content"
+               class="alert-link">Указать токен</a>
+        </div>
+    </div>
+    {% else %}
     <!-- Новый комментарий: текст и/или вложение -->
     <form id="comment-form"
           hx-post="{% url 'add_comment' obj.uuid %}"
@@ -38,11 +58,6 @@
                            onchange="window.mdSyncCommentForm(this); document.getElementById('file-chosen-label').textContent = this.files[0] ? this.files[0].name : '';">
                     <span id="file-chosen-label" class="text-muted small text-truncate" style="max-width: 240px; font-size: 0.78rem;"></span>
 
-                    {% if obj.effective_youtrack_issue_id and not request.user.youtrack_token %}
-                    <span class="text-warning" style="font-size: 0.78rem;">
-                        <i class="bi bi-exclamation-circle me-1"></i>Токен YouTrack не указан
-                    </span>
-                    {% endif %}
                 </div>
 
                 <button type="submit" id="comment-submit-btn" class="btn btn-primary fw-semibold px-4" disabled>
@@ -51,6 +66,7 @@
             </div>
         </div>
     </form>
+    {% endif %}
 
     <!-- Лента комментариев -->
     <form hx-post="{% url 'delete_comments_bulk' %}" hx-target="#tab-pane-comments">

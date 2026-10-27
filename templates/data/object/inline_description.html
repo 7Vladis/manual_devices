@@ -23,15 +23,38 @@
 {% else %}
     {% if obj.description %}
         <div class="markdown-content">{% description_body obj %}</div>
+        {% comment %}
+        Описание уезжает только у объекта со СВОЕЙ задачей: у потомка оно
+        локальное в обе стороны (отправка идёт по `youtrack_issue_id`, а
+        входящая синхронизация пишет описание владельцу задачи), поэтому там
+        правка доступна и без токена.
+        {% endcomment %}
         {% if not request.user.is_junior %}
-        <button type="button" class="btn btn-light border mt-3"
-                hx-get="{% url 'edit_description' obj.uuid %}"
-                hx-target="#description-container"
-                hx-swap="outerHTML">
-            <i class="bi bi-pencil"></i>Редактировать
-        </button>
+            {% if obj.youtrack_issue_id and not request.user.youtrack_token %}
+            <p class="hint mt-3 mb-0">
+                <i class="bi bi-lock me-1"></i>Описание публикуется в задаче
+                {{ obj.youtrack_issue_id }}. Личный токен YouTrack не указан.
+            </p>
+            {% else %}
+            <button type="button" class="btn btn-light border mt-3"
+                    hx-get="{% url 'edit_description' obj.uuid %}"
+                    hx-target="#description-container"
+                    hx-swap="outerHTML">
+                <i class="bi bi-pencil"></i>Редактировать
+            </button>
+            {% endif %}
         {% endif %}
     {% else %}
+        {% if obj.youtrack_issue_id and not request.user.youtrack_token %}
+        <div class="empty-state">
+            <span class="empty-icon"><i class="bi bi-lock"></i></span>
+            <span class="empty-title">Описание не заполнено</span>
+            <span class="empty-hint">
+                Описание публикуется в задаче {{ obj.youtrack_issue_id }}.
+                Личный токен YouTrack не указан.
+            </span>
+        </div>
+        {% else %}
         <div class="empty-state"
              {% if not request.user.is_junior %}
              hx-get="{% url 'edit_description' obj.uuid %}"
@@ -45,6 +68,7 @@
                 {% if request.user.is_junior %}Описание добавляет инженер с правами на редактирование.{% else %}Нажмите, чтобы добавить описание объекта.{% endif %}
             </span>
         </div>
+        {% endif %}
     {% endif %}
 {% endif %}
 </div>

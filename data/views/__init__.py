@@ -82,6 +82,7 @@ from .object_models import (  # noqa: F401
 from .suggestions import (  # noqa: F401
     check_model_name_view,
     check_object_name_view,
+    parse_spec_text,
     suggest_view,
     select_suggestion_view,
     reset_suggestion_view,

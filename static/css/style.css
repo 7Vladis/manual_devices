@@ -1966,6 +1966,16 @@ small, .small { font-size: 0.86em; }
 .markdown-content td { padding: 6px 10px; border: 1px solid var(--line); }
 .markdown-content th { background-color: var(--surface-sunken); text-align: left; font-weight: 600; }
 .markdown-content img { max-width: 100%; border-radius: var(--radius-sm); }
+/* Видео YouTrack вставляет в текст той же разметкой, что и картинку, поэтому
+   проигрыватель встречается прямо в ленте. Чёрный фон — поле кадра: ролик
+   редко совпадает пропорциями с отведённым местом. */
+.markdown-content video {
+    display: block;
+    max-width: 100%;
+    margin: 6px 0;
+    border-radius: var(--radius-sm);
+    background-color: #000;
+}
 .markdown-content hr { border-color: var(--line); opacity: 1; }
 
 /* ==========================================================================

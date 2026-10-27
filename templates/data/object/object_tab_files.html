@@ -4,6 +4,23 @@
 
 <div class="animate-fade">
 
+    {% comment %}
+    Как и комментарий, файл связанного объекта публикуется в задаче: без
+    токена публиковать его не от чьего имени, поэтому формы загрузки нет.
+    {% endcomment %}
+    {% if obj.effective_youtrack_issue_id and not request.user.youtrack_token %}
+    <div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3 mb-3 rounded-3 small">
+        <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
+        <div>
+            Файл публикуется в задаче <strong>{{ obj.effective_youtrack_issue_id }}</strong>.
+            Личный токен YouTrack не указан — публикация недоступна.
+            <a href="#" data-bs-toggle="modal" data-bs-target="#userTokenModal"
+               hx-get="{% url 'users:profile_youtrack_token' %}"
+               hx-target="#user-token-modal-content"
+               class="alert-link">Указать токен</a>
+        </div>
+    </div>
+    {% else %}
     <!-- Загрузка документа -->
     <form hx-post="{% url 'add_attachment' obj.uuid %}"
           hx-encoding="multipart/form-data"
@@ -23,6 +40,7 @@
             </div>
         </div>
     </form>
+    {% endif %}
 
     <!-- Список вложений -->
     <form hx-post="{% url 'delete_attachments_bulk' %}" hx-target="#tab-pane-files">

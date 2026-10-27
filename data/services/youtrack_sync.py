@@ -207,10 +207,17 @@ def mark_comments_obsolete(obj, comments, user):
     Время на всю операцию ограничено `MARK_TIME_BUDGET`: не уложившиеся записи
     остаются в справочнике непомеченными — лучше сказать об этом, чем оборвать
     запрос по таймауту gunicorn на середине списка.
+
+    Без личного токена записи с копией в задаче остаются на месте: пометить их
+    нечем, а правило «локальная запись исчезает только после подтверждённой
+    пометки» действует для всех одинаково. Записи, которые наружу не уезжали,
+    в задаче не отражены и убираются как обычно — для них токен не нужен.
     """
     deletable, errors = [], []
     deadline = time.monotonic() + MARK_TIME_BUDGET
+    has_token = youtrack_services.get_auth_token(user) is not None
     skipped = 0
+    held = 0
 
     for comment in comments:
         issue_id = record_issue(comment, obj)
@@ -218,6 +225,10 @@ def mark_comments_obsolete(obj, comments, user):
         if not (issue_id and comment.youtrack_id):
             # Запись наружу не уезжала — убираем молча.
             deletable.append(comment.uuid)
+            continue
+
+        if not has_token:
+            held += 1
             continue
 
         if time.monotonic() > deadline:
@@ -245,7 +256,8 @@ def mark_comments_obsolete(obj, comments, user):
 
         if not ok:
             logger.warning("Комментарий не помечен устаревшим в YouTrack %s: %s", issue_id, detail)
-            errors.append(f"Комментарий не помечен устаревшим в YouTrack: {detail}")
+            errors.append(f"Комментарий не помечен устаревшим в YouTrack: {detail}. "
+                          "Запись оставлена в справочнике")
             continue
 
         for att in comment.attachments.all():
@@ -256,8 +268,14 @@ def mark_comments_obsolete(obj, comments, user):
 
     if skipped:
         errors.append(
-            f"YouTrack отвечает медленно: {skipped} комментариев не помечено, "
-            "операция остановлена по времени"
+            "YouTrack отвечает медленно, операция остановлена по времени. "
+            f"Не помечено комментариев: {skipped}. Записи оставлены в справочнике"
+        )
+
+    if held:
+        errors.append(
+            "Личный токен YouTrack не указан: отметка об устаревании не выполнена. "
+            f"Записей оставлено в справочнике: {held}"
         )
 
     return deletable, errors
@@ -343,13 +361,25 @@ def mark_attachments_obsolete(obj, attachments, user):
     По той же причине бюджет времени (`MARK_TIME_BUDGET`) обрывает только
     заметки: надгробие ставится локально и в бюджете не нуждается, так что
     выделенные файлы уходят из справочника все, сколько бы их ни было.
+
+    Исключение — человек без токена: файл с копией в задаче остаётся на месте.
+    Надгробие тут не поставить, хотя оно и локальное: оно решает, что файл
+    больше не переносить, то есть распоряжается зеркалом задачи, а заметку о
+    том, что файла нет в ходу, отправить нечем. Файлы, которых в задаче нет,
+    убираются как обычно.
     """
     deletable, errors = [], []
     deadline = time.monotonic() + MARK_TIME_BUDGET
+    has_token = youtrack_services.get_auth_token(user) is not None
     skipped = 0
+    held = 0
 
     for att in attachments:
         issue_id = record_issue(att, obj)
+
+        if issue_id and att.youtrack_id and not has_token:
+            held += 1
+            continue
 
         if issue_id and att.youtrack_id:
             mark_record_obsolete(issue_id, att.youtrack_id, att.filename, user)
@@ -365,14 +395,22 @@ def mark_attachments_obsolete(obj, attachments, user):
                 )
                 if not ok:
                     logger.warning("Заметка о файле не добавлена в YouTrack %s: %s", issue_id, detail)
-                    errors.append(f"Заметка о файле «{att.filename}» не добавлена в задачу {issue_id}: {detail}")
+                    errors.append(f"Заметка о файле «{att.filename}» не добавлена "
+                                  f"в задачу {issue_id}: {detail}. Файл убран из справочника")
 
         deletable.append(att.uuid)
 
     if skipped:
         errors.append(
-            f"YouTrack отвечает медленно: о {skipped} файлах заметка не отправлена, "
-            "отправка остановлена по времени"
+            "YouTrack отвечает медленно, отправка остановлена по времени. "
+            f"Без заметки в задаче осталось файлов: {skipped}. "
+            "Файлы убраны из справочника"
+        )
+
+    if held:
+        errors.append(
+            "Личный токен YouTrack не указан: отметка об устаревании не выполнена. "
+            f"Файлов оставлено в справочнике: {held}"
         )
 
     return deletable, errors
