@@ -155,9 +155,13 @@ class DataObject(models.Model):
     name = models.CharField(max_length=255, verbose_name="Имя объекта", blank=True, null=True)
     inventory_number = models.CharField(max_length=100, verbose_name="Инвентарный номер", blank=True, null=True)
     youtrack_issue_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID задачи в Youtrack")
+    # Ближайший из сроков объекта — сводка по всем его планам ТО, а не
+    # самостоятельное значение. Планов у объекта может быть несколько
+    # (см. MaintenancePlan), и у каждого свой срок; строке дерева, плану ТО,
+    # рассылке и описи нужен один ближайший, и спрашивать его запросом на
+    # каждую строку дорого. Поле пишет только `refresh_object_schedule`.
     next_maintenance_date = models.DateField(blank=True, null=True, verbose_name="Дата следующего обслуживания")
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
-    date_update_rule = models.ForeignKey(DateUpdateRule, on_delete=models.SET_NULL, blank=True, null=True, related_name='data_objects', verbose_name="Правило расчета ТО")
 
     class Meta:
         db_table = 'data_object'
@@ -181,6 +185,23 @@ class DataObject(models.Model):
         if count is None:
             return self.children.exists()
         return bool(count)
+
+    @property
+    def nearest_plan(self):
+        """
+        План с ближайшим сроком — его и показывает ячейка паспорта.
+
+        Живёт свойством, а не контекстом: строку «Правило ТО» рисуют и
+        карточка, и OOB-ответ после правки планов, и у них разный набор
+        переменных шаблона — ровно как у `maintenance_state`. Запрос один и
+        только в карточке, в строках дерева свойство не используется.
+
+        Планы без срока уходят в конец: у них нечему быть ближе.
+        """
+        plans = list(self.plans.select_related('rule').all())
+        if not plans:
+            return None
+        return min(plans, key=lambda plan: (plan.next_date is None, plan.next_date))
 
     @property
     def maintenance_state(self):
@@ -283,6 +304,70 @@ class DataObject(models.Model):
             self.validate_parent(self.parent)
 
 
+class MaintenancePlan(models.Model):
+    """
+    Один срок ТО объекта: по какому правилу и когда.
+
+    Планов у объекта может быть несколько: у насоса отдельно плановый осмотр и
+    отдельно смазка подшипников, интервалы у них разные, и сроки расходятся.
+    Одной даты на объект для этого мало, поэтому срок переехал сюда, а
+    `DataObject.next_maintenance_date` остался сводкой — ближайшим из них.
+
+    План без правила — это срок, назначенный вручную: правило ему не нужно,
+    дату двигает человек. Такой план у объекта один, и держит это условное
+    ограничение (в Postgres два NULL различны, обычный `unique_together` их
+    не поймал бы).
+
+    Правило под `PROTECT`: удалить правило, по которому что-то запланировано,
+    нельзя. Настройки проверяют это раньше и отвечают понятным текстом, а
+    ограничение остаётся последней преградой.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    data_object = models.ForeignKey(
+        DataObject, on_delete=models.CASCADE, related_name='plans', verbose_name="Объект")
+    rule = models.ForeignKey(
+        DateUpdateRule, on_delete=models.PROTECT, blank=True, null=True,
+        related_name='plans', verbose_name="Правило расчёта")
+    next_date = models.DateField(blank=True, null=True, verbose_name="Дата следующего ТО")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Добавлен")
+
+    class Meta:
+        db_table = 'maintenance_plan'
+        verbose_name = 'План обслуживания'
+        verbose_name_plural = 'Планы обслуживания'
+        ordering = ['created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['data_object', 'rule'],
+                name='unique_plan_per_rule',
+                violation_error_message='Это правило уже назначено объекту.',
+            ),
+            models.UniqueConstraint(
+                fields=['data_object'],
+                condition=models.Q(rule__isnull=True),
+                name='unique_manual_plan_per_object',
+                violation_error_message='Срок вручную у объекта может быть только один.',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.data_object}: {self.rule.name if self.rule else 'вручную'}"
+
+    @property
+    def title(self):
+        """
+        Чем называть работу в интерфейсе и в уведомлении.
+
+        У плана без правила названия нет, и подставляется нейтральное
+        «Обслуживание»: в сводке Mattermost строка читается как
+        «**Обслуживание** — Щит управления», а «Ручной срок» на месте
+        названия работы выглядел бы свойством, а не работой. Чем он
+        отличается от планового, говорит соседняя строка с расшифровкой.
+        """
+        return self.rule.name if self.rule else 'Обслуживание'
+
+
 class ActionHistory(models.Model):
     ACTION_TYPE_CHOICES = [
         ('maintenance', 'Работа с оборудованием'),
@@ -320,6 +405,14 @@ class ActionHistory(models.Model):
     planned_for = models.DateField(
         blank=True, null=True, db_index=True,
         verbose_name="Закрытая плановая дата",
+    )
+    # По какому правилу выполнена работа. У объекта планов может быть
+    # несколько — «осмотр» и «смазка подшипников» идут с разными интервалами,
+    # — и без этого поля нельзя сказать, чей срок закрыла запись. Пусто
+    # у внеплановых работ и у записей, сделанных до появления планов.
+    maintenance_rule = models.ForeignKey(
+        DateUpdateRule, on_delete=models.SET_NULL, blank=True, null=True,
+        related_name='history_entries', verbose_name="Правило обслуживания",
     )
 
     class Meta:

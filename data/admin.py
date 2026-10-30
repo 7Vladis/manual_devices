@@ -40,7 +40,7 @@ class DataObjectAdmin(admin.ModelAdmin):
     list_display = ('name', 'inventory_number', 'model', 'parent', 'next_maintenance_date')
     list_filter = ('model__object_type', 'next_maintenance_date')
     search_fields = ('name', 'inventory_number', 'youtrack_issue_id', 'model__name')
-    fields = ('name', 'inventory_number', 'youtrack_issue_id', 'model', 'parent', 'date_update_rule', 'next_maintenance_date', 'description')
+    fields = ('name', 'inventory_number', 'youtrack_issue_id', 'model', 'parent', 'next_maintenance_date', 'description')
     
     inlines = [
         CommentInline, 

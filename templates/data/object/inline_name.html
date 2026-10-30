@@ -29,11 +29,23 @@
         </button>
     </form>
 {% else %}
-    <h1 {% if not request.user.is_junior %}hx-get="{% url 'edit_name' obj.uuid %}" hx-target="#name-display-container" hx-swap="outerHTML"{% endif %}
-        class="mb-0 d-inline-flex align-items-center editable-trigger"
-        style="cursor: pointer;">
-        <span>{{ obj.name|default:obj.model.name }}</span>
-        {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon fs-6"></i>{% endif %}
-    </h1>
+    <div class="d-inline-flex align-items-center">
+        <h1 {% if not request.user.is_junior %}hx-get="{% url 'edit_name' obj.uuid %}" hx-target="#name-display-container" hx-swap="outerHTML"{% endif %}
+            class="mb-0 d-inline-flex align-items-center editable-trigger"
+            style="cursor: pointer;">
+            <span>{{ obj.name|default:obj.model.name }}</span>
+            {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon fs-6"></i>{% endif %}
+        </h1>
+        {% comment %}
+        Кнопка копирования стоит рядом с полем, а не внутри него: поле само
+        кликабельно и открывает правку, вложенная кнопка открывала бы её заодно.
+        Копируется значение, а не текст ячейки — там рядом карандаш и «не указан».
+        {% endcomment %}
+        <button type="button" class="copy-btn" onclick="window.mdCopy(this)"
+                data-md-copy="{{ obj.name|default:obj.model.name }}"
+                title="Скопировать название объекта">
+            <i class="bi bi-clipboard"></i>
+        </button>
+    </div>
 {% endif %}
 </div>

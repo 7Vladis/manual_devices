@@ -37,7 +37,8 @@
           title="Инвентарный номер — кликните, чтобы изменить"
           {% endif %}>
         {% if obj.inventory_number %}
-            <span class="text-truncate">{{ obj.inventory_number }}</span>
+            {# `data-md-value` копирует кнопка из подписи ячейки. #}
+            <span class="text-truncate" data-md-value>{{ obj.inventory_number }}</span>
         {% else %}
             <span class="text-empty">не указан</span>
         {% endif %}

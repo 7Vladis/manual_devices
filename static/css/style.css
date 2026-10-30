@@ -818,11 +818,65 @@ small, .small { font-size: 0.86em; }
 /* ==========================================================================
    8. ДЕРЕВО И ПРОВОДНИК
    ========================================================================== */
+/* Две колонки справочника. Ширину списка держит переменная, а не доли
+   сетки Bootstrap: доли менять нечем, а ширину пользователь тянет мышью.
+   Значение по умолчанию повторяет прежнюю четверть экрана, но не даёт
+   списку ни сплющиться на ноутбуке, ни растянуться на широком мониторе. */
+.dict-layout {
+    display: flex;
+    flex-wrap: nowrap;
+    min-height: 0;
+}
+.dict-pane-list {
+    flex: 0 0 auto;
+    width: var(--dict-sidebar-w, clamp(240px, 24vw, 420px));
+    min-width: 0;
+}
+.dict-pane-detail {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Разделитель. Полоса шире своей линии: попасть в границу в один пиксель
+   мышью трудно, поэтому хватаемся за шесть, а видно по-прежнему линию. */
+.dict-resizer {
+    flex: 0 0 auto;
+    width: 6px;
+    margin-left: -3px;
+    margin-right: -3px;
+    z-index: 3;
+    cursor: col-resize;
+    background: transparent;
+    transition: background-color var(--transition-fast);
+    touch-action: none;
+}
+.dict-resizer:hover,
+.dict-resizer:focus-visible,
+.dict-layout.is-resizing .dict-resizer { background-color: var(--steel); }
+.dict-resizer:focus-visible { outline: none; }
+/* Пока тянут, выделение текста и курсоры панелей только мешают. */
+.dict-layout.is-resizing { user-select: none; }
+.dict-layout.is-resizing .dict-pane { pointer-events: none; }
+
 .dict-sidebar {
     display: flex;
     flex-direction: column;
     height: 100%;
     background-color: var(--paper);
+    /* Шапка списка подстраивается под ширину самого списка, а не экрана:
+       ширину задаёт пользователь, и к экрану она отношения не имеет. */
+    container-type: inline-size;
+    container-name: dict-sidebar;
+}
+
+/* Узкий список: подписи уходят, остаются значки. Кнопки при этом никуда
+   не деваются — пропадает только текст, который всё равно не поместился бы. */
+@container dict-sidebar (max-width: 260px) {
+    .switcher button { padding: 5px 4px; }
+    .switcher-label { display: none; }
+    .add-label { display: none; }
+    .add-caret { display: none; }
+    .dict-sidebar-top .dropdown > .btn { justify-content: center; }
 }
 .dict-sidebar-top {
     padding: 10px 10px 9px;
@@ -1179,6 +1233,54 @@ small, .small { font-size: 0.86em; }
 .editable-trigger:hover .edit-icon { opacity: 0.85; }
 .editable-trigger .edit-icon:hover { opacity: 1; color: var(--steel); }
 
+/* Копирование значения в буфер.
+   Кнопка стоит в подписи ячейки, а не у значения: значение кликабельно и
+   открывает правку, и рядом с ним уже стоит карандаш.
+   Проявляется по наведению на ячейку, как и карандаш, но на узком экране
+   видна всегда — там наведения нет. */
+.copy-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 18px;
+    padding: 0;
+    margin-left: auto;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--ink-faint);
+    font-size: 0.82em;
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity var(--transition-fast), color var(--transition-fast),
+                background-color var(--transition-fast);
+}
+.meta-cell:hover .copy-btn,
+.detail-title-row:hover .copy-btn,
+.copy-btn:focus-visible { opacity: 0.85; }
+.copy-btn:hover { opacity: 1; color: var(--steel); background-color: var(--surface-active); }
+/* Подтверждение — синим, а не зелёным: шкала срочности принадлежит
+   только срокам ТО, и «скопировано» к ней отношения не имеет. */
+.copy-btn.is-copied { opacity: 1; color: var(--steel); }
+
+@media (hover: none) {
+    .copy-btn { opacity: 0.7; }
+}
+
+/* Кнопка в подписи прячется, когда копировать нечего. Проверяем наличие
+   значения в самой ячейке, а не условием шаблона: подпись при правке
+   значения не перерисовывается, и условие осталось бы от прежнего
+   состояния. `:has` пересчитывается сам после любой подстановки HTMX. */
+.copy-btn[data-md-copy-from] { display: none; }
+.meta-cell:has([data-md-value]) .copy-btn[data-md-copy-from] { display: inline-flex; }
+
+/* У заголовка подписи нет, и кнопка стоит прямо за ним: `margin-left: auto`
+   в ряду по ширине содержимого свободного места не находит и прижал бы её
+   вплотную. */
+.detail-title-row .copy-btn { margin-left: 4px; }
+
 /* Вкладки */
 .seg-tabs {
     display: flex;
@@ -1472,7 +1574,12 @@ small, .small { font-size: 0.86em; }
 
 .sheet-body {
     padding: 16px 20px;
-    max-height: min(68vh, 640px);
+    /* Высота считается от экрана, а не фиксированным потолком: прежние
+       640px не давали окну правила ТО вырасти даже на высоком мониторе —
+       список дат в нём прокручивался в щели, пока вокруг пустовало пол-экрана.
+       Вычитаем шапку окна, подвал и поля Bootstrap; нижняя граница в 280px
+       нужна ноутбуку с коротким экраном, где иначе осталась бы полоска. */
+    max-height: max(280px, calc(100vh - 210px));
     overflow-y: auto;
 }
 .sheet-footer {
@@ -2099,7 +2206,10 @@ a:focus-visible {
     .meta-grid { grid-template-columns: 1fr; gap: 0; }
     .meta-label { width: 86px; }
 
-    /* Справочник: видна одна панель — список или карточка */
+    /* Справочник: видна одна панель — список или карточка. Ширина списка
+       здесь не настраивается: панель и так во весь экран. */
+    #dict-layout .dict-pane-list { width: 100% !important; }
+    #dict-layout .dict-resizer { display: none; }
     #dict-layout .dict-pane-detail { display: none !important; }
     #dict-layout.show-detail .dict-pane-list { display: none !important; }
     #dict-layout.show-detail .dict-pane-detail { display: flex !important; }

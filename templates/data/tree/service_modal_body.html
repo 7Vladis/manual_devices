@@ -64,6 +64,32 @@ objectServiced, а OOB-части ответа применятся в любо�
             </div>
         </div>
 
+        {% comment %}
+        Какую работу закрываем. Планов у объекта может быть несколько, и у
+        каждого свой срок: без выбора фиксация двигала бы первый попавшийся.
+        При одном плане выбирать не из чего — он уходит скрытым полем.
+        Предложенный срок лежит у каждого пункта в `data-next-date` и
+        переносится в поле даты при выборе.
+        {% endcomment %}
+        {% if plans|length > 1 %}
+        <div class="field">
+            <label for="service-plan-select">Какую работу выполнили</label>
+            <select name="plan" id="service-plan-select" class="form-select"
+                    onchange="window.mdPickServicePlan(this)">
+                {% for plan in plans %}
+                <option value="{{ plan.uuid }}"
+                        data-next-date="{% if plan.proposed_date %}{{ plan.proposed_date|date:'Y-m-d' }}{% endif %}"
+                        data-rule="{{ plan.title }}">
+                    {{ plan.title }}{% if plan.next_date %} — срок {{ plan.next_date|date:"d.m.Y" }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            <span class="hint">Сроки остальных работ останутся без изменений.</span>
+        </div>
+        {% elif plans %}
+        <input type="hidden" name="plan" value="{{ plans.0.uuid }}">
+        {% endif %}
+
         <!-- Описание работ -->
         <div class="field">
             <label for="service-comment">Что было сделано</label>
@@ -80,8 +106,8 @@ objectServiced, а OOB-части ответа применятся в любо�
             <input type="date" name="maintenance_date" id="maintenance-date-input" class="form-control" required
                    value="{% if proposed_date %}{{ proposed_date|date:'Y-m-d' }}{% elif obj.next_maintenance_date %}{{ obj.next_maintenance_date|date:'Y-m-d' }}{% endif %}">
             {% if proposed_date %}
-            <span class="hint text-success">
-                <i class="bi bi-magic me-1"></i>Рассчитана по правилу «{{ obj.date_update_rule.name }}».
+            <span class="hint text-success" id="service-date-hint">
+                <i class="bi bi-magic me-1"></i>Рассчитана по правилу «{{ plans.0.title }}».
             </span>
             {% else %}
             <span class="hint">

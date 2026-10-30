@@ -22,12 +22,13 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from data.models import DataObject, ObjectModel, ObjectType
+from data.models import DataObject, DateUpdateRule, MaintenancePlan, ObjectModel, ObjectType
+from data.services.maintenance import refresh_object_schedule
 from data.services.youtrack_queue import process_jobs
 
 from .models import MattermostSetting
 from .services import send_mattermost_notification, test_specific_webhook
-from .tasks import format_object_list, run_daily_maintenance_check
+from .tasks import format_plan_list, run_daily_maintenance_check
 
 User = get_user_model()
 
@@ -104,26 +105,44 @@ class DailyCheckTests(TestCase):
         object_type = ObjectType.objects.create(type='Насос')
         cls.model = ObjectModel.objects.create(object_type=object_type, name='НМ-125')
 
-    def _make_object(self, name, days_ahead, inventory_number=None):
-        return DataObject.objects.create(
-            model=self.model,
-            name=name,
-            inventory_number=inventory_number,
-            next_maintenance_date=timezone.localdate() + datetime.timedelta(days=days_ahead),
-        )
+    def _make_object(self, name, days_ahead, inventory_number=None, rule=None):
+        """Объект с назначенной работой: рассылка идёт по планам."""
+        obj = DataObject.objects.create(
+            model=self.model, name=name, inventory_number=inventory_number)
+        plan = MaintenancePlan.objects.create(
+            data_object=obj, rule=rule,
+            next_date=timezone.localdate() + datetime.timedelta(days=days_ahead))
+        refresh_object_schedule(obj)
+        return plan
 
-    def test_format_object_list_includes_model_and_inventory(self):
-        obj = self._make_object('Насос А', 0, inventory_number='ИНВ-1')
+    def test_line_names_the_work_and_the_object(self):
+        rule = DateUpdateRule.objects.create(name='Осмотр насосов', rule={})
+        plan = self._make_object('Насос А', 0, inventory_number='ИНВ-1', rule=rule)
 
-        line = format_object_list([obj])
+        line = format_plan_list([plan])
 
+        self.assertIn('Осмотр насосов', line)
         self.assertIn('Насос А', line)
         self.assertIn('НМ-125', line)
         self.assertIn('ИНВ-1', line)
 
     def test_object_without_inventory_number_is_marked(self):
-        obj = self._make_object('Безномерной', 0)
-        self.assertIn('Инв. №: нет', format_object_list([obj]))
+        plan = self._make_object('Безномерной', 0)
+        self.assertIn('Инв. №: нет', format_plan_list([plan]))
+
+    def test_two_works_of_one_object_are_two_lines(self):
+        """Без названия работы две строки про один насос читались бы повтором."""
+        inspection = DateUpdateRule.objects.create(name='Осмотр насосов', rule={})
+        greasing = DateUpdateRule.objects.create(name='Смазка подшипников', rule={})
+        plan = self._make_object('Насос А', 0, rule=inspection)
+        second = MaintenancePlan.objects.create(
+            data_object=plan.data_object, rule=greasing, next_date=plan.next_date)
+
+        lines = format_plan_list([plan, second]).splitlines()
+
+        self.assertEqual(len(lines), 2)
+        self.assertIn('Осмотр насосов', lines[0])
+        self.assertIn('Смазка подшипников', lines[1])
 
     @patch('notifications.tasks.send_mattermost_notification', return_value=(True, 'Успешно'))
     def test_notifications_are_sent_for_today_week_and_month(self, mock_send):
@@ -135,6 +154,7 @@ class DailyCheckTests(TestCase):
 
         self.assertEqual(mock_send.call_count, 3)
         messages = ' '.join(call.args[0] for call in mock_send.call_args_list)
+        self.assertIn('Работы на', messages)
         self.assertIn('Сегодня', messages)
         self.assertIn('Через неделю', messages)
         self.assertIn('Через месяц', messages)
@@ -166,10 +186,12 @@ class MaintenanceDigestCommandTests(TestCase):
         cls.model = ObjectModel.objects.create(object_type=object_type, name='НМ-125')
 
     def _make_object(self, name, days_ahead):
-        return DataObject.objects.create(
-            model=self.model, name=name,
-            next_maintenance_date=timezone.localdate() + datetime.timedelta(days=days_ahead),
-        )
+        obj = DataObject.objects.create(model=self.model, name=name)
+        MaintenancePlan.objects.create(
+            data_object=obj,
+            next_date=timezone.localdate() + datetime.timedelta(days=days_ahead))
+        refresh_object_schedule(obj)
+        return obj
 
     def test_dry_run_prints_messages_without_sending(self):
         self._make_object('Сегодня', 0)
@@ -193,7 +215,9 @@ class MaintenanceDigestCommandTests(TestCase):
 
     def test_custom_date_shifts_the_window(self):
         target = timezone.localdate() + datetime.timedelta(days=40)
-        DataObject.objects.create(model=self.model, name='Далёкий', next_maintenance_date=target)
+        far = DataObject.objects.create(model=self.model, name='Далёкий')
+        MaintenancePlan.objects.create(data_object=far, next_date=target)
+        refresh_object_schedule(far)
         out = StringIO()
 
         # Для даты «за 30 дней до» объект попадает в сводку

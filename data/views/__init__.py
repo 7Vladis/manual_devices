@@ -48,7 +48,6 @@ from .servicing import (  # noqa: F401
 from .objects import (  # noqa: F401
     delete_object_view,
     create_object_view,
-    unlink_rule_view,
     edit_inventory_view,
     edit_youtrack_view,
     edit_parent_view,
@@ -92,7 +91,9 @@ from .rules import (  # noqa: F401
     rules_dates_builder_view,
     rule_constructor_view,
     toggle_scheduling_mode_view,
-    edit_rule_view,
+    object_plans_view,
+    add_object_plan_view,
+    delete_object_plan_view,
 )
 from .clone import (  # noqa: F401
     clone_object_modal_view,
@@ -101,5 +102,11 @@ from .clone import (  # noqa: F401
 
 # Доменные функции остаются доступными под прежними именами:
 # на них опираются тесты и вызовы из соседних модулей.
-from ..services.maintenance import calculate_next_maintenance_date  # noqa: F401
+from ..services.maintenance import (  # noqa: F401
+    calculate_plan_date,
+    get_single_plan,
+    refresh_object_schedule,
+    set_manual_date,
+    set_object_rule,
+)
 from ..services.cloning import deep_clone_object  # noqa: F401

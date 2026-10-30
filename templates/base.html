@@ -170,6 +170,174 @@
         };
 
         /**
+         * Ширина списка в справочнике: тянут мышью, помнит браузер.
+         *
+         * Ширина живёт в переменной `--dict-sidebar-w` на самом размётчике,
+         * поэтому её достаточно переписать — перерисовывать ничего не нужно,
+         * и подстановки HTMX в панели её не теряют.
+         *
+         * Запоминает только браузер: это удобство одного человека за одним
+         * экраном, в базе ему делать нечего. `localStorage` может бросить
+         * исключение в приватном окне и при запрещённых данных сайта, поэтому
+         * и чтение, и запись обёрнуты — без него всё работает, просто ширина
+         * не переживёт перезагрузку.
+         */
+        const MD_DICT_W_KEY = 'mdDictSidebarWidth';
+        // Ниже 180 список перестаёт быть списком: от названий остаются
+        // три буквы с многоточием. Выше 680 он отнимает место у карточки.
+        const MD_DICT_W_MIN = 180;
+
+        const mdDictMaxWidth = () => Math.max(MD_DICT_W_MIN, Math.min(680, window.innerWidth - 420));
+
+        const mdSetDictWidth = (layout, width, remember) => {
+            const value = Math.round(Math.min(Math.max(width, MD_DICT_W_MIN), mdDictMaxWidth()));
+            layout.style.setProperty('--dict-sidebar-w', value + 'px');
+            if (remember) {
+                try { localStorage.setItem(MD_DICT_W_KEY, String(value)); } catch (e) { /* не запомним */ }
+            }
+            return value;
+        };
+
+        const mdResetDictWidth = (layout) => {
+            layout.style.removeProperty('--dict-sidebar-w');
+            try { localStorage.removeItem(MD_DICT_W_KEY); } catch (e) { /* не забудем */ }
+        };
+
+        window.mdInitDictResizer = function () {
+            const layout = document.getElementById('dict-layout');
+            const handle = document.getElementById('dict-resizer');
+            const pane = layout && layout.querySelector('.dict-pane-list');
+            if (!layout || !handle || !pane || handle.dataset.mdReady) return;
+            handle.dataset.mdReady = '1';
+
+            let saved = null;
+            try { saved = localStorage.getItem(MD_DICT_W_KEY); } catch (e) { /* нечего вспомнить */ }
+            if (saved && Number(saved) > 0) mdSetDictWidth(layout, Number(saved), false);
+
+            let startX = 0;
+            let startWidth = 0;
+
+            handle.addEventListener('pointerdown', (event) => {
+                startX = event.clientX;
+                startWidth = pane.getBoundingClientRect().width;
+                layout.classList.add('is-resizing');
+                handle.setPointerCapture(event.pointerId);
+                event.preventDefault();
+            });
+
+            handle.addEventListener('pointermove', (event) => {
+                if (!layout.classList.contains('is-resizing')) return;
+                mdSetDictWidth(layout, startWidth + (event.clientX - startX), false);
+            });
+
+            const finish = (event) => {
+                if (!layout.classList.contains('is-resizing')) return;
+                layout.classList.remove('is-resizing');
+                if (event && event.pointerId !== undefined && handle.hasPointerCapture(event.pointerId)) {
+                    handle.releasePointerCapture(event.pointerId);
+                }
+                mdSetDictWidth(layout, pane.getBoundingClientRect().width, true);
+            };
+            handle.addEventListener('pointerup', finish);
+            handle.addEventListener('pointercancel', finish);
+
+            // Двойной щелчок возвращает ширину по умолчанию — её же вернёт Home.
+            handle.addEventListener('dblclick', () => mdResetDictWidth(layout));
+
+            handle.addEventListener('keydown', (event) => {
+                const step = event.shiftKey ? 48 : 16;
+                const current = pane.getBoundingClientRect().width;
+                if (event.key === 'ArrowLeft') mdSetDictWidth(layout, current - step, true);
+                else if (event.key === 'ArrowRight') mdSetDictWidth(layout, current + step, true);
+                else if (event.key === 'Home') mdResetDictWidth(layout);
+                else return;
+                event.preventDefault();
+            });
+
+            // Окно сузили — ширина могла стать больше допустимой.
+            window.addEventListener('resize', () => {
+                if (!layout.style.getPropertyValue('--dict-sidebar-w')) return;
+                mdSetDictWidth(layout, pane.getBoundingClientRect().width, false);
+            });
+        };
+
+        document.addEventListener('DOMContentLoaded', window.mdInitDictResizer);
+
+        /**
+         * Выбор работы в окне фиксации ТО.
+         *
+         * У каждого плана свой интервал, поэтому и предложенный срок свой:
+         * он лежит в `data-next-date` выбранного пункта. Без переноса в поле
+         * человек закрывал бы один план датой, посчитанной для другого.
+         */
+        window.mdPickServicePlan = function (select) {
+            const option = select.options[select.selectedIndex];
+            if (!option) return;
+            const field = document.getElementById('maintenance-date-input');
+            const date = option.getAttribute('data-next-date');
+            if (field && date) field.value = date;
+            const hint = document.getElementById('service-date-hint');
+            if (hint) {
+                hint.innerHTML = '<i class="bi bi-magic me-1"></i>Рассчитана по правилу «'
+                    + (option.getAttribute('data-rule') || '') + '».';
+            }
+        };
+
+        /**
+         * Копирование значения в буфер обмена.
+         *
+         * Что копировать, кнопка несёт в `data-md-copy` — либо, если значение
+         * правится на месте, в `data-md-copy-from`: селектор элемента, из
+         * которого значение читается в момент щелчка. Второй способ нужен
+         * кнопке в подписи ячейки: подпись при правке не перерисовывается, и
+         * записанное в атрибут значение осталось бы прежним. Разметку
+         * значения помечает `data-md-value` — рядом с ним в ячейке стоят
+         * карандаш правки и «не указан», и копировать их не надо.
+         *
+         * `navigator.clipboard` существует только в защищённом контексте:
+         * по https и на localhost. Сервис внутренний, его открывают и по
+         * http по адресу машины — там объекта просто нет, поэтому для таких
+         * случаев остаётся запасной путь через скрытое поле и
+         * `document.execCommand`. Он устаревший, но работает везде.
+         */
+        window.mdCopy = function (button) {
+            const from = button.getAttribute('data-md-copy-from');
+            const source = from ? document.querySelector(from) : null;
+            const text = (from ? (source ? source.textContent : '') : button.getAttribute('data-md-copy')) || '';
+            if (!text.trim()) return;
+
+            const done = () => {
+                const icon = button.querySelector('i');
+                if (!icon || button.classList.contains('is-copied')) return;
+                const was = icon.className;
+                button.classList.add('is-copied');
+                icon.className = 'bi bi-clipboard-check';
+                setTimeout(() => {
+                    icon.className = was;
+                    button.classList.remove('is-copied');
+                }, 1200);
+            };
+
+            const fallback = () => {
+                const field = document.createElement('textarea');
+                field.value = text.trim();
+                field.setAttribute('readonly', '');
+                field.style.position = 'fixed';
+                field.style.opacity = '0';
+                document.body.appendChild(field);
+                field.select();
+                try { document.execCommand('copy'); done(); } catch (e) { /* копировать нечем */ }
+                document.body.removeChild(field);
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text.trim()).then(done).catch(fallback);
+            } else {
+                fallback();
+            }
+        };
+
+        /**
          * Подсказки закрываются по щелчку мимо них и по Escape.
          *
          * Раньше список висел до выбора значения и перекрывал поля формы под

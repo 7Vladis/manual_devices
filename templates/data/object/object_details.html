@@ -40,13 +40,36 @@
         <!-- Основная информация объекта -->
         <div class="meta-grid">
 
+            {% comment %}
+            Кнопка копирования стоит в подписи, а не у значения: значение
+            кликабельно и открывает правку, а рядом с ним уже есть карандаш.
+            Значение она читает из разметки в момент щелчка
+            (`data-md-copy-from`), потому что подпись при правке значения не
+            перерисовывается и записанное в атрибут протухло бы. Пустую ячейку
+            кнопка не показывает — за это отвечает `:has([data-md-value])`
+            в стилях, и работает это после любого обновления ячейки.
+            {% endcomment %}
             <div class="meta-cell">
-                <span class="meta-label"><i class="bi bi-tag-fill"></i>Модель</span>
+                <span class="meta-label">
+                    <i class="bi bi-tag-fill"></i>Модель
+                    <button type="button" class="copy-btn" onclick="window.mdCopy(this)"
+                            data-md-copy-from="#model-display-container [data-md-value]"
+                            title="Скопировать название модели">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </span>
                 {% include 'data/object/inline_model.html' with obj=obj editing=False %}
             </div>
 
             <div class="meta-cell">
-                <span class="meta-label"><i class="bi bi-upc-scan"></i>Инвентарный №</span>
+                <span class="meta-label">
+                    <i class="bi bi-upc-scan"></i>Инвентарный №
+                    <button type="button" class="copy-btn" onclick="window.mdCopy(this)"
+                            data-md-copy-from="#inventory-display-container [data-md-value]"
+                            title="Скопировать инвентарный номер">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </span>
                 {% include 'data/object/inline_inventory.html' with obj=obj editing=False %}
             </div>
 

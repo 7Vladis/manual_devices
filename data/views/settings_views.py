@@ -10,10 +10,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..forms import DateUpdateRuleForm, MONTH_NAMES
-from ..models import DataObject, DateUpdateRule, ObjectModel, ObjectType
+from ..models import DataObject, DateUpdateRule, MaintenancePlan, ObjectModel, ObjectType
 from users.decorators import role_required
 
-from ..services.maintenance import calculate_next_maintenance_date
+from ..services.maintenance import calculate_plan_date, refresh_object_schedule
 from .common import form_errors_text, htmx_error
 
 
@@ -37,10 +37,11 @@ def settings_page(request):
         # каждый объект спрашивал свою модель отдельным запросом — на 220
         # объектах страница делала 224 запроса вместо пяти.
         rules_query = DateUpdateRule.objects.prefetch_related(
-            Prefetch('data_objects',
-                     queryset=DataObject.objects.select_related('model').order_by('name'))
+            Prefetch('plans',
+                     queryset=MaintenancePlan.objects.select_related('data_object__model')
+                     .order_by('data_object__name'))
         ).annotate(
-            objects_count=Count('data_objects')
+            objects_count=Count('plans')
         ).order_by('name')
         
 
@@ -185,11 +186,15 @@ def edit_rule_settings_view(request, pk):
 
         # Правило изменилось — прежние даты рассчитаны по старым параметрам,
         # поэтому считаем заново от сегодняшнего дня, а не от старого срока.
-        for obj in rule_obj.data_objects.all():
-            obj.next_maintenance_date = calculate_next_maintenance_date(
-                obj, base_date=timezone.localdate(), use_anchor=False
+        # Пересчитывается каждый план этого правила; у соседних планов объекта
+        # сроки свои и остаются нетронутыми, а сводка объекта обновляется по
+        # всем его планам сразу.
+        for plan in rule_obj.plans.select_related('rule', 'data_object'):
+            plan.next_date = calculate_plan_date(
+                plan, base_date=timezone.localdate(), use_anchor=False
             )
-            obj.save(update_fields=['next_maintenance_date'])
+            plan.save(update_fields=['next_date'])
+            refresh_object_schedule(plan.data_object)
 
         response = HttpResponse()
         response['HX-Redirect'] = '/settings/?tab=rules'
@@ -224,7 +229,7 @@ def edit_rule_settings_view(request, pk):
 def delete_rule_view(request, pk):
     """Удаление правила планирования"""
     rule = get_object_or_404(DateUpdateRule, pk=pk)
-    if rule.data_objects.exists():
+    if rule.plans.exists():
         return htmx_error(
             'Нельзя удалить: правило используется в активных объектах.',
             retarget=f'#rule-error-{rule.uuid}'

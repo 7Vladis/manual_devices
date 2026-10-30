@@ -1,6 +1,6 @@
 """Глубокое копирование объекта с потомками."""
 
-from data.models import ActionHistory, DataObject
+from data.models import ActionHistory, DataObject, MaintenancePlan
 
 
 def deep_clone_object(source_obj, new_root_name, new_parent=None, source_root_name=None, user=None,
@@ -45,9 +45,16 @@ def deep_clone_object(source_obj, new_root_name, new_parent=None, source_root_na
         inventory_number=None,       # Очищаем инвентарник
         youtrack_issue_id=None,      # Очищаем задачу YouTrack
         next_maintenance_date=source_obj.next_maintenance_date,
-        date_update_rule=source_obj.date_update_rule,
         description=source_obj.description
     )
+
+    # Планы ТО переносятся как есть: копия обслуживается по тем же правилам
+    # и в те же сроки, что и оригинал. Сводка `next_maintenance_date`
+    # скопирована выше и планам соответствует.
+    MaintenancePlan.objects.bulk_create([
+        MaintenancePlan(data_object=cloned_obj, rule=plan.rule, next_date=plan.next_date)
+        for plan in source_obj.plans.all()
+    ])
     
     # 3. Фиксируем создание в истории объекта.
     # Факт копирования намеренно не упоминаем: в истории объекта важно, что

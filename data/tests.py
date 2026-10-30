@@ -13,9 +13,12 @@ import datetime
 import io
 from unittest.mock import patch
 
+from dateutil.relativedelta import relativedelta
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -27,6 +30,7 @@ from .models import (
     DataObject,
     DateUpdateRule,
     ObjectModel,
+    MaintenancePlan,
     ObjectType,
     YouTrackJob,
     YouTrackObsoleteRecord,
@@ -34,7 +38,9 @@ from .models import (
 from . import youtrack_services
 from .services.youtrack_queue import process_jobs
 from .templatetags.markdown_extras import markdown_format
-from .views import calculate_next_maintenance_date, get_ancestors_chain, parse_spec_text
+from .views import (calculate_plan_date, get_ancestors_chain, get_single_plan,
+                    parse_spec_text, refresh_object_schedule, set_manual_date,
+                    set_object_rule)
 
 User = get_user_model()
 
@@ -136,16 +142,17 @@ class MaintenanceCalculationTests(BaseDataTestCase):
     """Расчёт даты следующего ТО по правилам."""
 
     def test_no_rule_returns_none(self):
-        self.assertIsNone(calculate_next_maintenance_date(self.root))
+        self.assertIsNone(calculate_plan_date(None))
+        self.assertIsNone(calculate_plan_date(MaintenancePlan(data_object=self.root)))
 
     def test_relative_rule_adds_interval_to_base_date(self):
         rule = DateUpdateRule.objects.create(
             name='Раз в полгода',
             rule={'strategy': 'relative', 'anchor': 'actual', 'value': {'years': 0, 'months': 6, 'days': 0}},
         )
-        self.root.date_update_rule = rule
+        plan = MaintenancePlan(data_object=self.root, rule=rule)
 
-        result = calculate_next_maintenance_date(self.root, base_date=datetime.date(2026, 1, 31))
+        result = calculate_plan_date(plan, base_date=datetime.date(2026, 1, 31))
         self.assertEqual(result, datetime.date(2026, 7, 31))
 
     def test_relative_rule_anchored_to_scheduled_date(self):
@@ -153,10 +160,12 @@ class MaintenanceCalculationTests(BaseDataTestCase):
             name='Год от плана',
             rule={'strategy': 'relative', 'anchor': 'scheduled', 'value': {'years': 1, 'months': 0, 'days': 0}},
         )
-        self.root.date_update_rule = rule
-        self.root.next_maintenance_date = datetime.date(2026, 3, 10)
+        # Привязка «от планового срока» берётся из самого плана: у соседнего
+        # плана срок свой, и путать их значило бы сдвинуть не тот график.
+        plan = MaintenancePlan(data_object=self.root, rule=rule,
+                               next_date=datetime.date(2026, 3, 10))
 
-        result = calculate_next_maintenance_date(self.root, base_date=datetime.date(2026, 9, 1))
+        result = calculate_plan_date(plan, base_date=datetime.date(2026, 9, 1))
         self.assertEqual(result, datetime.date(2027, 3, 10))
 
     def test_fixed_rule_picks_next_date_in_year(self):
@@ -164,9 +173,9 @@ class MaintenanceCalculationTests(BaseDataTestCase):
             name='Сезонное',
             rule={'strategy': 'fixed', 'anchor': 'yearly', 'value': [{'month': 4, 'day': 15}, {'month': 10, 'day': 15}]},
         )
-        self.root.date_update_rule = rule
+        plan = MaintenancePlan(data_object=self.root, rule=rule)
 
-        result = calculate_next_maintenance_date(self.root, base_date=datetime.date(2026, 5, 1))
+        result = calculate_plan_date(plan, base_date=datetime.date(2026, 5, 1))
         self.assertEqual(result, datetime.date(2026, 10, 15))
 
     def test_fixed_rule_rolls_over_to_next_year(self):
@@ -174,9 +183,9 @@ class MaintenanceCalculationTests(BaseDataTestCase):
             name='Одна дата',
             rule={'strategy': 'fixed', 'anchor': 'yearly', 'value': [{'month': 2, 'day': 1}]},
         )
-        self.root.date_update_rule = rule
+        plan = MaintenancePlan(data_object=self.root, rule=rule)
 
-        result = calculate_next_maintenance_date(self.root, base_date=datetime.date(2026, 6, 1))
+        result = calculate_plan_date(plan, base_date=datetime.date(2026, 6, 1))
         self.assertEqual(result, datetime.date(2027, 2, 1))
 
 
@@ -795,14 +804,14 @@ class DeletionTests(BaseDataTestCase):
             user=self.senior, data_object=self.root,
             path=SimpleUploadedFile('p.png', PNG_BYTES, content_type='image/png'),
         )
-        self.root.date_update_rule = rule
-        self.root.save(update_fields=['date_update_rule'])
+        set_object_rule(self.root, rule)
 
         self.login(self.admin)
         urls = [
             reverse('delete_rule', args=[rule.uuid]),
             reverse('delete_object_type', args=[free_type.uuid]),
-            reverse('unlink_rule', args=[self.root.uuid]),
+            reverse('add_object_plan', args=[self.root.uuid]),
+            reverse('delete_object_plan', args=[get_single_plan(self.root).uuid]),
             reverse('set_preview_attachment', args=[att.uuid]),
             reverse('add_comment', args=[self.root.uuid]) + '?text=x',
             reverse('delete_comments_bulk'),
@@ -818,7 +827,7 @@ class DeletionTests(BaseDataTestCase):
         self.assertTrue(DateUpdateRule.objects.filter(pk=rule.pk).exists())
         self.assertTrue(ObjectType.objects.filter(pk=free_type.pk).exists())
         self.root.refresh_from_db()
-        self.assertEqual(self.root.date_update_rule, rule)
+        self.assertEqual(get_single_plan(self.root).rule, rule)
         att.refresh_from_db()
         self.assertFalse(att.is_preview)
         self.assertEqual(self.root.comments.count(), 0)
@@ -834,8 +843,7 @@ class DeletionTests(BaseDataTestCase):
 
     def test_rule_in_use_cannot_be_deleted(self):
         rule = DateUpdateRule.objects.create(name='Используемое', rule={})
-        self.root.date_update_rule = rule
-        self.root.save(update_fields=['date_update_rule'])
+        set_object_rule(self.root, rule)
 
         self.login(self.senior)
         response = self.client.post(reverse('delete_rule', args=[rule.uuid]))
@@ -999,9 +1007,9 @@ class SearchAndSuggestTests(BaseDataTestCase):
 class DashboardAndExportTests(BaseDataTestCase):
     """Дашборд, список ТО и выгрузка XLSX."""
 
-    def test_dashboard_counts_overdue_objects(self):
-        self.root.next_maintenance_date = timezone.localdate() - datetime.timedelta(days=3)
-        self.root.save(update_fields=['next_maintenance_date'])
+    def test_dashboard_counts_overdue_works(self):
+        """Просрочены работы, а не объекты: у одного их может быть несколько."""
+        set_manual_date(self.root, timezone.localdate() - datetime.timedelta(days=3))
 
         self.login(self.junior)
         response = self.client.get(reverse('dashboard'))
@@ -1011,13 +1019,13 @@ class DashboardAndExportTests(BaseDataTestCase):
         self.assertEqual(response.context['total_objects'], 2)
 
     def test_maintenance_list_filters_overdue_period(self):
-        self.root.next_maintenance_date = timezone.localdate() - datetime.timedelta(days=3)
-        self.root.save(update_fields=['next_maintenance_date'])
+        set_manual_date(self.root, timezone.localdate() - datetime.timedelta(days=3))
 
         self.login(self.junior)
         response = self.client.get(reverse('maintenance_list'), {'period': 'overdue'})
 
-        self.assertEqual(list(response.context['objects']), [self.root])
+        rows = list(response.context['page'].object_list)
+        self.assertEqual([row.data_object for row in rows], [self.root])
 
     def test_export_returns_xlsx_attachment(self):
         self.login(self.admin)
@@ -1922,8 +1930,8 @@ class BrokenRuleDataTests(BaseDataTestCase):
 
     def _calc(self, rule_data):
         rule = DateUpdateRule.objects.create(name=f'Правило {id(rule_data)}', rule=rule_data)
-        self.root.date_update_rule = rule
-        return calculate_next_maintenance_date(self.root, base_date=datetime.date(2026, 5, 1))
+        plan = MaintenancePlan(data_object=self.root, rule=rule)
+        return calculate_plan_date(plan, base_date=datetime.date(2026, 5, 1))
 
     def test_non_numeric_relative_value_returns_none(self):
         self.assertIsNone(self._calc({'strategy': 'relative', 'value': {'months': 'шесть'}}))
@@ -1956,8 +1964,9 @@ class MaintenancePlanStatsTests(BaseDataTestCase):
         self.wednesday = self.monday + datetime.timedelta(days=2)
 
     def _plan(self, obj, day):
-        obj.next_maintenance_date = day
-        obj.save(update_fields=['next_maintenance_date'])
+        # Срок назначается планом: `next_maintenance_date` — сводка по планам,
+        # и записи в неё одной объект запланированным не делает.
+        set_manual_date(obj, day)
 
     def _service(self, obj, next_date=None, unplanned=False):
         payload = {}
@@ -2092,19 +2101,19 @@ class MaintenanceListPeriodTests(BaseDataTestCase):
 
         # Именно сегодня: начало недели уже может быть в прошлом,
         # и тогда объект попал бы заодно в просроченные.
-        self.this_week = DataObject.objects.create(
-            model=self.model, name='На этой неделе', next_maintenance_date=today
-        )
-        self.overdue = DataObject.objects.create(
-            model=self.model, name='Просрочен', next_maintenance_date=self.monday - datetime.timedelta(days=30)
-        )
-        self.far_future = DataObject.objects.create(
-            model=self.model, name='Далеко', next_maintenance_date=self.sunday + datetime.timedelta(days=60)
-        )
+        # Срок назначается планом: запись в next_maintenance_date сама по
+        # себе работой не является (см. MaintenancePlanModelTests).
+        self.this_week = DataObject.objects.create(model=self.model, name='На этой неделе')
+        set_manual_date(self.this_week, today)
+        self.overdue = DataObject.objects.create(model=self.model, name='Просрочен')
+        set_manual_date(self.overdue, self.monday - datetime.timedelta(days=30))
+        self.far_future = DataObject.objects.create(model=self.model, name='Далеко')
+        set_manual_date(self.far_future, self.sunday + datetime.timedelta(days=60))
 
     def _list(self, period):
+        """Объекты строк списка: строка — работа, объект у неё внутри."""
         response = self.client.get(reverse('maintenance_list'), {'period': period})
-        return list(response.context['objects'])
+        return [row.data_object for row in response.context['page'].object_list]
 
     def test_week_list_excludes_overdue(self):
         """Раньше список брал всё до конца недели и тянул просроченные."""
@@ -2129,14 +2138,20 @@ class MaintenanceListPeriodTests(BaseDataTestCase):
 
         self.assertEqual(objects, [self.overdue])
 
-    def test_all_period_returns_everything(self):
-        self.assertEqual(len(self._list('all')), DataObject.objects.count())
+    def test_all_period_shows_objects_without_plans_too(self):
+        """«Кому ТО не назначено» — вопрос, с которым сюда и приходят."""
+        objects = self._list('all')
+
+        self.assertIn(self.root, objects)
+        self.assertIn(self.this_week, objects)
+        self.assertEqual(len(objects), DataObject.objects.count())
 
     def test_unknown_period_falls_back_to_week(self):
         response = self.client.get(reverse('maintenance_list'), {'period': 'квартал'})
 
         self.assertEqual(response.context['period_label'], "План на неделю")
-        self.assertNotIn(self.overdue, list(response.context['objects']))
+        rows = [row.data_object for row in response.context['page'].object_list]
+        self.assertNotIn(self.overdue, rows)
 
 
 class DictMobileLayoutTests(BaseDataTestCase):
@@ -2586,3 +2601,405 @@ class ExportSheetTests(BaseDataTestCase):
         values = [row[2] for row in self.inventory_rows(self.workbook()['Опись'])]
 
         self.assertIn("'=SUM(A1:A9)", values)
+
+
+class MaintenancePlanModelTests(BaseDataTestCase):
+    """
+    Срок ТО живёт планом, а `next_maintenance_date` — сводка по планам.
+
+    Планов у объекта может быть несколько: осмотр и смазка подшипников идут
+    с разными интервалами. Интерфейс пока правит один, но модель и расчёт
+    обязаны выдерживать несколько, иначе следующий шаг упрётся в данные.
+    """
+
+    def setUp(self):
+        self.inspection = DateUpdateRule.objects.create(
+            name='Осмотр насосов',
+            rule={'strategy': 'relative', 'anchor': 'actual',
+                  'value': {'years': 0, 'months': 3, 'days': 0}},
+        )
+        self.greasing = DateUpdateRule.objects.create(
+            name='Смазка подшипников',
+            rule={'strategy': 'relative', 'anchor': 'actual',
+                  'value': {'years': 0, 'months': 0, 'days': 30}},
+        )
+
+    def test_object_keeps_several_plans(self):
+        MaintenancePlan.objects.create(data_object=self.root, rule=self.inspection,
+                                       next_date=datetime.date(2030, 6, 1))
+        MaintenancePlan.objects.create(data_object=self.root, rule=self.greasing,
+                                       next_date=datetime.date(2030, 3, 1))
+
+        self.assertEqual(self.root.plans.count(), 2)
+
+    def test_summary_holds_the_nearest_date(self):
+        """Сводка — ближайший срок, а не последний назначенный."""
+        MaintenancePlan.objects.create(data_object=self.root, rule=self.inspection,
+                                       next_date=datetime.date(2030, 6, 1))
+        MaintenancePlan.objects.create(data_object=self.root, rule=self.greasing,
+                                       next_date=datetime.date(2030, 3, 1))
+
+        refresh_object_schedule(self.root)
+
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.next_maintenance_date, datetime.date(2030, 3, 1))
+
+    def test_summary_clears_when_plans_are_gone(self):
+        set_manual_date(self.root, datetime.date(2030, 1, 1))
+        self.root.plans.all().delete()
+
+        refresh_object_schedule(self.root)
+
+        self.root.refresh_from_db()
+        self.assertIsNone(self.root.next_maintenance_date)
+
+    def test_same_rule_cannot_be_assigned_twice(self):
+        MaintenancePlan.objects.create(data_object=self.root, rule=self.inspection)
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                MaintenancePlan.objects.create(data_object=self.root, rule=self.inspection)
+
+    def test_only_one_manual_plan_per_object(self):
+        """В Postgres два NULL различны, обычный unique_together их не ловит."""
+        MaintenancePlan.objects.create(data_object=self.root, next_date=datetime.date(2030, 1, 1))
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                MaintenancePlan.objects.create(data_object=self.root,
+                                               next_date=datetime.date(2030, 2, 1))
+
+    def test_rule_with_plans_is_protected(self):
+        from django.db.models import ProtectedError
+
+        MaintenancePlan.objects.create(data_object=self.root, rule=self.inspection)
+
+        with self.assertRaises(ProtectedError):
+            self.inspection.delete()
+
+    def test_anchor_uses_the_plan_own_date(self):
+        """У соседнего плана срок свой — перепутать их значит сдвинуть
+        не тот график."""
+        anchored = DateUpdateRule.objects.create(
+            name='Год от плана',
+            rule={'strategy': 'relative', 'anchor': 'scheduled',
+                  'value': {'years': 1, 'months': 0, 'days': 0}},
+        )
+        near = MaintenancePlan.objects.create(data_object=self.root, rule=self.greasing,
+                                              next_date=datetime.date(2030, 1, 1))
+        far = MaintenancePlan.objects.create(data_object=self.root, rule=anchored,
+                                             next_date=datetime.date(2030, 7, 15))
+
+        self.assertEqual(calculate_plan_date(far), datetime.date(2031, 7, 15))
+        self.assertEqual(near.next_date, datetime.date(2030, 1, 1))
+
+    def test_setting_a_rule_counts_from_today(self):
+        set_object_rule(self.root, self.greasing)
+
+        self.root.refresh_from_db()
+        expected = timezone.localdate() + datetime.timedelta(days=30)
+        self.assertEqual(get_single_plan(self.root).next_date, expected)
+        self.assertEqual(self.root.next_maintenance_date, expected)
+
+    def test_manual_plan_without_date_is_dropped(self):
+        MaintenancePlan.objects.create(data_object=self.root)
+
+        refresh_object_schedule(self.root)
+
+        self.assertEqual(self.root.plans.count(), 0)
+
+    def test_service_records_the_rule_it_closed(self):
+        set_object_rule(self.root, self.inspection)
+        self.login(self.senior)
+
+        self.client.post(reverse('service_object', args=[self.root.uuid]), {
+            'maintenance_date': (timezone.localdate() + datetime.timedelta(days=90)).isoformat(),
+        })
+
+        entry = ActionHistory.objects.filter(data_object=self.root,
+                                             maintenance_kind='planned').first()
+        self.assertEqual(entry.maintenance_rule, self.inspection)
+
+    def test_clone_copies_plans(self):
+        set_object_rule(self.root, self.inspection)
+
+        self.login(self.senior)
+        self.client.post(reverse('clone_object'), {
+            'source_object': str(self.root.uuid),
+            'new_name': 'Копия станции',
+            'clone_children': 'on',
+        })
+
+        copy = DataObject.objects.get(name='Копия станции')
+        self.assertEqual(copy.plans.count(), 1)
+        self.assertEqual(copy.plans.first().rule, self.inspection)
+
+    def test_editing_a_rule_recalculates_its_plans_only(self):
+        set_object_rule(self.root, self.inspection)
+        other = MaintenancePlan.objects.create(data_object=self.root, rule=self.greasing,
+                                               next_date=datetime.date(2030, 9, 9))
+
+        self.login(self.admin)
+        self.client.post(reverse('edit_rule_settings', args=[self.inspection.uuid]), {
+            'name': 'Осмотр насосов',
+            'new_rule_strategy': 'relative',
+            'new_rule_anchor': 'actual',
+            'new_rule_years': 1,
+            'new_rule_months': 0,
+            'new_rule_days': 0,
+        })
+
+        other.refresh_from_db()
+        changed = self.root.plans.get(rule=self.inspection)
+        self.assertEqual(changed.next_date,
+                         timezone.localdate() + relativedelta(years=1))
+        self.assertEqual(other.next_date, datetime.date(2030, 9, 9))
+
+
+class ObjectPlansUiTests(BaseDataTestCase):
+    """Окно планирования: несколько работ у одного объекта."""
+
+    def setUp(self):
+        self.inspection = DateUpdateRule.objects.create(
+            name='Осмотр насосов',
+            rule={'strategy': 'relative', 'anchor': 'actual',
+                  'value': {'years': 0, 'months': 3, 'days': 0}},
+        )
+        self.greasing = DateUpdateRule.objects.create(
+            name='Смазка подшипников',
+            rule={'strategy': 'relative', 'anchor': 'actual',
+                  'value': {'years': 0, 'months': 0, 'days': 30}},
+        )
+        self.login(self.senior)
+
+    def add(self, rule=None, next_date=None):
+        payload = {'plan_kind': 'manual' if rule is None else 'rule'}
+        if rule is not None:
+            payload['date_update_rule'] = str(rule.uuid)
+        if next_date is not None:
+            payload['next_date'] = next_date.isoformat()
+        return self.client.post(reverse('add_object_plan', args=[self.root.uuid]), payload)
+
+    def test_window_lists_every_plan(self):
+        self.add(self.inspection)
+        self.add(self.greasing)
+
+        body = self.client.get(reverse('object_plans', args=[self.root.uuid])).content.decode()
+
+        self.assertIn('Осмотр насосов', body)
+        self.assertIn('Смазка подшипников', body)
+
+    def test_two_rules_live_side_by_side(self):
+        """Интервалы разные, сроки расходятся — в этом весь смысл."""
+        self.add(self.inspection)
+        self.add(self.greasing)
+
+        dates = {p.rule.name: p.next_date for p in self.root.plans.select_related('rule')}
+        self.assertEqual(dates['Осмотр насосов'],
+                         timezone.localdate() + relativedelta(months=3))
+        self.assertEqual(dates['Смазка подшипников'],
+                         timezone.localdate() + datetime.timedelta(days=30))
+
+    def test_summary_follows_the_nearest_plan(self):
+        self.add(self.inspection)
+        self.add(self.greasing)
+
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.next_maintenance_date,
+                         timezone.localdate() + datetime.timedelta(days=30))
+
+    def test_same_rule_twice_is_refused(self):
+        self.add(self.inspection)
+
+        response = self.add(self.inspection)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.root.plans.count(), 1)
+
+    def test_second_manual_plan_is_refused(self):
+        self.add(next_date=datetime.date(2030, 1, 1))
+
+        response = self.add(next_date=datetime.date(2030, 2, 1))
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.root.plans.count(), 1)
+
+    def test_manual_plan_needs_a_date(self):
+        response = self.client.post(reverse('add_object_plan', args=[self.root.uuid]),
+                                    {'plan_kind': 'manual'})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.root.plans.count(), 0)
+
+    def test_removing_a_plan_keeps_the_others(self):
+        self.add(self.inspection)
+        self.add(self.greasing)
+        doomed = self.root.plans.get(rule=self.greasing)
+
+        self.client.post(reverse('delete_object_plan', args=[doomed.uuid]))
+
+        self.root.refresh_from_db()
+        self.assertEqual([p.rule.name for p in self.root.plans.select_related('rule')],
+                         ['Осмотр насосов'])
+        self.assertEqual(self.root.next_maintenance_date,
+                         timezone.localdate() + relativedelta(months=3))
+
+    def test_card_cell_shows_nearest_and_count(self):
+        self.add(self.inspection)
+        self.add(self.greasing)
+
+        body = self.client.get(reverse('object_detail', args=[self.root.uuid])).content.decode()
+
+        self.assertIn('Смазка подшипников', body)
+        self.assertIn('и ещё 1', body)
+
+    def test_service_window_offers_a_choice(self):
+        self.add(self.inspection)
+        self.add(self.greasing)
+
+        body = self.client.get(reverse('service_object', args=[self.root.uuid])).content.decode()
+
+        self.assertIn('Какую работу выполнили', body)
+        self.assertIn('data-next-date', body)
+
+    def test_service_moves_only_the_chosen_plan(self):
+        self.add(self.inspection)
+        self.add(self.greasing)
+        chosen = self.root.plans.get(rule=self.greasing)
+        untouched = self.root.plans.get(rule=self.inspection)
+        untouched_date = untouched.next_date
+
+        self.client.post(reverse('service_object', args=[self.root.uuid]), {
+            'plan': str(chosen.uuid),
+            'maintenance_date': datetime.date(2031, 5, 5).isoformat(),
+        })
+
+        chosen.refresh_from_db()
+        untouched.refresh_from_db()
+        self.assertEqual(chosen.next_date, datetime.date(2031, 5, 5))
+        self.assertEqual(untouched.next_date, untouched_date)
+
+    def test_service_records_which_rule_was_closed(self):
+        self.add(self.inspection)
+        self.add(self.greasing)
+        chosen = self.root.plans.get(rule=self.greasing)
+        closed_date = chosen.next_date
+
+        self.client.post(reverse('service_object', args=[self.root.uuid]), {
+            'plan': str(chosen.uuid),
+            'maintenance_date': datetime.date(2031, 5, 5).isoformat(),
+        })
+
+        entry = ActionHistory.objects.filter(data_object=self.root,
+                                             maintenance_kind='planned').first()
+        self.assertEqual(entry.maintenance_rule, self.greasing)
+        self.assertEqual(entry.planned_for, closed_date)
+
+    def test_plan_of_another_object_is_ignored(self):
+        """Номер плана приходит формой — чужой к объекту не привязать."""
+        self.add(self.inspection)
+        alien = MaintenancePlan.objects.create(data_object=self.child, rule=self.greasing,
+                                               next_date=datetime.date(2030, 1, 1))
+
+        self.client.post(reverse('service_object', args=[self.root.uuid]), {
+            'plan': str(alien.uuid),
+            'maintenance_date': datetime.date(2031, 5, 5).isoformat(),
+        })
+
+        alien.refresh_from_db()
+        self.assertEqual(alien.next_date, datetime.date(2030, 1, 1))
+        self.assertEqual(self.root.plans.get(rule=self.inspection).next_date,
+                         datetime.date(2031, 5, 5))
+
+
+class PlanIsEventBasedTests(BaseDataTestCase):
+    """
+    План ТО считает работы, а не объекты.
+
+    У насоса осмотр может быть просрочен, а смазка стоять на будущей неделе —
+    одной строкой на объект такое не показать.
+    """
+
+    def setUp(self):
+        self.today = timezone.localdate()
+        self.inspection = DateUpdateRule.objects.create(
+            name='Осмотр', rule={'strategy': 'relative', 'anchor': 'actual',
+                                 'value': {'years': 0, 'months': 3, 'days': 0}})
+        self.greasing = DateUpdateRule.objects.create(
+            name='Смазка', rule={'strategy': 'relative', 'anchor': 'actual',
+                                 'value': {'years': 0, 'months': 0, 'days': 30}})
+        self.overdue_plan = MaintenancePlan.objects.create(
+            data_object=self.root, rule=self.inspection,
+            next_date=self.today - datetime.timedelta(days=5))
+        self.today_plan = MaintenancePlan.objects.create(
+            data_object=self.root, rule=self.greasing, next_date=self.today)
+        refresh_object_schedule(self.root)
+        self.login(self.junior)
+
+    def rows(self, period):
+        response = self.client.get(reverse('maintenance_list'), {'period': period})
+        return list(response.context['page'].object_list)
+
+    def test_one_object_gives_two_rows(self):
+        titles = {row.title for row in self.rows('all') if row.data_object == self.root}
+
+        self.assertEqual(titles, {'Осмотр', 'Смазка'})
+
+    def test_overdue_counts_works_not_objects(self):
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.context['overdue_count'], 1)
+        self.assertEqual(response.context['total_objects'], 2)
+
+    def test_groups_split_the_same_object(self):
+        """Просроченная работа и сегодняшняя — в разных группах."""
+        response = self.client.get(reverse('maintenance_list'), {'period': 'all'})
+        groups = {g['key']: [p.title for p in g['plans']] for g in response.context['groups']}
+
+        self.assertIn('Осмотр', groups['overdue'])
+        self.assertIn('Смазка', groups['today'])
+
+    def test_two_works_on_one_day_are_two_events(self):
+        """Пара «объект + дата» склеила бы их в одно событие."""
+        self.overdue_plan.next_date = self.today
+        self.overdue_plan.save(update_fields=['next_date'])
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.context['week_all'], 2)
+
+    def test_objects_without_plans_are_visible_in_all(self):
+        rows = self.rows('all')
+
+        unplanned = [row for row in rows if getattr(row, 'no_plan', False)]
+        self.assertEqual([row.data_object for row in unplanned], [self.child])
+
+    def test_row_names_the_work_and_the_object(self):
+        body = self.client.get(reverse('maintenance_list'), {'period': 'all'}).content.decode()
+
+        self.assertIn('Осмотр', body)
+        self.assertIn('Насосная станция №1', body)
+        self.assertIn('ТО не назначено', body)
+
+    def test_export_lists_every_work(self):
+        import openpyxl
+
+        self.login(self.admin)
+        response = self.client.get(reverse('export_xlsx'))
+        wb = openpyxl.load_workbook(io.BytesIO(response.content))
+
+        works = [[c.value for c in row] for row in wb['Работы'].iter_rows(min_row=2)]
+        self.assertEqual([(w[3], w[4]) for w in works], [
+            ('Осмотр', (self.today - datetime.timedelta(days=5)).strftime('%d.%m.%Y')),
+            ('Смазка', self.today.strftime('%d.%m.%Y')),
+        ])
+
+    def test_inventory_sheet_admits_there_are_more_works(self):
+        import openpyxl
+
+        self.login(self.admin)
+        response = self.client.get(reverse('export_xlsx'))
+        wb = openpyxl.load_workbook(io.BytesIO(response.content))
+
+        cell = wb['Опись'].cell(row=6, column=6).value
+        self.assertIn('и ещё 1', cell)

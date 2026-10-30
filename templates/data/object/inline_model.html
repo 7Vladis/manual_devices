@@ -34,7 +34,12 @@
           style="cursor: pointer;"
           title="Модель оборудования — кликните, чтобы изменить"
           {% endif %}>
-        <span class="text-truncate">{{ obj.model.name }}</span>
+        {% comment %}
+        `data-md-value` — то, что копирует кнопка из подписи ячейки. Метка
+        нужна потому, что рядом лежат карандаш правки и «не указан», а брать
+        текст ячейки целиком нельзя.
+        {% endcomment %}
+        <span class="text-truncate" data-md-value>{{ obj.model.name }}</span>
         {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon"></i>{% endif %}
     </span>
 {% endif %}

@@ -73,10 +73,10 @@
             <div class="entry-detail border-top pt-3">
                 <span class="entry-detail-title">Объекты с этим правилом</span>
                 <div class="d-flex flex-wrap gap-2">
-                    {% for obj in item.data_objects.all %}
-                    <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="chip-link">
+                    {% for plan in item.plans.all %}
+                    <a href="{% url 'dict' %}?object={{ plan.data_object.uuid }}" class="chip-link">
                         <i class="bi bi-box-seam text-secondary"></i>
-                        <span class="text-truncate">{{ obj.name|default:obj.model.name }}</span>
+                        <span class="text-truncate">{{ plan.data_object.name|default:plan.data_object.model.name }}</span>
                         <i class="bi bi-arrow-right-short chip-sub"></i>
                     </a>
                     {% empty %}

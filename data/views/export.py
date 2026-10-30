@@ -9,7 +9,9 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.utils import timezone
 
-from ..models import DataObject
+from django.db.models import Prefetch
+
+from ..models import DataObject, MaintenancePlan
 from users.decorators import role_required
 
 
@@ -83,11 +85,15 @@ def export_xlsx_view(request):
     убран. Он рвал дерево — объект без номера исчезал вместе со своим
     составом, хотя именно он и говорит, где этот состав искать.
     """
-    objects = DataObject.objects.select_related('model', 'model__object_type', 'parent')
+    objects = (DataObject.objects
+               .select_related('model', 'model__object_type', 'parent')
+               .prefetch_related(Prefetch('plans',
+                                          queryset=MaintenancePlan.objects.select_related('rule'))))
     rows = walk_tree(list(objects))
 
     wb = openpyxl.Workbook()
     _fill_inventory_sheet(wb, rows)
+    _fill_plans_sheet(wb, rows)
     _fill_models_sheet(wb, rows)
     _fill_descriptions_sheet(wb, rows)
 
@@ -150,7 +156,7 @@ def _fill_inventory_sheet(wb, rows):
             obj.name or obj.model.name,
             obj.model.name,
             (parent.name or parent.model.name) if parent else "",
-            obj.next_maintenance_date.strftime('%d.%m.%Y') if obj.next_maintenance_date else "",
+            _nearest_date_cell(obj),
             "",  # отметка о наличии — ставится ручкой
             "",  # примечание — пишется ручкой
         ]
@@ -191,6 +197,57 @@ def _fill_inventory_sheet(wb, rows):
     ws.print_options.horizontalCentered = True
     ws.oddFooter.left.text = "Опись оборудования"
     ws.oddFooter.right.text = "Стр. &P из &N"
+
+
+def _nearest_date_cell(obj):
+    """
+    Ближайший срок объекта для описи — и сколько работ у него ещё.
+
+    Весь график в опись не ставим: её печатают, чтобы найти вещь на месте,
+    а не чтобы читать расписание. Но умолчать, что работ несколько, нельзя —
+    иначе дата выглядит единственной. Полный список на листе «Работы».
+    """
+    if not obj.next_maintenance_date:
+        return ""
+    shown = obj.next_maintenance_date.strftime('%d.%m.%Y')
+    count = len(obj.plans.all())
+    return f"{shown} и ещё {count - 1}" if count > 1 else shown
+
+
+def _fill_plans_sheet(wb, rows):
+    """
+    Лист «Работы» — по строке на план, а не на объект.
+
+    У насоса осмотр и смазка идут с разными интервалами: в описи у объекта
+    одна строка и один ближайший срок, а полный график живёт здесь.
+    """
+    ws = wb.create_sheet("Работы")
+    ws.append(["№", "Инвентарный номер", "Объект", "Работа", "Следующее ТО"])
+
+    for column in range(1, 6):
+        cell = ws.cell(row=1, column=column)
+        cell.font = Font(bold=True, color=INK)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = Border(bottom=Side(style='thin', color=RULE))
+
+    for obj, number, _level in rows:
+        for plan in sorted(obj.plans.all(),
+                           key=lambda item: (item.next_date is None, item.next_date)):
+            values = [
+                number,
+                obj.inventory_number or "",
+                obj.name or obj.model.name,
+                plan.title,
+                plan.next_date.strftime('%d.%m.%Y') if plan.next_date else "",
+            ]
+            ws.append([escape_formula(value) for value in values])
+            for cell in ws[ws.max_row]:
+                cell.data_type = 's'
+                cell.alignment = Alignment(vertical="center")
+
+    for index, width in enumerate([8, 20, 36, 32, 16], start=1):
+        ws.column_dimensions[get_column_letter(index)].width = width
+    ws.freeze_panes = "A2"
 
 
 def _fill_models_sheet(wb, rows):

@@ -7,17 +7,26 @@
       class="meta-value {% if not request.user.is_junior %}editable-trigger{% endif %}"
       {% if not request.user.is_junior %}
       data-bs-toggle="modal"
-      data-bs-target="#editRuleModal"
-      hx-get="{% url 'edit_rule' obj.uuid %}"
-      hx-target="#edit-rule-modal-content"
-      title="Кликните, чтобы изменить правило расчета ТО"
+      data-bs-target="#plansModal"
+      hx-get="{% url 'object_plans' obj.uuid %}"
+      hx-target="#plans-modal-content"
+      title="Кликните, чтобы настроить планы обслуживания"
       style="cursor: pointer;"
       {% endif %}
       {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
-    {% if obj.date_update_rule %}
-        <span class="text-truncate" title="{{ obj.date_update_rule.name }}">{{ obj.date_update_rule.name }}</span>
+    {% comment %}
+    Ячейка показывает сводку: ближайший план и сколько их ещё. Весь список
+    живёт в окне — в ячейку паспорта он не поместится, а знать «что ближе
+    всего и один ли это план» достаточно, чтобы решить, открывать ли окно.
+    {% endcomment %}
+    {% with nearest=obj.nearest_plan rest=obj.plans.count %}
+    {% if nearest %}
+        <span class="text-truncate" title="{{ nearest.title }}">{{ nearest.title }}</span>
+        {# Счётчик не сжимается и не переносится: ужиматься должно название. #}
+        {% if rest > 1 %}<span class="text-empty ms-1 flex-shrink-0 text-nowrap">и ещё {{ rest|add:"-1" }}</span>{% endif %}
     {% else %}
-        <span class="text-empty">ручной ввод</span>
+        <span class="text-empty">не назначено</span>
     {% endif %}
+    {% endwith %}
     {% if not request.user.is_junior %}<i class="bi bi-pencil-square edit-icon"></i>{% endif %}
 </span>

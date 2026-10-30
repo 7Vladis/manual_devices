@@ -3,19 +3,26 @@
     <div class="dict-sidebar-top">
 
         <div class="d-flex align-items-center gap-2">
-            <!-- Объекты ↔ Модели -->
+            {% comment %}
+            Объекты ↔ Модели. Подписи вынесены в отдельные элементы: ширину
+            списка задаёт пользователь, и на узком она прячется правилом
+            контейнера. Поэтому же у кнопок есть `title` — иначе от них
+            остались бы одни значки без объяснения.
+            {% endcomment %}
             <div class="switcher flex-grow-1">
                 <button type="button"
                         class="{% if active_tab == 'objects' %}is-active{% endif %}"
                         hx-get="{% url 'dict' %}?tab=objects&sidebar=1"
-                        hx-target="#sidebar-container">
-                    <i class="bi bi-box-seam"></i>Объекты
+                        hx-target="#sidebar-container"
+                        title="Объекты — экземпляры оборудования">
+                    <i class="bi bi-box-seam"></i><span class="switcher-label">Объекты</span>
                 </button>
                 <button type="button"
                         class="{% if active_tab == 'models' %}is-active{% endif %}"
                         hx-get="{% url 'dict' %}?tab=models&sidebar=1"
-                        hx-target="#sidebar-container">
-                    <i class="bi bi-layers"></i>Модели
+                        hx-target="#sidebar-container"
+                        title="Модели — общие характеристики экземпляров">
+                    <i class="bi bi-layers"></i><span class="switcher-label">Модели</span>
                 </button>
             </div>
 
@@ -30,11 +37,12 @@
             <button class="btn btn-primary w-100 d-flex align-items-center justify-content-between"
                     type="button"
                     data-bs-toggle="dropdown"
-                    aria-expanded="false">
+                    aria-expanded="false"
+                    title="Добавить объект, модель или копию объекта">
                 <span class="d-flex align-items-center gap-2">
-                    <i class="bi bi-plus-lg"></i>Добавить
+                    <i class="bi bi-plus-lg"></i><span class="add-label">Добавить</span>
                 </span>
-                <i class="bi bi-chevron-down" style="font-size: 10px; opacity: 0.7;"></i>
+                <i class="bi bi-chevron-down add-caret" style="font-size: 10px; opacity: 0.7;"></i>
             </button>
 
             <ul class="dropdown-menu w-100" style="min-width: 260px;">

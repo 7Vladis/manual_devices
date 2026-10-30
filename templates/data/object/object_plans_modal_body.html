@@ -1,0 +1,107 @@
+{% comment %}
+Окно планирования ТО: список планов объекта.
+
+Планов у объекта может быть несколько — осмотр и смазка подшипников идут
+с разными интервалами, — поэтому окно показывает их списком, а не одним
+полем. Окно не закрывается после добавления: планы назначают несколько
+подряд, и закрывать его каждый раз значило бы открывать заново.
+{% endcomment %}
+<div class="sheet-header animate-fade">
+    <span class="sheet-icon bg-light-primary text-primary"><i class="bi bi-calendar-check"></i></span>
+    <div class="sheet-heading">
+        <h5>Планирование ТО</h5>
+        <p class="text-truncate" title="{{ obj.name|default:obj.model.name }}">{{ obj.name|default:obj.model.name }}</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+</div>
+
+<div class="sheet-body">
+
+    <div class="form-feedback"></div>
+
+    <div class="field">
+        <label>Назначенные работы</label>
+
+        {% for plan in plans %}
+        <div class="option-card is-selected mb-2" style="cursor: default;">
+            <span class="option-icon bg-light-primary text-primary">
+                <i class="bi {% if plan.rule %}bi-arrow-repeat{% else %}bi-hand-index{% endif %}"></i>
+            </span>
+            <span class="option-text flex-grow-1">
+                <b>{{ plan.title }}</b>
+                <small>
+                    {% if plan.next_date %}Следующее ТО {{ plan.next_date|date:"d.m.Y" }}. {% endif %}{{ plan.details }}
+                </small>
+            </span>
+            <span class="d-flex align-items-center gap-1 flex-shrink-0">
+                {% if plan.rule %}
+                <a href="{% url 'settings_page' %}?tab=rules" target="_blank" rel="noopener"
+                   class="btn btn-light border btn-icon"
+                   title="Редактировать правило в настройках (в новой вкладке)">
+                    <i class="bi bi-pencil"></i>
+                </a>
+                {% endif %}
+                <button type="button"
+                        class="btn btn-light border btn-icon text-danger"
+                        hx-post="{% url 'delete_object_plan' plan.uuid %}"
+                        hx-target="#plans-modal-content"
+                        hx-confirm="Убрать «{{ plan.title }}» из планов объекта?"
+                        title="Убрать этот план">
+                    <i class="bi bi-trash3"></i>
+                </button>
+            </span>
+        </div>
+        {% empty %}
+        <span class="hint">Работы не назначены — срок ТО у объекта не рассчитывается.</span>
+        {% endfor %}
+    </div>
+
+    <div class="form-section">
+        <span class="form-section-title">Добавить работу</span>
+
+        <form hx-post="{% url 'add_object_plan' obj.uuid %}"
+              hx-target="#plans-modal-content"
+              class="field">
+            {% csrf_token %}
+            <input type="hidden" name="plan_kind" value="rule">
+            <label>По правилу расчёта</label>
+            <div class="d-flex gap-2 align-items-start">
+                <div id="search-wrapper-date_update_rule" class="flex-grow-1 position-relative">
+                    <input type="text" name="q" class="form-control"
+                           placeholder="Начните вводить название правила..."
+                           hx-get="{% url 'suggest' %}?field=date_update_rule"
+                           hx-trigger="keyup changed delay:300ms, focus"
+                           hx-target="#results-date_update_rule"
+                           autocomplete="off">
+                    <div id="results-date_update_rule"></div>
+                </div>
+                <button type="submit" class="btn btn-primary fw-semibold flex-shrink-0">
+                    <i class="bi bi-plus-lg"></i>Добавить
+                </button>
+            </div>
+            <span class="hint">Срок считается от сегодняшнего дня. Новые правила создаются в разделе «Настройки → Правила ТО».</span>
+        </form>
+
+        {% if not has_manual_plan %}
+        <form hx-post="{% url 'add_object_plan' obj.uuid %}"
+              hx-target="#plans-modal-content"
+              class="field mt-3">
+            {% csrf_token %}
+            <input type="hidden" name="plan_kind" value="manual">
+            <label for="plan-manual-date">Или срок вручную</label>
+            <div class="d-flex gap-2 align-items-start">
+                <input type="date" name="next_date" id="plan-manual-date" class="form-control flex-grow-1" required>
+                <button type="submit" class="btn btn-light border fw-semibold flex-shrink-0">
+                    <i class="bi bi-plus-lg"></i>Добавить
+                </button>
+            </div>
+            <span class="hint">Дату двигает инженер; правило к такому сроку не применяется.</span>
+        </form>
+        {% endif %}
+    </div>
+
+</div>
+
+<div class="sheet-footer">
+    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Закрыть</button>
+</div>

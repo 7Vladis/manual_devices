@@ -14,7 +14,9 @@ from ..forms import parse_maintenance_date
 from ..models import ActionHistory, DataObject, YouTrackJob
 from .. import youtrack_services
 from ..services import youtrack_queue
-from ..services.maintenance import calculate_next_maintenance_date
+from ..services.maintenance import (calculate_plan_date, get_single_plan,
+                                    refresh_object_schedule, set_manual_date)
+from ..models import MaintenancePlan
 from .common import htmx_error, render_maintenance_pill, yt_toast
 
 logger = logging.getLogger('data')
@@ -33,18 +35,35 @@ def service_object_view(request, pk):
         spent_time = request.POST.get('spent_time', '').strip()
         custom_comment = request.POST.get('comment', '').strip()
         
-        # Плановое событие, которое закрывает эта работа, — это срок ТО,
+        # Работу закрывают по плану: он говорит, какой срок закрыт и какое
+        # правило выполнено. Какой именно — выбирают в окне, когда планов
+        # несколько; при одном выбирать не из чего, и он приходит скрытым
+        # полем. Чужой план к объекту не привяжешь: выборка сужена по нему.
+        plan_uuid = request.POST.get('plan')
+        plan = None
+        if plan_uuid:
+            plan = MaintenancePlan.objects.filter(pk=plan_uuid, data_object=obj).first()
+        if plan is None:
+            plan = get_single_plan(obj)
+
+        # Плановое событие, которое закрывает эта работа, — это срок,
         # назначенный ДО обновления. Запоминаем его до перезаписи.
-        closed_plan_date = None if is_unplanned else obj.next_maintenance_date
+        closed_plan_date = None if is_unplanned else (plan.next_date if plan else None)
+        closed_rule = plan.rule if (plan and not is_unplanned) else None
 
         # 1. Если ТО ПЛАНОВОЕ — обновляем дату следующего обслуживания
         if not is_unplanned and date_str:
             try:
-                obj.next_maintenance_date = parse_maintenance_date(date_str, "Дата следующего ТО")
+                new_date = parse_maintenance_date(date_str, "Дата следующего ТО")
             except ValidationError as exc:
                 return htmx_error(" ".join(exc.messages),
                                   retarget='#service-modal-content .form-feedback')
-            obj.save(update_fields=['next_maintenance_date'])
+            if plan is None:
+                plan = set_manual_date(obj, new_date)
+            else:
+                plan.next_date = new_date
+                plan.save(update_fields=['next_date'])
+                refresh_object_schedule(obj)
         
         # 2. Формируем текст записи для истории и YouTrack
         if is_unplanned:
@@ -66,6 +85,7 @@ def service_object_view(request, pk):
             action=action_text,
             maintenance_kind='unplanned' if is_unplanned else 'planned',
             planned_for=closed_plan_date,
+            maintenance_rule=closed_rule,
         )
 
         # 4. Списание времени уходит в очередь: ТО уже зафиксировано локально,
@@ -96,11 +116,17 @@ def service_object_view(request, pk):
         response['HX-Trigger'] = 'objectServiced'
         return response
 
-    proposed_date = calculate_next_maintenance_date(obj)
-    
+    # Каждому плану — свой предложенный срок: интервалы у них разные, и
+    # подставлять один на все значило бы сдвинуть не тот график. Окно кладёт
+    # дату в `data-next-date`, а выбор плана переносит её в поле.
+    plans = list(obj.plans.select_related('rule').all())
+    for plan in plans:
+        plan.proposed_date = calculate_plan_date(plan)
+
     return render(request, 'data/tree/service_modal_body.html', {
         'obj': obj,
-        'proposed_date': proposed_date,
+        'plans': plans,
+        'proposed_date': plans[0].proposed_date if plans else None,
         'effective_yt_id': effective_yt_id,
         'target_yt_obj': target_yt_obj
     })

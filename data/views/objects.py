@@ -16,7 +16,7 @@ from ..models import ActionHistory, DataObject, DateUpdateRule, ObjectModel, Obj
 from users.decorators import role_required
 
 from ..services import youtrack_queue
-from ..services.maintenance import calculate_next_maintenance_date
+from ..services.maintenance import set_manual_date, set_object_rule
 from .common import (NO_TOKEN_DELETE_MESSAGE, blocked_without_token,
                      blocked_without_token_setup, has_youtrack_token, htmx_error,
                      sync_pill_oob, token_missing_for, tree_sidebar_context)
@@ -126,17 +126,15 @@ def create_object_view(request):
             parent=parent_obj,
             inventory_number=inventory_number if inventory_number else None,
             youtrack_issue_id=youtrack_issue_id if youtrack_issue_id else None,
-            next_maintenance_date=next_maintenance_date,
-            date_update_rule=selected_rule
         )
 
+        # Срок объекта живёт планом, а не полем: план и считает дату по
+        # правилу, и обновляет сводку в `next_maintenance_date`.
         scheduling_mode = request.POST.get('maintenance_scheduling_mode', 'manual')
         if scheduling_mode == 'auto' and selected_rule:
-            first_date = calculate_next_maintenance_date(
-                new_obj, base_date=timezone.localdate(), use_anchor=False
-            )
-            new_obj.next_maintenance_date = first_date
-            new_obj.save(update_fields=['next_maintenance_date'])
+            set_object_rule(new_obj, selected_rule, base_date=timezone.localdate())
+        elif next_maintenance_date:
+            set_manual_date(new_obj, next_maintenance_date)
             
         if parent_obj:
             parent_name = parent_obj.name or parent_obj.model.name
@@ -155,30 +153,6 @@ def create_object_view(request):
                       tree_sidebar_context(request, active_object=new_obj))
 
     return render(request, 'data/includes/create_object_modal_body.html')
-
-
-@login_required
-@role_required(['senior', 'admin', 'superuser'])
-@require_POST
-def unlink_rule_view(request, pk):
-    # Сроки ТО в YouTrack не зеркалятся — отвязка правила уезжать никуда не может.
-    obj = get_object_or_404(DataObject, pk=pk)
-
-    obj.date_update_rule = None
-    obj.save(update_fields=['date_update_rule'])
-    
-    ActionHistory.objects.create(
-        user=request.user,
-        data_object=obj,
-        action_type='rule_change',
-        action="Правило автоматического расчета ТО отвязано от объекта."
-    )
-    
-    return render(request, 'data/object/edit_rule_modal_body.html', {
-        'obj': obj,
-        'current_mode': 'auto',
-        'rule_details': None
-    })
 
 
 @login_required

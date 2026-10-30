@@ -2,6 +2,10 @@
 Список работ, сгруппированный по срочности. Группы приходят из
 group_by_urgency(): пустые не рендерятся.
 
+Строка — это работа (план), а не объект: у насоса осмотр может быть
+просрочен, а смазка стоять на будущей неделе. Поэтому в строке два имени —
+что за работа и над чем.
+
 Обёртка сама перезагружается по событию objectServiced — после фиксации ТО
 из этого же списка объект уезжает в другую группу.
 {% endcomment %}
@@ -15,17 +19,18 @@ group_by_urgency(): пустые не рендерятся.
     <section class="plan-group {% if group.key == 'overdue' %}is-overdue{% endif %}">
         <div class="plan-group-head">
             <h2>{{ group.title }}</h2>
-            <span class="group-count">{{ group.objects|length }}</span>
+            <span class="group-count">{{ group.plans|length }}</span>
         </div>
 
         <div class="plan-list">
-            {% for obj in group.objects %}
+            {% for plan in group.plans %}
+            {% with obj=plan.data_object %}
             <div class="plan-row">
 
                 <span class="rail {% if group.key == 'overdue' %}is-overdue{% elif group.key == 'today' or group.key == 'week' %}is-due{% elif group.key == 'none' %}is-none{% endif %}">
-                    {% if obj.next_maintenance_date %}
-                        <span class="rail-date">{{ obj.next_maintenance_date|date:"d.m" }}</span>
-                        <span class="rail-delta">{{ obj.days_label }}</span>
+                    {% if plan.next_date %}
+                        <span class="rail-date">{{ plan.next_date|date:"d.m" }}</span>
+                        <span class="rail-delta">{{ plan.days_label }}</span>
                     {% else %}
                         <span class="rail-date">—</span>
                     {% endif %}
@@ -33,8 +38,8 @@ group_by_urgency(): пустые не рендерятся.
 
                 <a href="{% url 'dict' %}?object={{ obj.uuid }}" class="plan-row-main">
                     <span class="plan-names">
-                        <span class="plan-name">{{ obj.name|default:obj.model.name }}</span>
-                        <span class="plan-sub">{{ obj.model.object_type.type }} — {{ obj.model.name }}</span>
+                        <span class="plan-name">{% if plan.no_plan %}ТО не назначено{% else %}{{ plan.title }}{% endif %}</span>
+                        <span class="plan-sub">{{ obj.name|default:obj.model.name }} — {{ obj.model.name }}</span>
                     </span>
                     <span class="plan-inv {% if not obj.inventory_number %}is-empty{% endif %}">
                         {{ obj.inventory_number|default:"без инв. №" }}
@@ -61,6 +66,7 @@ group_by_urgency(): пустые не рендерятся.
                 </span>
 
             </div>
+            {% endwith %}
             {% endfor %}
         </div>
     </section>
