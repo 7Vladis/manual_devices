@@ -2,40 +2,30 @@
 #
 # Обновление установки ManDev.
 #
-# Сценарий: рядом с рабочим каталогом распакован новый релиз. Скрипт переносит
-# в него состояние (.env, вложения, сертификаты *.crt), останавливает сервисы,
-# меняет каталоги местами и поднимает сервисы заново. Старая версия остаётся
-# рядом с отметкой времени — на случай отката.
+# Сценарий: скрипт запускается из каталога нового релиза. Он переносит в него
+# состояние рабочей установки (.env, вложения, логи, сертификаты *.crt),
+# останавливает сервисы, меняет каталоги местами, применяет миграции и только
+# после этого запускает web и scheduler. Старая версия остаётся рядом с
+# отметкой времени — на случай отката.
 #
-# Запускать нужно копию скрипта из рабочей установки: рабочим считается тот
-# каталог, в котором лежит сам скрипт, а не текущий каталог оболочки.
-#
-#   ./update.sh                        # релиз в ../manual_devices
-#   ./update.sh /path/to/new-release   # явный путь к релизу
+#   ./update.sh                        # рабочая установка в ../mandev
+#   ./update.sh /path/to/current       # явный путь к рабочей установке
 #   ./update.sh --dry-run              # показать план, ничего не менять
 #   ./update.sh --no-restart           # не трогать docker compose
 #   ./update.sh --keep-compose         # оставить docker-compose.yaml старой версии
 #   ./update.sh --keep-old 2           # сколько прежних версий оставить (по умолчанию 1)
 #   ./update.sh --no-prune             # не убирать образы без тега
-#   ./update.sh --no-self-upgrade      # не передавать работу скрипту из релиза
 #
-# Если в релизе лежит другой update.sh, работу продолжает он: исправления в
-# самом обновлении приезжают с релизом, а запускается копия из рабочей
-# установки — без этого правка применялась бы только со следующего раза.
-#
-# После успешного запуска скрипт прибирает за собой: удаляет прежние версии
-# сверх --keep-old и образы без тега, оставшиеся от прежних сборок. Тома docker
-# не трогаются ни при каких условиях — в postgres_data лежит база.
+# Имя рабочего каталога сохраняется: Docker Compose использует его в имени тома
+# с PostgreSQL. После успешного запуска скрипт удаляет прежние версии сверх
+# --keep-old и образы без тега. Тома docker не трогаются ни при каких условиях.
 #
 set -euo pipefail
 
 # --- Параметры -------------------------------------------------------------
 
-# Рабочая установка — каталог, где лежит сам скрипт. Исключение одно:
-# самообновление (ниже) передаёт его явно, потому что там работает уже копия
-# из релиза, и своим каталогом она считала бы релиз.
-INSTALL_DIR="${MANDEV_INSTALL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
-RELEASE_DIR=""
+RELEASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR=""
 DRY_RUN=0
 RESTART=1
 KEEP_COMPOSE=0
@@ -45,11 +35,6 @@ KEEP_COMPOSE=0
 # уже сто. Одна копия остаётся на случай отката.
 KEEP_OLD=1
 PRUNE_IMAGES=1
-SELF_UPGRADE=1
-
-# Аргументы как есть: самообновление передаёт их дальше, а разбор ниже их
-# «съедает» сдвигами.
-ORIGINAL_ARGS=("$@")
 
 # Состояние, которое переносится из рабочей установки в новый релиз.
 # Сертификаты в этот список не входят: они переносятся по расширению, а не по
@@ -71,36 +56,19 @@ while [[ $# -gt 0 ]]; do
         --keep-compose) KEEP_COMPOSE=1 ;;
         --keep-old)     KEEP_OLD="${2:-1}"; shift ;;
         --no-prune)     PRUNE_IMAGES=0 ;;
-        --no-self-upgrade) SELF_UPGRADE=0 ;;
         -h|--help)      usage 0 ;;
         -*)             echo "Неизвестный параметр: $1" >&2; usage 1 ;;
-        *)              RELEASE_DIR="$1" ;;
+        *)
+            [[ -z "$INSTALL_DIR" ]] || { echo "Путь к рабочей установке указан дважды." >&2; exit 1; }
+            INSTALL_DIR="$1"
+            ;;
     esac
     shift
 done
 
-: "${RELEASE_DIR:=$(dirname "$INSTALL_DIR")/manual_devices}"
+: "${INSTALL_DIR:=$(dirname "$RELEASE_DIR")/mandev}"
 
 [[ "$KEEP_OLD" =~ ^[0-9]+$ ]] || { echo "--keep-old ожидает число, получено: $KEEP_OLD" >&2; exit 1; }
-
-# --- Передача работы скрипту из релиза --------------------------------------
-#
-# Скрипт обновления — такая же часть релиза, как и код: он тоже исправляется.
-# Но запускают копию из рабочей установки, то есть предыдущую, и её правки не
-# знают. Поэтому, если в релизе update.sh отличается, дальше работает он — с
-# теми же аргументами и с явно переданным рабочим каталогом.
-#
-# Это не расширение доверия: код этого релиза через минуту и так станет
-# сервисом. Отключается `--no-self-upgrade`.
-if [[ $SELF_UPGRADE -eq 1 && -z "${MANDEV_SELF_UPGRADED:-}" \
-      && -d "$RELEASE_DIR" && -f "$RELEASE_DIR/update.sh" \
-      && -f "$INSTALL_DIR/update.sh" ]] \
-   && ! cmp -s "$RELEASE_DIR/update.sh" "$INSTALL_DIR/update.sh"; then
-    printf '\033[0;36m==>\033[0m %s\n' "В релизе другой update.sh — продолжаю им"
-    export MANDEV_SELF_UPGRADED=1
-    export MANDEV_INSTALL_DIR="$INSTALL_DIR"
-    exec bash "$RELEASE_DIR/update.sh" "${ORIGINAL_ARGS[@]}"
-fi
 
 # --- Вывод -----------------------------------------------------------------
 
@@ -117,19 +85,36 @@ run() {
     fi
 }
 
+run_compose() {
+    if [[ $DRY_RUN -eq 1 ]]; then
+        printf '      [dry-run] (cd %s && %s' "$INSTALL_DIR" "$COMPOSE"
+        printf ' %q' "$@"
+        printf ')\n'
+    else
+        (cd "$INSTALL_DIR" && $COMPOSE "$@")
+    fi
+}
+
+startup_failed() {
+    warn "$1"
+    warn "Новая версия осталась в $INSTALL_DIR, прежняя — в $BACKUP_DIR."
+    warn "Перед ручным откатом проверьте совместимость уже применённых миграций."
+    exit 1
+}
+
 # --- Проверки до любых изменений -------------------------------------------
 
 info "Проверка предусловий"
 
-[[ -d "$RELEASE_DIR" ]] || fail "Каталог нового релиза не найден: $RELEASE_DIR"
-RELEASE_DIR="$(cd "$RELEASE_DIR" && pwd)"
+[[ -f "$RELEASE_DIR/manage.py" ]] || fail "В каталоге нового релиза нет manage.py: $RELEASE_DIR"
+[[ -d "$INSTALL_DIR" ]] || fail "Рабочая установка не найдена: $INSTALL_DIR
+       Запустите скрипт из каталога нового релиза и укажите путь к старой установке:
+           ./update.sh /путь/к/рабочей/установке"
+INSTALL_DIR="$(cd "$INSTALL_DIR" && pwd)"
 
-[[ "$RELEASE_DIR" != "$INSTALL_DIR" ]] || fail "каталог релиза совпадает с рабочим: $INSTALL_DIR
-       Рабочим считается каталог, в котором лежит сам скрипт. Так бывает, если
-       запущена копия update.sh из нового релиза или если рабочая установка
-       называется manual_devices — тогда укажите путь к релизу явно:
-           ./update.sh /путь/к/новому/релизу"
-[[ -f "$RELEASE_DIR/manage.py" ]] || fail "В каталоге релиза нет manage.py — это не проект ManDev: $RELEASE_DIR"
+[[ "$RELEASE_DIR" != "$INSTALL_DIR" ]] || fail "Каталог нового релиза совпадает с рабочим: $INSTALL_DIR"
+[[ "$INSTALL_DIR" != "$RELEASE_DIR/"* ]] || fail "Рабочая установка не должна находиться внутри нового релиза."
+[[ "$RELEASE_DIR" != "$INSTALL_DIR/"* ]] || fail "Новый релиз не должен находиться внутри рабочей установки."
 [[ -f "$INSTALL_DIR/manage.py" ]] || fail "В рабочем каталоге нет manage.py: $INSTALL_DIR"
 
 for item in "${STATE_REQUIRED[@]}"; do
@@ -154,8 +139,8 @@ if [[ $RESTART -eq 1 ]]; then
     fi
 fi
 
-ok "Рабочая установка: $INSTALL_DIR"
 ok "Новый релиз:       $RELEASE_DIR"
+ok "Рабочая установка: $INSTALL_DIR"
 ok "Резервная копия:   $BACKUP_DIR"
 [[ $DRY_RUN -eq 1 ]] && warn "Режим --dry-run: изменения не применяются."
 
@@ -230,7 +215,7 @@ if [[ $RESTART -eq 1 ]]; then
     fi
 fi
 
-# --- Переключение каталогов с откатом ---------------------------------------
+# --- Переключение каталогов с откатом --------------------------------------
 
 info "Переключение версий"
 
@@ -240,15 +225,13 @@ rollback() {
     local code=$?
     [[ $code -eq 0 ]] && return 0
 
-    warn "Сбой обновления (код $code) — выполняю откат."
+    warn "Сбой переключения каталогов (код $code) — выполняю откат."
     case $SWITCH_STAGE in
         2)
-            # Новый релиз уже занял рабочее имя — вернуть обратно.
             [[ -e "$INSTALL_DIR" ]] && mv "$INSTALL_DIR" "$RELEASE_DIR" || true
             [[ -e "$BACKUP_DIR" ]] && mv "$BACKUP_DIR" "$INSTALL_DIR" || true
             ;;
         1)
-            # Рабочий каталог переименован, новый ещё не встал на его место.
             [[ -e "$BACKUP_DIR" ]] && mv "$BACKUP_DIR" "$INSTALL_DIR" || true
             ;;
     esac
@@ -267,19 +250,38 @@ ok "новый релиз → $(basename "$INSTALL_DIR")"
 
 trap - EXIT
 
-# --- Запуск сервисов -------------------------------------------------------
+# --- Сборка, миграции и запуск ---------------------------------------------
 
 if [[ $RESTART -eq 1 ]]; then
-    info "Сборка и запуск сервисов"
-    if [[ $DRY_RUN -eq 1 ]]; then
-        printf '      [dry-run] (cd %s && %s up -d --build)\n' "$INSTALL_DIR" "$COMPOSE"
-    else
-        if ! (cd "$INSTALL_DIR" && $COMPOSE up -d --build); then
-            warn "Сервисы не поднялись. Прежняя версия лежит в $BACKUP_DIR."
-            warn "Откат вручную:  mv '$INSTALL_DIR' '$RELEASE_DIR' && mv '$BACKUP_DIR' '$INSTALL_DIR'"
-            exit 1
-        fi
+    info "Сборка образов"
+    run_compose build || startup_failed "Не удалось собрать образы."
+
+    info "Запуск PostgreSQL"
+    run_compose up -d db || startup_failed "Не удалось запустить PostgreSQL."
+
+    if [[ $DRY_RUN -eq 0 ]]; then
+        info "Ожидание готовности PostgreSQL"
+        DB_READY=0
+        for _ in {1..30}; do
+            if (cd "$INSTALL_DIR" && $COMPOSE exec -T db sh -c \
+                    'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"') >/dev/null 2>&1; then
+                DB_READY=1
+                break
+            fi
+            sleep 2
+        done
+        [[ $DB_READY -eq 1 ]] || startup_failed "PostgreSQL не стал готов за 60 секунд."
     fi
+
+    # Миграции завершаются в одноразовом контейнере до запуска web и scheduler.
+    # Иначе scheduler может начать работу, когда web ещё только применяет их.
+    info "Применение миграций"
+    run_compose run --rm --no-deps web python manage.py migrate --noinput \
+        || startup_failed "Миграции не применены; web и scheduler не запускались."
+
+    info "Запуск сервисов"
+    run_compose up -d || startup_failed "Не удалось запустить сервисы после миграций."
+    run_compose ps || warn "Не удалось получить состояние сервисов — проверьте: $COMPOSE ps"
 fi
 
 # --- Уборка ----------------------------------------------------------------
@@ -335,5 +337,7 @@ fi
 info "Обновление завершено"
 ok "Рабочая версия:   $INSTALL_DIR"
 ok "Прежняя версия:   $BACKUP_DIR (удалите, когда убедитесь, что всё работает)"
-[[ $RESTART -eq 0 ]] && warn "Сервисы не перезапускались — сделайте это вручную: docker compose up -d --build"
+if [[ $RESTART -eq 0 ]]; then
+    warn "Сервисы не запускались. Перед общим запуском соберите образы, поднимите db и выполните миграции."
+fi
 exit 0

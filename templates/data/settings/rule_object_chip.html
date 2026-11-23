@@ -1,0 +1,7 @@
+<span class="chip-link rule-object-chip">
+    <i class="bi bi-box-seam text-secondary"></i>
+    <span class="text-truncate">{{ obj.name|default:obj.model.name }}</span>
+    <input type="hidden" name="object_ids" value="{{ obj.uuid }}">
+    <button type="button" class="btn-close" aria-label="Убрать объект {{ obj.name|default:obj.model.name }}"
+            onclick="this.closest('.rule-object-chip').remove()"></button>
+</span>

@@ -305,6 +305,9 @@ class ObjectCreationTests(BaseDataTestCase):
         self.assertEqual(created.parent, self.root)
         self.assertEqual(created.next_maintenance_date, datetime.date(2026, 12, 1))
         self.assertTrue(created.actions.filter(action_type='create').exists())
+        body = response.content.decode()
+        self.assertIn('id="detail-container" hx-swap-oob="innerHTML"', body)
+        self.assertIn(reverse('object_detail', args=[created.uuid]), body)
 
     def test_auto_mode_computes_first_maintenance_date(self):
         rule = DateUpdateRule.objects.create(
@@ -860,7 +863,7 @@ class CloneTests(BaseDataTestCase):
         self.root.save(update_fields=['youtrack_issue_id'])
 
         self.login(self.senior)
-        self.client.post(reverse('clone_object'), {
+        response = self.client.post(reverse('clone_object'), {
             'source_object': str(self.root.uuid),
             'new_name': 'Насосная станция №2',
             'clone_children': 'on',
@@ -871,6 +874,9 @@ class CloneTests(BaseDataTestCase):
         self.assertIsNone(clone.youtrack_issue_id)
         self.assertIsNone(clone.parent)
         self.assertEqual(clone.children.count(), 1)
+        body = response.content.decode()
+        self.assertIn('id="detail-container" hx-swap-oob="innerHTML"', body)
+        self.assertIn(reverse('object_detail', args=[clone.uuid]), body)
 
     def test_clone_without_children_creates_single_object(self):
         self.login(self.senior)
@@ -1026,6 +1032,22 @@ class DashboardAndExportTests(BaseDataTestCase):
 
         rows = list(response.context['page'].object_list)
         self.assertEqual([row.data_object for row in rows], [self.root])
+
+    def test_pagination_replaces_container_contents_not_container(self):
+        for index in range(41):
+            obj = DataObject.objects.create(model=self.model, name=f'Объект {index}')
+            MaintenancePlan.objects.create(
+                data_object=obj,
+                next_date=timezone.localdate() + datetime.timedelta(days=index),
+            )
+
+        self.login(self.junior)
+        response = self.client.get(reverse('maintenance_list'), {'period': 'all', 'page': 2})
+
+        body = response.content.decode()
+        pager = body[body.index('<nav class="pager"'):body.index('</nav>')]
+        self.assertEqual(pager.count('hx-swap="innerHTML"'), 2)
+        self.assertIn('hx-target="#maintenance-container"', pager)
 
     def test_export_returns_xlsx_attachment(self):
         self.login(self.admin)
@@ -1808,6 +1830,104 @@ class RuleValidationTests(BaseDataTestCase):
         self.assertEqual(response.status_code, 200)
         rule = DateUpdateRule.objects.get(name='Тестовое правило')
         self.assertEqual(rule.rule['value'], {'years': 0, 'months': 6, 'days': 0})
+
+    def test_rule_can_be_created_with_multiple_objects(self):
+        response = self._create(object_ids=[str(self.root.uuid), str(self.child.uuid)])
+
+        self.assertEqual(response.status_code, 200)
+        rule = DateUpdateRule.objects.get(name='Тестовое правило')
+        self.assertEqual(
+            {plan.data_object for plan in rule.plans.all()},
+            {self.root, self.child},
+        )
+        self.assertTrue(all(plan.next_date for plan in rule.plans.all()))
+        self.assertEqual(
+            ActionHistory.objects.filter(action_type='rule_change').count(),
+            2,
+        )
+
+    def test_invalid_object_does_not_create_rule(self):
+        response = self._create(object_ids=['не-uuid'])
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(DateUpdateRule.objects.filter(name='Тестовое правило').exists())
+
+    def test_rule_object_search_excludes_linked_and_selected_objects(self):
+        rule = DateUpdateRule.objects.create(name='Осмотр', rule={})
+        MaintenancePlan.objects.create(data_object=self.root, rule=rule)
+
+        response = self.client.get(reverse('suggest'), {
+            'field': 'rule_object',
+            'q': 'Насос',
+            'rule_id': str(rule.uuid),
+            'object_ids': [str(self.child.uuid)],
+        })
+
+        body = response.content.decode()
+        self.assertNotIn('Насосная станция №1', body)
+        self.assertNotIn('Насос А', body)
+
+    def test_selecting_rule_object_returns_hidden_input_and_resets_search(self):
+        response = self.client.get(reverse('select_rule_object', args=[self.root.uuid]), {
+            'selection_id': 'create',
+        })
+
+        body = response.content.decode()
+        self.assertIn(f'name="object_ids" value="{self.root.uuid}"', body)
+        self.assertIn('id="rule-object-search-create"', body)
+        self.assertIn('hx-swap-oob="outerHTML"', body)
+
+    def test_rule_links_can_add_and_remove_multiple_objects(self):
+        rule = DateUpdateRule.objects.create(
+            name='Осмотр',
+            rule={'strategy': 'relative', 'anchor': 'actual', 'value': {'years': 0, 'months': 6, 'days': 0}},
+        )
+        root_plan = MaintenancePlan.objects.create(data_object=self.root, rule=rule)
+        child_plan = MaintenancePlan.objects.create(data_object=self.child, rule=rule)
+        first = DataObject.objects.create(model=self.model, name='Насос Б')
+        second = DataObject.objects.create(model=self.model, name='Насос В')
+
+        response = self.client.post(reverse('update_rule_objects', args=[rule.uuid]), {
+            'remove_plan_ids': [str(root_plan.uuid), str(child_plan.uuid)],
+            'object_ids': [str(first.uuid), str(second.uuid)],
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {plan.data_object for plan in rule.plans.all()},
+            {first, second},
+        )
+        self.assertEqual(
+            ActionHistory.objects.filter(action_type='rule_change').count(),
+            4,
+        )
+        self.assertContains(response, f'id="collapse-objects-{rule.uuid}"')
+        self.assertContains(response, 'class="collapse show"')
+
+    def test_rule_links_cannot_remove_plan_of_another_rule(self):
+        rule = DateUpdateRule.objects.create(name='Осмотр', rule={})
+        other_rule = DateUpdateRule.objects.create(name='Смазка', rule={})
+        other_plan = MaintenancePlan.objects.create(data_object=self.root, rule=other_rule)
+
+        response = self.client.post(reverse('update_rule_objects', args=[rule.uuid]), {
+            'remove_plan_ids': [str(other_plan.uuid)],
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(MaintenancePlan.objects.filter(pk=other_plan.pk).exists())
+
+    def test_updating_links_preserves_fixed_dates_in_rule_card(self):
+        rule = DateUpdateRule.objects.create(
+            name='Сезонный осмотр',
+            rule={'strategy': 'fixed', 'anchor': 'yearly', 'value': [{'month': 4, 'day': 15}]},
+        )
+
+        response = self.client.post(reverse('update_rule_objects', args=[rule.uuid]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Сезонные даты:')
+        self.assertContains(response, '15 Апреля')
+        self.assertNotContains(response, 'Параметры не заданы')
 
     def test_non_numeric_interval_is_rejected(self):
         """Раньше голый int() ронял запрос с 500."""

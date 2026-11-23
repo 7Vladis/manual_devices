@@ -1,0 +1,60 @@
+<div class="entry-card" id="rule-card-{{ item.uuid }}">
+    <div class="entry-card-body">
+        <div class="entry-main">
+            <button type="button" class="entry-title"
+                    data-bs-toggle="modal"
+                    data-bs-target="#editRuleSettingsModal"
+                    hx-get="{% url 'edit_rule_settings' item.uuid %}"
+                    hx-target="#edit-rule-settings-modal-content"
+                    title="Изменить название и параметры правила">
+                {{ item.name }}<i class="bi bi-pencil-square edit-icon"></i>
+            </button>
+
+            <span class="entry-meta">
+                {% if item.rule.strategy == 'relative' %}
+                    <i class="bi bi-arrow-repeat text-success me-1"></i>Интервал:
+                    <strong class="text-dark">{{ item.rule.value.years }} г. {{ item.rule.value.months }} мес. {{ item.rule.value.days }} дн.</strong>
+                {% elif item.rule.strategy == 'fixed' and item.formatted_fixed_dates %}
+                    <i class="bi bi-calendar-event text-cyan me-1"></i>Сезонные даты:
+                    <strong class="text-dark">{{ item.formatted_fixed_dates }}</strong>
+                {% else %}
+                    <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                    <span class="text-warning">Параметры не заданы — откройте правило и настройте расчёт.</span>
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="entry-actions">
+            <button class="btn btn-light border fw-semibold" type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#collapse-objects-{{ item.uuid }}"
+                    aria-expanded="{% if objects_expanded %}true{% else %}false{% endif %}"
+                    aria-controls="collapse-objects-{{ item.uuid }}">
+                Объектов: {{ item.objects_count }}<i class="bi bi-chevron-down ms-1"></i>
+            </button>
+
+            <div id="rule-error-{{ item.uuid }}" class="d-inline-block"></div>
+
+            {% if item.objects_count == 0 %}
+            <button type="button" class="btn btn-light border btn-icon text-danger"
+                    hx-post="{% url 'delete_rule' item.uuid %}"
+                    hx-confirm="Удалить правило «{{ item.name }}»?"
+                    title="Удалить правило">
+                <i class="bi bi-trash3"></i>
+            </button>
+            {% else %}
+            <span class="lock-hint" title="Правило используется объектами — сначала отвяжите его">
+                <i class="bi bi-lock-fill"></i>Используется
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="collapse {% if objects_expanded %}show{% endif %}" id="collapse-objects-{{ item.uuid }}">
+        <div class="entry-detail border-top pt-3">
+            <div id="rule-objects-content-{{ item.uuid }}">
+                {% include 'data/settings/rule_objects.html' with item=item %}
+            </div>
+        </div>
+    </div>
+</div>

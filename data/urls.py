@@ -15,6 +15,10 @@ urlpatterns = [
     path('settings/rules/create/', views.create_rule_settings_view, name='create_rule_settings'),
     path('settings/rules/<uuid:pk>/delete/', views.delete_rule_view, name='delete_rule'),
     path('settings/rules/<uuid:pk>/edit/', views.edit_rule_settings_view, name='edit_rule_settings'),
+    path('settings/rules/<uuid:pk>/objects/', views.rule_objects_view, name='rule_objects'),
+    path('settings/rules/<uuid:pk>/objects/edit/', views.edit_rule_objects_view, name='edit_rule_objects'),
+    path('settings/rules/<uuid:pk>/objects/update/', views.update_rule_objects_view, name='update_rule_objects'),
+    path('settings/rules/objects/select/<uuid:pk>/', views.select_rule_object_view, name='select_rule_object'),
     path('settings/users/<uuid:pk>/toggle/', users.views.toggle_user_status_view, name='toggle_user_status'),
     
     # Дерево и проводник объектов

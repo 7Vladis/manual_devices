@@ -52,4 +52,16 @@ fixed_dates, month_names.
     <div id="constructor-fields-{{ mode }}">
         {% include 'data/includes/rule_constructor_fields.html' %}
     </div>
+
+    {% if show_object_selector %}
+    <section class="form-section">
+        <div class="form-section-title"><i class="bi bi-box-seam"></i>Объекты обслуживания</div>
+        <div class="field">
+            <label>Привязать к объектам <span class="text-muted fw-normal">(необязательно)</span></label>
+            <div id="rule-object-selection-create" class="d-flex flex-wrap gap-2 mb-2"></div>
+            {% include 'data/settings/rule_object_search.html' with selection_id='create' %}
+            <span class="hint">Можно выбрать несколько объектов по названию, инвентарному номеру или модели. Поле можно оставить пустым.</span>
+        </div>
+    </section>
+    {% endif %}
 </div>

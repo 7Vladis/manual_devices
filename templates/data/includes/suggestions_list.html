@@ -31,7 +31,11 @@
     {% for item in results %}
     <button type="button"
             class="suggest-item"
-            {% if field == 'model_inline' and target_obj_uuid %}
+            {% if field == 'rule_object' %}
+                hx-get="{% url 'select_rule_object' item.uuid %}?selection_id={{ selection_id }}&rule_id={{ rule_id }}"
+                hx-target="#rule-object-selection-{{ selection_id }}"
+                hx-swap="beforeend"
+            {% elif field == 'model_inline' and target_obj_uuid %}
                 hx-post="{% url 'edit_object_model' target_obj_uuid %}"
                 hx-target="#model-display-container"
                 hx-swap="outerHTML"
@@ -51,7 +55,7 @@
             <i class="bi bi-layers text-secondary flex-shrink-0"></i>
             <span class="s-name text-truncate">{{ item.name }}</span>
             <span class="s-sub text-truncate ms-auto">{{ item.object_type.type }}</span>
-        {% elif field == 'parent' or field == 'parent_inline' or field == 'source_object' %}
+        {% elif field == 'parent' or field == 'parent_inline' or field == 'source_object' or field == 'rule_object' %}
             <i class="bi bi-box text-primary flex-shrink-0"></i>
             <span class="s-name text-truncate">{{ item.name|default:item.model.name }}</span>
             <span class="s-sub text-truncate ms-auto">{{ item.inventory_number|default:item.model.name }}</span>

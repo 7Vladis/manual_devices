@@ -20,6 +20,10 @@ from .settings_views import (  # noqa: F401
     create_rule_settings_view,
     edit_rule_settings_view,
     delete_rule_view,
+    rule_objects_view,
+    edit_rule_objects_view,
+    update_rule_objects_view,
+    select_rule_object_view,
 )
 from .export import (  # noqa: F401
     export_xlsx_view,

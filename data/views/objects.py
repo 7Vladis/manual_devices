@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from django.views.decorators.http import require_POST, require_http_methods
@@ -149,8 +150,20 @@ def create_object_view(request):
             action=action_desc
         )
         
-        return render(request, 'data/tree/dict_sidebar.html',
-                      tree_sidebar_context(request, active_object=new_obj))
+        sidebar_html = render_to_string(
+            'data/tree/dict_sidebar.html',
+            tree_sidebar_context(request, active_object=new_obj),
+            request=request,
+        )
+        detail_html = format_html(
+            '<div id="detail-container" hx-swap-oob="innerHTML">'
+            '<div hx-get="{}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">'
+            '<div class="d-flex align-items-center justify-content-center h-100 p-5">'
+            '<div class="spinner-border text-primary" role="status"></div>'
+            '</div></div></div>',
+            reverse('object_detail', args=[new_obj.uuid]),
+        )
+        return HttpResponse(sidebar_html + "\n" + detail_html)
 
     return render(request, 'data/includes/create_object_modal_body.html')
 

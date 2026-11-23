@@ -1,0 +1,13 @@
+<div id="rule-object-search-{{ selection_id }}" class="w-100 position-relative"
+     {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+    <input type="text"
+           name="q"
+           class="form-control"
+           placeholder="Начните вводить название объекта..."
+           hx-get="{% url 'suggest' %}?field=rule_object&selection_id={{ selection_id }}{% if rule_id %}&rule_id={{ rule_id }}{% endif %}"
+           hx-trigger="keyup changed delay:300ms, focus"
+           hx-target="#rule-object-results-{{ selection_id }}"
+           hx-include="closest form"
+           autocomplete="off">
+    <div id="rule-object-results-{{ selection_id }}"></div>
+</div>

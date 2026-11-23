@@ -1,0 +1,43 @@
+<form hx-post="{% url 'update_rule_objects' item.uuid %}"
+      hx-target="#rule-card-{{ item.uuid }}"
+      hx-swap="outerHTML">
+    {% csrf_token %}
+    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-3">
+        <span class="entry-detail-title mb-0">Редактирование привязок: {{ item.name }}</span>
+        <button type="button" class="btn btn-light border btn-sm"
+                hx-get="{% url 'rule_objects' item.uuid %}"
+                hx-target="#rule-objects-content-{{ item.uuid }}"
+                hx-swap="innerHTML">Отмена</button>
+    </div>
+
+    <div id="rule-objects-error-{{ item.uuid }}"></div>
+
+    {% if item.plans.all %}
+    <div class="field">
+        <label>Отвязать выбранные объекты</label>
+        <div class="rule-object-remove-list">
+            {% for plan in item.plans.all %}
+            <label class="form-check d-flex align-items-center gap-2">
+                <input class="form-check-input mt-0" type="checkbox"
+                       name="remove_plan_ids" value="{{ plan.uuid }}"
+                       aria-label="Отвязать {{ plan.data_object.name|default:plan.data_object.model.name }}">
+                <span>{{ plan.data_object.name|default:plan.data_object.model.name }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="field">
+        <label>Добавить объекты</label>
+        <div id="rule-object-selection-{{ item.uuid }}" class="d-flex flex-wrap gap-2 mb-2"></div>
+        {% include 'data/settings/rule_object_search.html' with selection_id=item.uuid rule_id=item.uuid %}
+        <span class="hint">Можно выбрать несколько объектов. Уже привязанные и выбранные объекты не попадают в подсказки повторно.</span>
+    </div>
+
+    <div class="d-flex justify-content-end pt-2">
+        <button type="submit" class="btn btn-primary fw-semibold">
+            <i class="bi bi-check-lg"></i>Сохранить привязки
+        </button>
+    </div>
+</form>

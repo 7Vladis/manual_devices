@@ -3,6 +3,7 @@
 import re
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -131,8 +132,8 @@ def suggest_view(request):
         else:
             results = list(ObjectModel.objects.select_related('object_type').all().order_by('name')[:8])
         
-    # 3. Родительские объекты (включая parent_inline и source_object)
-    elif field in ['parent', 'parent_inline', 'source_object']:
+    # 3. Объекты: родитель, источник копии или выбор для правила ТО
+    elif field in ['parent', 'parent_inline', 'source_object', 'rule_object']:
         qs = DataObject.objects.select_related('model', 'model__object_type').all()
         
         # Защита от зацикливания: исключаем сам объект и всё его поддерево
@@ -142,6 +143,17 @@ def suggest_view(request):
             if source:
                 excluded |= {str(u) for u in source.get_descendant_uuids()}
             qs = qs.exclude(pk__in=excluded)
+
+        if field == 'rule_object':
+            try:
+                rule_id = request.GET.get('rule_id')
+                if rule_id:
+                    qs = qs.exclude(plans__rule_id=rule_id)
+                selected_ids = request.GET.getlist('object_ids')
+                if selected_ids:
+                    qs = qs.exclude(pk__in=selected_ids)
+            except (ValidationError, ValueError):
+                pass
             
         if q:
             exact = qs.filter(Q(name__iexact=q) | Q(inventory_number__iexact=q))
@@ -179,6 +191,8 @@ def suggest_view(request):
         'field': field,
         'q': q,
         'target_obj_uuid': target_obj_uuid,
+        'selection_id': request.GET.get('selection_id', 'create'),
+        'rule_id': request.GET.get('rule_id', ''),
         'show_create_option': show_create_option
     })
 

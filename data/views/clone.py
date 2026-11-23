@@ -4,6 +4,9 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils.html import format_html
 from django.views.decorators.http import require_POST
 
 from .common import tree_sidebar_context
@@ -61,7 +64,19 @@ def clone_object_view(request):
                     clone_children=clone_children
                 )
 
-        return render(request, 'data/tree/dict_sidebar.html',
-                      tree_sidebar_context(request, active_object=new_root))
+        sidebar_html = render_to_string(
+            'data/tree/dict_sidebar.html',
+            tree_sidebar_context(request, active_object=new_root),
+            request=request,
+        )
+        detail_html = format_html(
+            '<div id="detail-container" hx-swap-oob="innerHTML">'
+            '<div hx-get="{}" hx-trigger="load" hx-target="this" hx-swap="outerHTML">'
+            '<div class="d-flex align-items-center justify-content-center h-100 p-5">'
+            '<div class="spinner-border text-primary" role="status"></div>'
+            '</div></div></div>',
+            reverse('object_detail', args=[new_root.uuid]),
+        )
+        return HttpResponse(sidebar_html + "\n" + detail_html)
 
     return HttpResponse("Метод не разрешен", status=405)

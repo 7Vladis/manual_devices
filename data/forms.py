@@ -12,7 +12,7 @@ from datetime import date
 
 from django import forms
 
-from .models import DateUpdateRule
+from .models import DataObject, DateUpdateRule, MaintenancePlan
 
 STRATEGY_CHOICES = [
     ('relative', 'Интервал от даты'),
@@ -88,6 +88,9 @@ class DateUpdateRuleForm(forms.ModelForm):
     new_rule_years = forms.IntegerField(label="Лет", min_value=0, max_value=MAX_YEARS, required=False, initial=0)
     new_rule_months = forms.IntegerField(label="Месяцев", min_value=0, max_value=MAX_MONTHS, required=False, initial=6)
     new_rule_days = forms.IntegerField(label="Дней", min_value=0, max_value=MAX_DAYS, required=False, initial=0)
+    object_ids = forms.ModelMultipleChoiceField(
+        label="Объекты", queryset=DataObject.objects.all(), required=False,
+    )
 
     class Meta:
         model = DateUpdateRule
@@ -142,6 +145,19 @@ class DateUpdateRuleForm(forms.ModelForm):
         if commit:
             rule.save()
         return rule
+
+
+class RuleObjectLinksForm(forms.Form):
+    object_ids = forms.ModelMultipleChoiceField(
+        queryset=DataObject.objects.all(), required=False,
+    )
+    remove_plan_ids = forms.ModelMultipleChoiceField(
+        queryset=MaintenancePlan.objects.none(), required=False,
+    )
+
+    def __init__(self, *args, rule, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['remove_plan_ids'].queryset = MaintenancePlan.objects.filter(rule=rule)
 
 
 def parse_maintenance_date(raw, field_label="Дата"):

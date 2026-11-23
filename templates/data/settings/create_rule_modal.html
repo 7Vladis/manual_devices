@@ -11,7 +11,7 @@
 <form hx-post="{% url 'create_rule_settings' %}"
       hx-on::after-request="if (event.detail.elt === this && event.detail.successful) { bootstrap.Modal.getInstance(document.getElementById('createRuleSettingsModal')).hide(); }">
     {% csrf_token %}
-    {% include 'data/settings/_rule_form_body.html' with mode='create' error_id='create-rule-error' %}
+    {% include 'data/settings/_rule_form_body.html' with mode='create' error_id='create-rule-error' show_object_selector=True %}
     <div class="sheet-footer">
         <span class="footer-note"><span class="req">*</span> — обязательные поля</span>
         <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Отмена</button>

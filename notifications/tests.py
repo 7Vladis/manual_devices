@@ -357,6 +357,8 @@ class WebhookViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(MattermostSetting.objects.filter(webhook_url='https://mm.test/hook/new').exists())
+        self.assertContains(response, 'https://mm.test/hook/new')
+        self.assertContains(response, 'class="entry-card"', count=1)
 
     def test_senior_cannot_add_webhook(self):
         self.client.force_login(self.senior)
