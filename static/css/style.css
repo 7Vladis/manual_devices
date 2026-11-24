@@ -1581,6 +1581,10 @@ small, .small { font-size: 0.86em; }
        нужна ноутбуку с коротким экраном, где иначе осталась бы полоска. */
     max-height: max(280px, calc(100vh - 210px));
     overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+#createRuleSettingsModal .sheet-body {
+    max-height: max(280px, calc(100vh - 150px));
 }
 .sheet-footer {
     display: flex;

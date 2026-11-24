@@ -347,7 +347,7 @@
          */
         const mdCloseSuggestions = (event) => {
             document.querySelectorAll('.suggest-menu:not(.suggest-menu-static)').forEach((menu) => {
-                const wrapper = menu.closest('[id^="search-wrapper-"]');
+                const wrapper = menu.closest('[id^="search-wrapper-"], [id^="rule-object-search-"]');
                 if (!wrapper || !event || !wrapper.contains(event.target)) menu.remove();
             });
         };

@@ -5,7 +5,8 @@
            class="form-control"
            placeholder="Начните вводить название объекта..."
            hx-get="{% url 'suggest' %}?field=rule_object&selection_id={{ selection_id }}{% if rule_id %}&rule_id={{ rule_id }}{% endif %}"
-           hx-trigger="keyup changed delay:300ms, focus"
+           hx-trigger="keyup changed delay:300ms, focus, click"
+           hx-sync="this:drop"
            hx-target="#rule-object-results-{{ selection_id }}"
            hx-include="closest form"
            autocomplete="off">

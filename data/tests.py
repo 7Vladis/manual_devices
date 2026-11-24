@@ -1876,6 +1876,8 @@ class RuleValidationTests(BaseDataTestCase):
         self.assertIn(f'name="object_ids" value="{self.root.uuid}"', body)
         self.assertIn('id="rule-object-search-create"', body)
         self.assertIn('hx-swap-oob="outerHTML"', body)
+        self.assertIn('hx-trigger="keyup changed delay:300ms, focus, click"', body)
+        self.assertIn('hx-sync="this:drop"', body)
 
     def test_rule_links_can_add_and_remove_multiple_objects(self):
         rule = DateUpdateRule.objects.create(
