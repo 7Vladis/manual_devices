@@ -1584,7 +1584,7 @@ small, .small { font-size: 0.86em; }
     scrollbar-gutter: stable;
 }
 #createRuleSettingsModal .sheet-body {
-    max-height: max(280px, calc(100vh - 150px));
+    max-height: max(280px, calc(100vh - 100px));
 }
 .sheet-footer {
     display: flex;

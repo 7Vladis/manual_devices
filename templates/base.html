@@ -357,6 +357,25 @@
             if (event.key === 'Escape') mdCloseSuggestions(null);
         });
 
+        // Ждём содержимое HTMX: иначе пустое окно успевает показаться полоской,
+        // а его высота после подстановки формы меняется скачком.
+        document.addEventListener('show.bs.modal', (event) => {
+            const modal = event.target;
+            if (!modal.hasAttribute('data-md-reset')) return;
+            const holder = modal.querySelector('.modal-content');
+            if (!holder || holder.childElementCount || holder.textContent.trim()) return;
+            event.preventDefault();
+            modal.dataset.mdAwaitingContent = 'true';
+        });
+
+        document.body.addEventListener('htmx:afterSwap', (event) => {
+            const holder = event.target.closest('.modal-content');
+            const modal = holder && holder.closest('[data-md-reset]');
+            if (!modal || modal.dataset.mdAwaitingContent !== 'true') return;
+            delete modal.dataset.mdAwaitingContent;
+            bootstrap.Modal.getOrCreateInstance(modal).show();
+        });
+
         /**
          * Содержимое модальных окон, подгружаемое по HTMX, очищается при закрытии.
          *
